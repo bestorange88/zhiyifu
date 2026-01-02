@@ -10,6 +10,7 @@ import ToolsPage from "@/pages/ToolsPage";
 import ChatPage from "@/pages/ChatPage";
 import ServicePage from "@/pages/ServicePage";
 import MinePage from "@/pages/MinePage";
+import ToolChatPage from "@/pages/ToolChatPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -18,6 +19,7 @@ function Router() {
       <Switch>
         <Route path="/" component={HomePage} />
         <Route path="/tools" component={ToolsPage} />
+        <Route path="/tools/:id" component={ToolChatPage} />
         <Route path="/chat" component={ChatPage} />
         <Route path="/service" component={ServicePage} />
         <Route path="/mine" component={MinePage} />

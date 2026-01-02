@@ -63,17 +63,30 @@ export function registerChatRoutes(app: Express): void {
   app.post("/api/conversations/:id/messages", async (req: Request, res: Response) => {
     try {
       const conversationId = parseInt(req.params.id);
-      const { content } = req.body;
+      const { content, systemPrompt } = req.body;
 
       // Save user message
       await chatStorage.createMessage(conversationId, "user", content);
 
       // Get conversation history for context
       const messages = await chatStorage.getMessagesByConversation(conversationId);
-      const chatMessages = messages.map((m) => ({
+      
+      // Build chat messages with optional system prompt
+      const chatMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
+      
+      // Add system prompt if provided
+      if (systemPrompt) {
+        chatMessages.push({
+          role: "system",
+          content: systemPrompt,
+        });
+      }
+      
+      // Add conversation history
+      chatMessages.push(...messages.map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
-      }));
+      })));
 
       // Set up SSE
       res.setHeader("Content-Type", "text/event-stream");

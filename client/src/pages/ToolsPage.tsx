@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Header } from "@/components/Header";
 import { FeatureCard } from "@/components/FeatureCard";
 import { cn } from "@/lib/utils";
@@ -39,11 +40,16 @@ export const tools: Tool[] = [
 const categories = ['全部', 'AI 问诊', '法律', '起名/算命', '教育（论文）'];
 
 export default function ToolsPage() {
+  const [, setLocation] = useLocation();
   const [selectedCategory, setSelectedCategory] = useState('全部');
 
   const filteredTools = selectedCategory === '全部' 
     ? tools 
     : tools.filter(tool => tool.category === selectedCategory);
+
+  const handleToolClick = (toolId: string) => {
+    setLocation(`/tools/${toolId}`);
+  };
 
   return (
     <div className="pb-24 min-h-screen bg-gray-50/50">
@@ -79,6 +85,7 @@ export default function ToolsPage() {
             icon={tool.icon}
             color={tool.color}
             variant="compact"
+            onClick={() => handleToolClick(tool.id)}
           />
         ))}
       </main>

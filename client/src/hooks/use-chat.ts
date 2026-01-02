@@ -48,7 +48,7 @@ export function useMessages(conversationId: number) {
 }
 
 // Custom hook for streaming messages (SSE)
-export function useChatStream(conversationId: number) {
+export function useChatStream(conversationId: number, systemPrompt?: string) {
   const queryClient = useQueryClient();
   const [streamingContent, setStreamingContent] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -65,7 +65,7 @@ export function useChatStream(conversationId: number) {
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, systemPrompt }),
         signal: abortControllerRef.current.signal,
       });
 

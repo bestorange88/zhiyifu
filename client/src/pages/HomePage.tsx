@@ -1,3 +1,4 @@
+import { useLocation } from "wouter";
 import { Volume2, CreditCard, Stethoscope, FileText, Sparkles, ChevronRight, User } from "lucide-react";
 import { FeatureCard } from "@/components/FeatureCard";
 import { ArticleCard } from "@/components/ArticleCard";
@@ -12,6 +13,12 @@ const articles = [
 ];
 
 export default function HomePage() {
+  const [, setLocation] = useLocation();
+
+  const handleToolClick = (toolId: string) => {
+    setLocation(`/tools/${toolId}`);
+  };
+
   return (
     <div className="pb-24 min-h-screen bg-gray-50/50">
       <Header />
@@ -54,18 +61,24 @@ export default function HomePage() {
 
           {/* Small Feature Cards Grid */}
           <div className="grid grid-cols-2 gap-2 h-32">
-            <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl p-3 text-white flex flex-col items-center justify-center text-center shadow-md cursor-pointer hover:-translate-y-1 transition-transform">
+            <button 
+              onClick={() => handleToolClick("2")}
+              className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl p-3 text-white flex flex-col items-center justify-center text-center shadow-md cursor-pointer hover:-translate-y-1 transition-transform"
+            >
               <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center mb-2">
                 <Stethoscope className="w-4 h-4" />
               </div>
               <h4 className="font-bold text-xs">AI体检</h4>
-            </div>
-            <div className="bg-gradient-to-br from-indigo-400 to-indigo-500 rounded-2xl p-3 text-white flex flex-col items-center justify-center text-center shadow-md cursor-pointer hover:-translate-y-1 transition-transform">
+            </button>
+            <button 
+              onClick={() => handleToolClick("12")}
+              className="bg-gradient-to-br from-indigo-400 to-indigo-500 rounded-2xl p-3 text-white flex flex-col items-center justify-center text-center shadow-md cursor-pointer hover:-translate-y-1 transition-transform"
+            >
               <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center mb-2">
                 <FileText className="w-4 h-4" />
               </div>
-              <h4 className="font-bold text-xs">工作周报</h4>
-            </div>
+              <h4 className="font-bold text-xs">智能写作</h4>
+            </button>
           </div>
         </div>
 
@@ -89,6 +102,7 @@ export default function HomePage() {
                 icon={tool.icon}
                 color={tool.color}
                 variant="compact"
+                onClick={() => handleToolClick(tool.id)}
               />
             ))}
           </div>
