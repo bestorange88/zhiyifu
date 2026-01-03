@@ -1,58 +1,36 @@
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Gift, Star, Coins, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useSpinBalance, useSpin } from "@/hooks/use-api";
+import { useAuth } from "@/lib/auth";
 
-interface Prize {
+interface DisplayPrize {
   id: number;
   name: string;
-  probability: number;
   color: string;
   textColor: string;
 }
 
-const prizes: Prize[] = [
-  { id: 0, name: "38元", probability: 1, color: "bg-red-500", textColor: "text-white" },
-  { id: 1, name: "18元", probability: 1, color: "bg-orange-400", textColor: "text-white" },
-  { id: 2, name: "AI积分500", probability: 30, color: "bg-blue-500", textColor: "text-white" },
-  { id: 3, name: "2元", probability: 33, color: "bg-green-500", textColor: "text-white" },
-  { id: 4, name: "8元", probability: 3, color: "bg-purple-500", textColor: "text-white" },
-  { id: 5, name: "1元", probability: 22, color: "bg-cyan-500", textColor: "text-white" },
-  { id: 6, name: "祝你下次好运", probability: 10, color: "bg-gray-400", textColor: "text-white" },
-  { id: 7, name: "1元", probability: 22, color: "bg-cyan-500", textColor: "text-white" },
-  { id: 8, name: "8元", probability: 3, color: "bg-purple-500", textColor: "text-white" },
-  { id: 9, name: "2元", probability: 33, color: "bg-green-500", textColor: "text-white" },
-  { id: 10, name: "AI积分500", probability: 30, color: "bg-blue-500", textColor: "text-white" },
-  { id: 11, name: "18元", probability: 1, color: "bg-orange-400", textColor: "text-white" },
+const displayPrizes: DisplayPrize[] = [
+  { id: 0, name: "38元", color: "bg-red-500", textColor: "text-white" },
+  { id: 1, name: "18元", color: "bg-orange-400", textColor: "text-white" },
+  { id: 2, name: "AI积分500", color: "bg-blue-500", textColor: "text-white" },
+  { id: 3, name: "2元", color: "bg-green-500", textColor: "text-white" },
+  { id: 4, name: "8元", color: "bg-purple-500", textColor: "text-white" },
+  { id: 5, name: "1元", color: "bg-cyan-500", textColor: "text-white" },
+  { id: 6, name: "祝你下次好运", color: "bg-gray-400", textColor: "text-white" },
+  { id: 7, name: "1元", color: "bg-cyan-500", textColor: "text-white" },
+  { id: 8, name: "8元", color: "bg-purple-500", textColor: "text-white" },
+  { id: 9, name: "2元", color: "bg-green-500", textColor: "text-white" },
+  { id: 10, name: "AI积分500", color: "bg-blue-500", textColor: "text-white" },
+  { id: 11, name: "18元", color: "bg-orange-400", textColor: "text-white" },
 ];
 
-const weightedPrizes = [
-  { index: 0, weight: 1 },
-  { index: 1, weight: 1 },
-  { index: 2, weight: 30 },
-  { index: 3, weight: 33 },
-  { index: 4, weight: 3 },
-  { index: 5, weight: 22 },
-  { index: 6, weight: 10 },
-];
-
-function getRandomPrizeIndex(): number {
-  const totalWeight = weightedPrizes.reduce((sum, p) => sum + p.weight, 0);
-  let random = Math.random() * totalWeight;
-  
-  for (const prize of weightedPrizes) {
-    random -= prize.weight;
-    if (random <= 0) {
-      if (prize.index === 1) return Math.random() > 0.5 ? 1 : 11;
-      if (prize.index === 2) return Math.random() > 0.5 ? 2 : 10;
-      if (prize.index === 3) return Math.random() > 0.5 ? 3 : 9;
-      if (prize.index === 4) return Math.random() > 0.5 ? 4 : 8;
-      if (prize.index === 5) return Math.random() > 0.5 ? 5 : 7;
-      return prize.index;
-    }
-  }
-  return 6;
+function getPrizeIndex(prizeName: string): number {
+  const index = displayPrizes.findIndex(p => p.name === prizeName);
+  return index >= 0 ? index : 6;
 }
 
 interface LotteryWheelProps {
@@ -62,36 +40,59 @@ interface LotteryWheelProps {
 }
 
 export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheelProps) {
+  const { user } = useAuth();
+  const { data: spinBalance, refetch: refetchBalance } = useSpinBalance();
+  const spinMutation = useSpin();
+  
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [showResult, setShowResult] = useState(false);
   const [wonPrize, setWonPrize] = useState<string | null>(null);
-  const [spinsLeft, setSpinsLeft] = useState(3);
-  const wheelRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const spin = () => {
+  useEffect(() => {
+    if (open) {
+      refetchBalance();
+    }
+  }, [open, refetchBalance]);
+
+  const spinsLeft = spinBalance?.availableSpins || 0;
+
+  const spin = async () => {
     if (isSpinning || spinsLeft <= 0) return;
+    if (!user) {
+      setError("请先登录");
+      return;
+    }
 
     setIsSpinning(true);
     setShowResult(false);
-    setSpinsLeft((prev) => prev - 1);
+    setError(null);
 
-    const prizeIndex = getRandomPrizeIndex();
-    const prize = prizes[prizeIndex];
+    const requestId = `spin_${user.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-    const sliceAngle = 360 / 12;
-    const targetAngle = 360 - (prizeIndex * sliceAngle + sliceAngle / 2);
-    const spins = 5 + Math.random() * 3;
-    const finalRotation = rotation + spins * 360 + targetAngle - (rotation % 360);
+    try {
+      const result = await spinMutation.mutateAsync(requestId);
+      
+      const prizeIndex = getPrizeIndex(result.prize);
+      const sliceAngle = 360 / 12;
+      const targetAngle = 360 - (prizeIndex * sliceAngle + sliceAngle / 2);
+      const spins = 5 + Math.random() * 3;
+      const finalRotation = rotation + spins * 360 + targetAngle - (rotation % 360);
 
-    setRotation(finalRotation);
+      setRotation(finalRotation);
 
-    setTimeout(() => {
+      setTimeout(() => {
+        setIsSpinning(false);
+        setWonPrize(result.prize);
+        setShowResult(true);
+        onWin?.(result.prize);
+        refetchBalance();
+      }, 4000);
+    } catch (err: any) {
       setIsSpinning(false);
-      setWonPrize(prize.name);
-      setShowResult(true);
-      onWin?.(prize.name);
-    }, 4000);
+      setError(err.message || "抽奖失败");
+    }
   };
 
   const handleClose = () => {
@@ -99,6 +100,7 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
       onOpenChange(false);
       setShowResult(false);
       setWonPrize(null);
+      setError(null);
     }
   };
 
@@ -116,9 +118,15 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
           <div className="flex justify-center mb-4">
             <div className="bg-white/20 rounded-full px-4 py-1.5 text-white text-sm flex items-center gap-2">
               <Sparkles className="w-4 h-4" />
-              今日剩余 {spinsLeft} 次抽奖机会
+              剩余 {spinsLeft} 次抽奖机会
             </div>
           </div>
+
+          {error && (
+            <div className="bg-red-900/50 text-white text-center py-2 px-4 rounded-lg mb-4 text-sm">
+              {error}
+            </div>
+          )}
 
           <div className="relative flex items-center justify-center">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1 z-20">
@@ -128,14 +136,13 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
             <div className="relative w-72 h-72">
               <div className="absolute inset-0 rounded-full bg-gradient-to-b from-yellow-300 to-yellow-500 p-2 shadow-2xl">
                 <div
-                  ref={wheelRef}
                   className="w-full h-full rounded-full overflow-hidden relative"
                   style={{
                     transform: `rotate(${rotation}deg)`,
                     transition: isSpinning ? "transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)" : "none",
                   }}
                 >
-                  {prizes.map((prize, index) => {
+                  {displayPrizes.map((prize, index) => {
                     const angle = (360 / 12) * index;
                     const skewAngle = 90 - 360 / 12;
                     return (
@@ -178,7 +185,7 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
 
               <button
                 onClick={spin}
-                disabled={isSpinning || spinsLeft <= 0}
+                disabled={isSpinning || spinsLeft <= 0 || !user}
                 className={cn(
                   "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10",
                   "w-20 h-20 rounded-full",
@@ -189,7 +196,7 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
                   "text-white font-bold",
                   "transition-transform",
                   isSpinning ? "scale-95" : "hover:scale-105 active:scale-95",
-                  spinsLeft <= 0 && "opacity-50 cursor-not-allowed"
+                  (spinsLeft <= 0 || !user) && "opacity-50 cursor-not-allowed"
                 )}
                 data-testid="button-spin"
               >

@@ -1,0 +1,304 @@
+0. 目标与范围
+目标
+
+把前端模板变成可运行的产品闭环：
+
+签到(行为入口) → 获得抽奖次数 → 幸运转盘(刺激) → 奖励入账(多为冻结) → VIP(放大器) → 满足条件发起提现(风控点)
+并叠加：推广会员等级 V1~V5 + 直推/间推收益 + 达标奖励金。
+
+MVP 范围（第一阶段必须完成）
+
+登录/注册/邀请码体系
+
+签到与连续奖励+断签惩罚
+
+抽奖次数与幸运转盘（概率、奖池、日志、幂等）
+
+钱包账本（余额/冻结/积分）
+
+VIP（权益：额外抽奖、提现加速/门槛）
+
+提现（申请→审核/排队→完成/拒绝）
+
+推广关系链 + V1~V5 达标统计 + 奖励发放
+
+风控：设备/IP/频率/重复账号/提现审核策略
+
+1. 技术栈建议（适合 Replit）
+推荐方案：Node.js + Express + PostgreSQL（或 Supabase）
+
+后端：Node.js(Express/NestJS 二选一；MVP 用 Express 更快)
+
+数据库：PostgreSQL
+
+Replit 可用 Neon（外部 PG）或 Supabase（外部 PG + Auth 可选）
+
+缓存/队列（可选）：Upstash Redis（用于频控、锁、幂等）
+
+定时任务：node-cron（MVP）→ 后续可换 BullMQ/Cloud scheduler
+
+鉴权：JWT（MVP），后续可接 Supabase Auth
+
+如果你前端模板已经有 Supabase 相关结构，也可以直接走 Supabase（更省登录/表结构/权限成本）。但你说“只有前端模版”，我默认你还没后端。
+
+2. 项目结构（Replit 目录建议）
+/app
+  /frontend        # 你现有的前端模板（Vite/Next 任选）
+  /backend
+    /src
+      app.js
+      routes/
+      controllers/
+      services/
+      middlewares/
+      jobs/
+      utils/
+    package.json
+  /shared           # 前后端共享 types/常量（可选）
+replit.nix / .replit
+
+
+启动方式：
+
+backend：npm run dev 监听 3001
+
+frontend：npm run dev 监听 5173（或 3000）
+
+Replit 用一个 npm run start 同时拉起（concurrently）
+
+3. 核心数据模型（数据库表设计）
+3.1 用户与关系链
+users
+
+id (uuid)
+
+phone/email
+
+password_hash
+
+invite_code（自己的邀请码）
+
+inviter_id（上级，nullable）
+
+vip_level（0/1…）
+
+vip_expire_at（若做期限）
+
+status（active/banned）
+
+created_at
+
+user_devices（风控）
+
+id
+
+user_id
+
+device_fingerprint
+
+last_ip
+
+last_login_at
+
+risk_score
+
+referral_tree_cache（统计加速，可选）
+
+user_id
+
+direct_count
+
+team_3gen_count
+
+updated_at
+
+3.2 签到系统
+checkins
+
+id
+
+user_id
+
+date (YYYY-MM-DD)
+
+streak_count（当天签到后的连续数）
+
+reward_spin_times（签到当天获得的抽奖次数）
+
+created_at
+
+checkin_rules（可配置）
+
+rule_key：streak_3_bonus, streak_7_bonus, streak_15_bonus, month_cash
+
+value：如 1/2/5/58
+
+reset_cycle：15（到15清0）
+
+断签扣 3 天惩罚：建议实现为“当日 streak_count = max(0, last_streak - 3) 后再 +1”，并记录罚分事件。
+
+3.3 抽奖与奖池
+spin_balance（抽奖次数余额）
+
+user_id
+
+available_spins（可用次数）
+
+updated_at
+
+wheel_prizes（奖品配置）
+
+id
+
+name（38元/18元/积分500/下次好运）
+
+type（cash / points / none）
+
+amount（现金或积分）
+
+probability（0~1，总和=1）
+
+stock（可选：限制库存）
+
+weight（可选：用权重代替概率）
+
+wheel_spins（抽奖记录，幂等）
+
+id
+
+user_id
+
+request_id（客户端生成，保证幂等）
+
+prize_id
+
+status（pending/success/failed）
+
+created_at
+
+3.4 钱包（非常关键）
+wallets
+
+user_id
+
+balance_cash_available（可提现余额）
+
+balance_cash_frozen（冻结现金）
+
+balance_points（AI积分）
+
+updated_at
+
+ledger（账本流水，所有变动都记）
+
+id
+
+user_id
+
+type（checkin_bonus / spin_win / vip_purchase / withdraw_apply / withdraw_success / referral_reward / admin_adjust）
+
+currency（cash_available / cash_frozen / points）
+
+amount（正负）
+
+ref_id（关联 wheel_spins / withdraws / orders）
+
+created_at
+
+原则：不要直接改余额不记账。所有余额变动必须写 ledger。
+
+3.5 VIP
+vip_plans（可配置）
+
+vip_level
+
+name
+
+price
+
+daily_extra_spins（每日额外次数）
+
+withdraw_min_amount（提现门槛）
+
+withdraw_speed（如 T+0/T+1）
+
+win_multiplier（中奖翻倍/概率提升参数）
+
+orders（购买订单）
+
+id
+
+user_id
+
+type（vip）
+
+amount
+
+status（pending/paid/failed）
+
+created_at
+
+3.6 提现
+withdraws
+
+id
+
+user_id
+
+amount
+
+status（applied / reviewing / approved / paid / rejected）
+
+method（usdt/bank/…）
+
+account_info（加密存储）
+
+require_conditions_snapshot（提交时快照：签到天数/抽奖次数/VIP）
+
+created_at
+
+reviewed_at
+
+paid_at
+
+3.7 推广等级（V1~V5）
+rank_rules
+
+rank（1~5）
+
+direct_required
+
+team_3gen_required
+
+direct_commission_rate（10%）
+
+indirect_commission_rate（5%）
+
+cash_bonus（0/588/1288/2888/8888）
+
+user_ranks
+
+user_id
+
+current_rank
+
+reached_at
+
+referral_rewards
+
+id
+
+user_id（拿奖励的人）
+
+from_user_id（贡献来源）
+
+level（1直推/2间推）
+
+amount
+
+status
+
+created_at
+
+直推收益10% / 间推5%：这里的“收益”来源要明确：
+MVP 先定义为：下级发生“充值/购买VIP/平台有效消费”时的分成（否则没法算）。

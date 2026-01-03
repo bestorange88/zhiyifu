@@ -1,0 +1,165 @@
+4. 后端接口清单（前端对接用）
+Auth
+
+POST /api/auth/register（邀请码必填）
+
+POST /api/auth/login
+
+GET /api/me
+
+Checkin
+
+POST /api/checkin（今日签到）
+
+GET /api/checkin/status（今日是否签到、当前连续天数、下一奖励）
+
+GET /api/checkin/history
+
+Spins / Wheel
+
+GET /api/wheel/config（12格配置）
+
+POST /api/wheel/spin（抽一次，传 request_id 幂等）
+
+GET /api/wheel/history
+
+Wallet
+
+GET /api/wallet（可用/冻结/积分）
+
+GET /api/ledger?cursor=
+
+VIP
+
+GET /api/vip/plans
+
+POST /api/vip/buy（创建订单）
+
+POST /api/vip/confirm（支付回调/模拟）
+
+GET /api/vip/status
+
+Withdraw
+
+GET /api/withdraw/rules（门槛、进度、条件）
+
+POST /api/withdraw/apply
+
+GET /api/withdraw/history
+
+Referral / Rank
+
+GET /api/referral/summary（直推数、3代团队数、当前等级、差多少达标）
+
+GET /api/referral/tree（可选）
+
+GET /api/referral/rewards
+
+Admin（MVP可先简单）
+
+GET /api/admin/withdraw/list
+
+POST /api/admin/withdraw/review（approve/reject）
+
+POST /api/admin/wheel/update
+
+POST /api/admin/user/ban
+
+5. 关键业务逻辑（必须按事务/幂等实现）
+5.1 签到逻辑（断签扣3天、15天清0）
+
+判断今日是否已签：已签返回
+
+读取上次签到日期与 streak
+
+若断签：streak = max(0, last_streak - 3)
+
+今日 streak = streak + 1
+
+基础奖励：+1 次抽奖
+
+若 streak 达到 3/7/15：额外加抽奖次数
+
+若 streak == 15：记录后清0（或把下一天开始计为1）
+
+若连续满 30 天：发 58 元（建议发到 frozen 现金）
+
+5.2 抽奖逻辑（概率、库存、幂等）
+
+校验 available_spins > 0
+
+使用 request_id 幂等：同 request_id 返回同结果
+
+扣 1 次 spins（事务内）
+
+按权重抽奖
+
+写 wheel_spins + ledger + 更新 wallet（现金走 frozen）
+
+返回奖品结果
+
+5.3 VIP 特权绑定
+
+每日额外抽奖次数：用定时任务每天给 VIP 用户发放
+
+提现门槛：withdraw_rules 动态按 vip_level 计算
+
+抽奖概率提升：可以先做“奖励翻倍（现金/积分×2）”比改概率更容易控风险
+
+5.4 提现风控（MVP最小可用）
+
+提现必须满足：
+
+可用余额 ≥ 最低额度（按 VIP 变化）
+
+完成一定次数签到/抽奖（快照）
+
+同设备/同IP频率限制
+
+提现流程：apply → reviewing → paid
+
+apply 时：从 available 扣到 “提现冻结”（或直接扣减并记录 pending）
+
+admin 审核通过：标记 paid；拒绝：退回余额
+
+5.5 推广等级判定
+
+注册必须邀请码 → 建立 inviter_id
+
+统计：
+
+direct_count：users where inviter_id = me
+
+team_3gen_count：三代（需要维护树或用 closure table；MVP 用递归查询 + 缓存）
+
+达标升级：更新 user_ranks
+
+达标现金奖励：走 ledger 发放（建议先 frozen）
+
+6. 定时任务（jobs）
+
+daily_vip_spins_job：每天 00:00 给 VIP 发额外抽奖次数
+
+checkin_month_reward_job：月连续奖励（若按“连续30天”可在签到时直接判定）
+
+risk_monitor_job：统计异常（同设备多号/同IP多号/高频提现）
+
+7. Replit 上线步骤（落地版）
+
+在 Replit 新建 Node 项目（或 monorepo）
+
+配置数据库（Neon/Supabase）拿到 DATABASE_URL
+
+后端启动 Express，跑迁移（推荐 Prisma）
+
+前端 .env 写 VITE_API_BASE
+
+用 Replit 的 Secrets 存：
+
+JWT_SECRET
+
+DATABASE_URL
+
+REDIS_URL（可选）
+
+npm run dev 联调 → npm run start 上线
