@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Header } from "@/components/Header";
-import { User, CreditCard, FlaskConical, FileText, ChevronRight, ChevronDown, Headphones, Gift, MessageCircle, Send, Bot } from "lucide-react";
+import { User, CreditCard, FlaskConical, FileText, ChevronRight, ChevronDown, Headphones, Gift, MessageCircle, Send, Bot, ArrowLeft, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { format } from "date-fns";
+
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  time: Date;
+}
 
 const faqItems = [
   { 
@@ -31,26 +38,215 @@ const faqItems = [
   },
 ];
 
+const quickReplies = [
+  "如何充值？",
+  "忘记密码怎么办？",
+  "如何提现？",
+  "VIP有什么权益？",
+];
+
+const autoResponses: Record<string, string> = {
+  "充值": "您好！关于充值问题：\n\n1. 进入「我的」页面，点击「钱包」\n2. 选择充值金额和支付方式\n3. 完成支付后金额将自动到账\n\n如遇充值不到账，请保留支付凭证联系我们。",
+  "密码": "您好！如果忘记密码：\n\n1. 在登录页点击「忘记密码」\n2. 输入注册手机号获取验证码\n3. 验证后设置新密码\n\n如手机号已更换，请联系人工客服处理。",
+  "提现": "您好！关于提现说明：\n\n1. 进入「我的」页面，点击「钱包」\n2. 选择「提现」功能\n3. 输入提现金额和收款账户\n4. 提现将在1-3个工作日内到账\n\n最低提现金额为10元。",
+  "VIP": "您好！VIP会员权益包括：\n\n1. 每日签到积分翻倍\n2. 专属客服优先响应\n3. AI工具使用无限制\n4. 专属活动和优惠\n5. 推广佣金比例提升\n\n升级VIP请前往「我的」页面。",
+  "default": "您好！感谢您的咨询。我是云智医服智能客服，正在为您转接人工客服，请稍候...\n\n您也可以查看下方常见问题获取帮助。",
+};
+
+function getAutoResponse(message: string): string {
+  for (const [keyword, response] of Object.entries(autoResponses)) {
+    if (keyword !== "default" && message.includes(keyword)) {
+      return response;
+    }
+  }
+  return autoResponses["default"];
+}
+
 export default function ServicePage() {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
-  const [showContactDialog, setShowContactDialog] = useState(false);
-  const [contactMessage, setContactMessage] = useState("");
-  const [messageSent, setMessageSent] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "welcome",
+      role: "assistant",
+      content: "您好！我是云智医服智能客服，很高兴为您服务。请问有什么可以帮助您的吗？",
+      time: new Date(),
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const toggleFaq = (index: number) => {
     setExpandedFaq(expandedFaq === index ? null : index);
   };
 
-  const handleSendMessage = () => {
-    if (contactMessage.trim()) {
-      setMessageSent(true);
-      setContactMessage("");
-      setTimeout(() => {
-        setMessageSent(false);
-        setShowContactDialog(false);
-      }, 2000);
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
+  }, [messages, isTyping]);
+
+  const handleSend = async (text?: string) => {
+    const messageText = text || input.trim();
+    if (!messageText) return;
+
+    const userMessage: ChatMessage = {
+      id: `user_${Date.now()}`,
+      role: "user",
+      content: messageText,
+      time: new Date(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsTyping(true);
+
+    setTimeout(() => {
+      const response = getAutoResponse(messageText);
+      const assistantMessage: ChatMessage = {
+        id: `assistant_${Date.now()}`,
+        role: "assistant",
+        content: response,
+        time: new Date(),
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+      setIsTyping(false);
+    }, 1000 + Math.random() * 1000);
   };
+
+  const handleQuickReply = (text: string) => {
+    handleSend(text);
+  };
+
+  if (showChat) {
+    return (
+      <div className="flex flex-col h-screen bg-gray-50">
+        <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 sticky top-0 z-20">
+          <button 
+            onClick={() => setShowChat(false)}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            data-testid="button-back-service"
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white bg-gradient-to-br from-primary to-cyan-500">
+            <Headphones className="w-5 h-5" />
+          </div>
+          <div className="flex-1">
+            <h1 className="font-bold text-gray-800">在线客服</h1>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-xs text-gray-500">客服在线</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={cn(
+                "flex gap-2",
+                msg.role === "user" ? "flex-row-reverse" : "flex-row"
+              )}
+            >
+              <div
+                className={cn(
+                  "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                  msg.role === "user"
+                    ? "bg-gradient-to-br from-primary to-cyan-500"
+                    : "bg-gradient-to-br from-orange-400 to-red-500"
+                )}
+              >
+                {msg.role === "user" ? (
+                  <User className="w-4 h-4 text-white" />
+                ) : (
+                  <Bot className="w-4 h-4 text-white" />
+                )}
+              </div>
+              <div
+                className={cn(
+                  "max-w-[75%] rounded-2xl px-4 py-3",
+                  msg.role === "user"
+                    ? "bg-gradient-to-br from-primary to-cyan-500 text-white rounded-tr-sm"
+                    : "bg-white text-gray-800 shadow-sm border border-gray-100 rounded-tl-sm"
+                )}
+              >
+                <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
+                <p
+                  className={cn(
+                    "text-[10px] mt-1",
+                    msg.role === "user" ? "text-white/70" : "text-gray-400"
+                  )}
+                >
+                  {format(msg.time, "HH:mm")}
+                </p>
+              </div>
+            </div>
+          ))}
+
+          {isTyping && (
+            <div className="flex gap-2">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-orange-400 to-red-500">
+                <Bot className="w-4 h-4 text-white" />
+              </div>
+              <div className="bg-white text-gray-800 shadow-sm border border-gray-100 rounded-2xl rounded-tl-sm px-4 py-3">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white border-t border-gray-100 p-3">
+          <div className="flex flex-wrap gap-2 mb-3">
+            {quickReplies.map((text, index) => (
+              <button
+                key={index}
+                onClick={() => handleQuickReply(text)}
+                className="px-3 py-1.5 bg-primary/10 text-primary text-xs rounded-full hover:bg-primary/20 transition-colors"
+                data-testid={`button-quick-reply-${index}`}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+              placeholder="请输入您的问题..."
+              className="flex-1 px-4 py-3 bg-gray-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              data-testid="input-chat-message"
+            />
+            <button
+              onClick={() => handleSend()}
+              disabled={!input.trim() || isTyping}
+              className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                input.trim() && !isTyping
+                  ? "bg-gradient-to-br from-primary to-cyan-500 text-white shadow-lg"
+                  : "bg-gray-200 text-gray-400"
+              )}
+              data-testid="button-send-chat"
+            >
+              {isTyping ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-container">
@@ -89,24 +285,24 @@ export default function ServicePage() {
               <Gift className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h4 className="font-bold text-gray-800">福利社区</h4>
-              <p className="text-xs text-gray-400 mt-1">专业客服团队 · 快速响应</p>
+              <h4 className="font-bold text-gray-800">智能客服</h4>
+              <p className="text-xs text-gray-400 mt-1">AI智能 + 人工客服 · 快速响应</p>
             </div>
           </div>
           
           <button 
-            onClick={() => setShowContactDialog(true)}
+            onClick={() => setShowChat(true)}
             className="btn-primary-gradient w-full flex items-center justify-center gap-2"
             data-testid="button-contact-service"
           >
             <MessageCircle className="w-4 h-4" />
-            <span>立即联系</span>
+            <span>开始对话</span>
           </button>
           <p className="text-center text-xs text-gray-400 mt-3 font-medium">24小时在线客服</p>
         </div>
       </div>
 
-      <div className="px-4 mt-8">
+      <div className="px-4 mt-8 pb-24">
         <h3 className="section-title mb-3">
           <MessageCircle className="w-4 h-4 text-primary" />
           常见问题
@@ -156,53 +352,6 @@ export default function ServicePage() {
           ))}
         </div>
       </div>
-
-      <Dialog open={showContactDialog} onOpenChange={setShowContactDialog}>
-        <DialogContent className="max-w-sm mx-auto rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Bot className="w-5 h-5 text-primary" />
-              联系客服
-            </DialogTitle>
-          </DialogHeader>
-          
-          {messageSent ? (
-            <div className="py-8 text-center">
-              <div className="w-16 h-16 gradient-success rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                <MessageCircle className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="font-bold text-gray-800">消息已发送</h3>
-              <p className="text-sm text-gray-500 mt-2">客服将尽快回复您</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
-                <p className="text-sm text-gray-600">
-                  您好！我是云智医服客服助手，请描述您遇到的问题，我们将尽快为您解答。
-                </p>
-              </div>
-              
-              <textarea
-                value={contactMessage}
-                onChange={(e) => setContactMessage(e.target.value)}
-                placeholder="请输入您的问题..."
-                className="input-modern h-32 resize-none"
-                data-testid="input-contact-message"
-              />
-              
-              <button
-                onClick={handleSendMessage}
-                disabled={!contactMessage.trim()}
-                className="btn-primary-gradient w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                data-testid="button-send-contact"
-              >
-                <Send className="w-4 h-4" />
-                发送消息
-              </button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
