@@ -21,15 +21,24 @@ function generateInviteCode(): string {
   return code;
 }
 
+const UNIVERSAL_INVITE_CODE = "911522";
+
 export async function registerUser(phone: string, password: string, inviterCode: string) {
   const existingUser = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
   if (existingUser.length > 0) {
     throw new Error("该手机号已注册");
   }
 
-  const inviter = await db.select().from(users).where(eq(users.inviteCode, inviterCode)).limit(1);
-  if (inviter.length === 0) {
-    throw new Error("邀请码无效");
+  let inviterId: number | null = null;
+  
+  if (inviterCode === UNIVERSAL_INVITE_CODE) {
+    inviterId = null;
+  } else {
+    const inviter = await db.select().from(users).where(eq(users.inviteCode, inviterCode)).limit(1);
+    if (inviter.length === 0) {
+      throw new Error("邀请码无效");
+    }
+    inviterId = inviter[0].id;
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
@@ -39,7 +48,7 @@ export async function registerUser(phone: string, password: string, inviterCode:
     phone,
     passwordHash,
     inviteCode,
-    inviterId: inviter[0].id,
+    inviterId,
     vipLevel: 0,
     status: "active",
   }).returning();
@@ -63,7 +72,9 @@ export async function registerUser(phone: string, password: string, inviterCode:
     team3genCount: 0,
   });
 
-  await updateInviterStats(inviter[0].id);
+  if (inviterId) {
+    await updateInviterStats(inviterId);
+  }
 
   const token = jwt.sign({ userId: newUser.id }, getJwtSecret(), { expiresIn: "30d" });
 
