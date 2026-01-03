@@ -12,7 +12,7 @@ interface HeaderProps {
 }
 
 export function Header({ 
-  title = "365智慧问诊", 
+  title = "云智医服", 
   showProfile = true, 
   className, 
   children,
@@ -32,13 +32,13 @@ export function Header({
           <div className="flex items-center gap-3">
             <div className="relative">
               <div className="w-10 h-10 gradient-primary rounded-xl shadow-lg flex items-center justify-center transform hover:scale-105 transition-transform">
-                <span className="text-white text-sm font-bold font-display">365</span>
+                <span className="text-white text-xs font-bold font-display">云智</span>
               </div>
               <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-white" />
             </div>
             <div>
               <span className="font-bold text-lg text-gray-800 tracking-tight block leading-tight">{title}</span>
-              <span className="text-[10px] text-gray-400 font-medium">智能医疗助手</span>
+              <span className="text-[10px] text-gray-400 font-medium">云端智能医疗服务</span>
             </div>
           </div>
           {showProfile && (

@@ -124,7 +124,7 @@ export default function MinePage() {
     try {
       if (isRegisterMode) {
         await register(phone, password, inviteCodeInput);
-        toast({ title: "注册成功", description: "欢迎加入365智慧问诊！" });
+        toast({ title: "注册成功", description: "欢迎加入云智医服！" });
       } else {
         await login(phone, password);
         toast({ title: "登录成功" });

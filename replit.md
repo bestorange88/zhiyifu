@@ -1,10 +1,17 @@
-# 365智慧问诊 (365 Smart Diagnosis)
+# 云智医服 (Cloud Smart Medical Service)
 
 ## Overview
 
-This is a mobile-first AI-powered medical consultation application built with React and Express. The app provides users with access to various AI-powered tools including medical consultations, health assessments, legal advice, fortune telling, and more. It features a chat interface with streaming responses using Server-Sent Events (SSE) for real-time AI interactions.
+云智医服是一个移动优先的AI智能医疗咨询平台，使用React和Express构建。应用提供21+种AI专业工具，包括医疗问诊、健康评估、法律咨询、运势分析等。采用SSE实时流式响应的聊天界面，提供流畅的AI交互体验。
 
 The application follows a monorepo structure with separate client and server directories, uses PostgreSQL for data persistence, and integrates with OpenAI-compatible APIs through Replit's AI integrations for chat and image generation capabilities.
+
+## Branding
+- **Platform Name**: 云智医服
+- **Tagline**: 云端智能医疗服务
+- **Logo**: Cloud-medical cross gradient icon (teal to emerald)
+- **Primary Color**: #1FB6FF (Teal)
+- **Secondary Color**: #34D399 (Emerald)
 
 ## User Preferences
 

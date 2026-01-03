@@ -178,7 +178,7 @@ export default function ServicePage() {
             <div className="space-y-4">
               <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
                 <p className="text-sm text-gray-600">
-                  您好！我是365智慧问诊客服助手，请描述您遇到的问题，我们将尽快为您解答。
+                  您好！我是云智医服客服助手，请描述您遇到的问题，我们将尽快为您解答。
                 </p>
               </div>
               

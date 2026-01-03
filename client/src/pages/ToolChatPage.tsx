@@ -28,7 +28,7 @@ const toolSystemPrompts: Record<string, string> = {
 };
 
 function getSystemPrompt(toolTitle: string): string {
-  return toolSystemPrompts[toolTitle] || `你是365智慧问诊的AI助手，专注于"${toolTitle}"领域。请专业、友善地回答用户的问题。`;
+  return toolSystemPrompts[toolTitle] || `你是云智医服的AI助手，专注于"${toolTitle}"领域。请专业、友善地回答用户的问题。`;
 }
 
 export default function ToolChatPage() {
