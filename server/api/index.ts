@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { AuthRequest, authMiddleware } from "../middleware/auth";
+import { AdminRequest, adminAuthMiddleware } from "../middleware/adminAuth";
 import * as authService from "../services/auth";
 import * as walletService from "../services/wallet";
 import * as checkinService from "../services/checkin";
@@ -7,7 +8,9 @@ import * as spinService from "../services/spin";
 import * as vipService from "../services/vip";
 import * as withdrawService from "../services/withdraw";
 import * as referralService from "../services/referral";
-import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema } from "@shared/schema";
+import * as adminService from "../services/admin";
+import * as agentService from "../services/agent";
+import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema } from "@shared/schema";
 
 export function registerApiRoutes(app: Express): void {
   // ============ AUTH ============
@@ -235,23 +238,117 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
-  // ============ ADMIN ============
-  app.get("/api/admin/withdraw/list", async (req, res) => {
+  // ============ AGENT ============
+  app.get("/api/agent/status", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const { db } = await import("../db");
-      const { withdraws } = await import("@shared/schema");
-      const { desc } = await import("drizzle-orm");
-      const list = await db.select().from(withdraws).orderBy(desc(withdraws.createdAt)).limit(100);
-      res.json(list);
+      const status = await agentService.getAgentStatus(req.userId!);
+      res.json(status);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
 
-  app.post("/api/admin/withdraw/review", async (req, res) => {
+  app.post("/api/agent/apply", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const { withdrawId, approved } = req.body;
+      const { realName, wechat, reason } = agentApplySchema.parse(req.body);
+      const result = await agentService.applyAgent(req.userId!, realName, wechat, reason);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN AUTH ============
+  app.post("/api/admin/login", async (req, res) => {
+    try {
+      const { username, password } = adminLoginSchema.parse(req.body);
+      const result = await adminService.adminLogin(username, password);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/me", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      res.json({ adminId: req.adminId, role: req.adminRole });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN DASHBOARD ============
+  app.get("/api/admin/dashboard", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const stats = await adminService.getDashboardStats();
+      res.json(stats);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/users", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const result = await adminService.getUserList(page, limit);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/users/:id/status", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const { status } = adminUserStatusSchema.parse(req.body);
+      const result = await adminService.updateUserStatus(userId, status);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/withdraws", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const status = req.query.status as string | undefined;
+      const result = await adminService.getWithdrawList(status, page, limit);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/withdraws/:id/review", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const withdrawId = parseInt(req.params.id);
+      const { approved } = adminWithdrawReviewSchema.parse(req.body);
       const result = await withdrawService.reviewWithdraw(withdrawId, approved);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/agents", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const status = req.query.status as string | undefined;
+      const result = await adminService.getAgentApplicationList(status, page, limit);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/agents/:id/review", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const appId = parseInt(req.params.id);
+      const { approved, reviewNote } = adminAgentReviewSchema.parse(req.body);
+      const result = await adminService.reviewAgentApplication(appId, approved, reviewNote);
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });

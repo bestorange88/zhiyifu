@@ -158,6 +158,30 @@ export const referralRewards = pgTable("referral_rewards", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ============ ADMIN ============
+export const admins = pgTable("admins", {
+  id: serial("id").primaryKey(),
+  username: varchar("username", { length: 50 }).unique().notNull(),
+  passwordHash: text("password_hash").notNull(),
+  role: varchar("role", { length: 20 }).default("admin").notNull(),
+  status: varchar("status", { length: 20 }).default("active").notNull(),
+  lastLoginAt: timestamp("last_login_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ============ AGENT APPLICATION ============
+export const agentApplications = pgTable("agent_applications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  realName: varchar("real_name", { length: 50 }).notNull(),
+  wechat: varchar("wechat", { length: 50 }),
+  reason: text("reason"),
+  status: varchar("status", { length: 20 }).default("pending").notNull(),
+  reviewNote: text("review_note"),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ============ CHAT (existing) ============
 export const conversations = pgTable("conversations", {
   id: serial("id").primaryKey(),
@@ -201,6 +225,8 @@ export type Withdraw = typeof withdraws.$inferSelect;
 export type RankRule = typeof rankRules.$inferSelect;
 export type UserRank = typeof userRanks.$inferSelect;
 export type ReferralReward = typeof referralRewards.$inferSelect;
+export type Admin = typeof admins.$inferSelect;
+export type AgentApplication = typeof agentApplications.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
 export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type Message = typeof messages.$inferSelect;
@@ -226,4 +252,28 @@ export const withdrawApplySchema = z.object({
   amount: z.number().positive(),
   method: z.string(),
   accountInfo: z.string(),
+});
+
+export const adminLoginSchema = z.object({
+  username: z.string().min(3),
+  password: z.string().min(6),
+});
+
+export const agentApplySchema = z.object({
+  realName: z.string().min(2),
+  wechat: z.string().optional(),
+  reason: z.string().optional(),
+});
+
+export const adminUserStatusSchema = z.object({
+  status: z.enum(["active", "banned"]),
+});
+
+export const adminWithdrawReviewSchema = z.object({
+  approved: z.boolean(),
+});
+
+export const adminAgentReviewSchema = z.object({
+  approved: z.boolean(),
+  reviewNote: z.string().optional(),
 });

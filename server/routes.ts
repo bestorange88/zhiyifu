@@ -4,12 +4,16 @@ import { storage } from "./storage";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
 import { registerApiRoutes } from "./api";
+import { initDefaultAdmin } from "./services/admin";
 import { api } from "@shared/routes";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Initialize default admin
+  await initDefaultAdmin();
+  
   // Register new API routes
   registerApiRoutes(app);
   

@@ -64,10 +64,7 @@ export default function MinePage() {
         setShowLotteryDialog(true);
         break;
       case 'agent':
-        toast({
-          title: "代理申请",
-          description: "代理功能即将上线，敬请期待！",
-        });
+        setLocation('/referral');
         break;
     }
   };
