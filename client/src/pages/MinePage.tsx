@@ -58,10 +58,7 @@ export default function MinePage() {
         setShowInviteDialog(true);
         break;
       case 'vip':
-        toast({
-          title: "VIP会员",
-          description: "VIP会员功能即将上线，敬请期待！",
-        });
+        setLocation('/vip');
         break;
       case 'lottery':
         setShowLotteryDialog(true);

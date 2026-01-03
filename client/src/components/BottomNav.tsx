@@ -13,8 +13,8 @@ const tabs = [
 export function BottomNav() {
   const [location] = useLocation();
 
-  // Hide bottom nav on tool chat pages
-  if (location.startsWith("/tools/")) {
+  // Hide bottom nav on tool chat pages and VIP page
+  if (location.startsWith("/tools/") || location === "/vip") {
     return null;
   }
 
