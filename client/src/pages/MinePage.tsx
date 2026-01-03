@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import LotteryWheel from "@/components/LotteryWheel";
 
 const benefits = [
   { id: 'lottery', title: '转盘奖励', description: '资助贡献值', action: '去抽奖', icon: <Gift className="w-5 h-5 text-red-500" /> },
@@ -22,6 +23,7 @@ export default function MinePage() {
   const { toast } = useToast();
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [showLotteryDialog, setShowLotteryDialog] = useState(false);
   const [copied, setCopied] = useState(false);
   
   const inviteCode = "AI365VIP2024";
@@ -49,10 +51,7 @@ export default function MinePage() {
         });
         break;
       case 'lottery':
-        toast({
-          title: "转盘抽奖",
-          description: "抽奖功能即将上线，敬请期待！",
-        });
+        setShowLotteryDialog(true);
         break;
       case 'agent':
         toast({
@@ -261,6 +260,18 @@ export default function MinePage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Lottery Wheel */}
+      <LotteryWheel
+        open={showLotteryDialog}
+        onOpenChange={setShowLotteryDialog}
+        onWin={(prize) => {
+          toast({
+            title: "抽奖结果",
+            description: `您获得了：${prize}`,
+          });
+        }}
+      />
 
       {/* Invite Dialog */}
       <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
