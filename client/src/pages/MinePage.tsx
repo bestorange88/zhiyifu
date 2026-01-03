@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut } from "lucide-react";
+import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -8,10 +8,10 @@ import { useWallet, useCheckinStatus, useCheckin, useSpinBalance, useReferralSum
 import LotteryWheel from "@/components/LotteryWheel";
 
 const benefits = [
-  { id: 'lottery', title: '转盘奖励', description: '资助贡献值', action: '去抽奖', icon: <Gift className="w-5 h-5 text-red-500" /> },
-  { id: 'agent', title: '分佣奖励', description: '申请代理', action: '去开通', icon: <Zap className="w-5 h-5 text-yellow-500" /> },
-  { id: 'invite', title: '邀请好友', description: '无限福利', action: '去邀请', icon: <Share2 className="w-5 h-5 text-blue-500" /> },
-  { id: 'vip', title: '月卡季卡', description: 'AI会员套餐', action: '立即开通', icon: <Crown className="w-5 h-5 text-amber-500" /> },
+  { id: 'lottery', title: '转盘奖励', description: '资助贡献值', action: '去抽奖', icon: <Gift className="w-5 h-5 text-rose-500" />, gradient: 'from-rose-50 to-pink-50' },
+  { id: 'agent', title: '分佣奖励', description: '申请代理', action: '去开通', icon: <Zap className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-orange-50' },
+  { id: 'invite', title: '邀请好友', description: '无限福利', action: '去邀请', icon: <Share2 className="w-5 h-5 text-blue-500" />, gradient: 'from-blue-50 to-indigo-50' },
+  { id: 'vip', title: '月卡季卡', description: 'AI会员套餐', action: '立即开通', icon: <Crown className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-yellow-50' },
 ];
 
 export default function MinePage() {
@@ -162,24 +162,25 @@ export default function MinePage() {
   ];
 
   return (
-    <div className="pb-24 min-h-screen bg-gray-50/50">
-      <div className="bg-gradient-to-b from-blue-500 to-blue-600 px-6 pt-8 pb-20 rounded-b-[2.5rem] shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-16 -mt-16" />
+    <div className="page-container">
+      <div className="gradient-primary px-6 pt-8 pb-24 rounded-b-[2.5rem] shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-72 h-72 bg-white/5 rounded-full blur-3xl -mr-20 -mt-20" />
+        <div className="absolute bottom-10 left-0 w-48 h-48 bg-purple-400/10 rounded-full blur-3xl -ml-20" />
         
         <div className="flex items-center justify-between relative z-10 mb-8">
-          <h1 className="font-bold text-xl text-white">我的</h1>
+          <h1 className="font-bold text-xl text-white text-shadow-sm">我的</h1>
           <div className="flex items-center gap-2">
             {user && (
               <button 
                 onClick={logout}
-                className="p-2 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-colors"
+                className="p-2.5 bg-white/15 hover:bg-white/25 rounded-xl backdrop-blur-sm transition-colors"
                 data-testid="button-logout"
               >
                 <LogOut className="w-5 h-5 text-white" />
               </button>
             )}
             <button 
-              className="p-2 bg-white/20 hover:bg-white/30 rounded-full backdrop-blur-sm transition-colors"
+              className="p-2.5 bg-white/15 hover:bg-white/25 rounded-xl backdrop-blur-sm transition-colors"
               data-testid="button-settings"
             >
               <Settings className="w-5 h-5 text-white" />
@@ -189,144 +190,147 @@ export default function MinePage() {
         
         {user ? (
           <div className="flex items-center gap-4 relative z-10">
-            <div className="w-16 h-16 bg-white rounded-full p-1 shadow-lg">
-              <div className="w-full h-full bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center overflow-hidden">
+            <div className="w-18 h-18 bg-white rounded-2xl p-1 shadow-lg">
+              <div className="w-full h-full bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl flex items-center justify-center overflow-hidden w-16 h-16">
                 <User className="w-8 h-8 text-white" />
               </div>
             </div>
             <div className="text-white flex-1">
-              <h3 className="font-bold text-lg">{user.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}</h3>
-              <p className="text-sm opacity-80 mt-1">
-                {user.vipLevel > 0 ? `VIP${user.vipLevel}会员` : '普通用户'}
-                {referralSummary?.currentRank > 0 && ` · ${referralSummary.currentRankName}`}
-              </p>
+              <h3 className="font-bold text-lg text-shadow-sm">{user.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}</h3>
+              <div className="flex items-center gap-2 mt-1.5">
+                {user.vipLevel > 0 ? (
+                  <span className="badge-sm bg-amber-400/90 text-amber-900">VIP{user.vipLevel}</span>
+                ) : (
+                  <span className="badge-sm bg-white/20 text-white/90">普通用户</span>
+                )}
+                {referralSummary?.currentRank > 0 && (
+                  <span className="badge-sm bg-white/20 text-white/90">{referralSummary.currentRankName}</span>
+                )}
+              </div>
             </div>
           </div>
         ) : (
           <button 
             onClick={() => setShowLoginDialog(true)}
-            className="flex items-center gap-4 relative z-10 w-full text-left"
+            className="flex items-center gap-4 relative z-10 w-full text-left group"
             data-testid="button-login-trigger"
           >
-            <div className="w-16 h-16 bg-white rounded-full p-1 shadow-lg">
-              <div className="w-full h-full bg-gray-100 rounded-full flex items-center justify-center overflow-hidden">
+            <div className="w-16 h-16 bg-white rounded-2xl p-1 shadow-lg">
+              <div className="w-full h-full bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden">
                 <User className="w-8 h-8 text-gray-400" />
               </div>
             </div>
             <div className="text-white flex-1">
-              <h3 className="font-bold text-lg flex items-center gap-2">
+              <h3 className="font-bold text-lg flex items-center gap-2 text-shadow-sm">
                 点击登录/注册
-                <ChevronRight className="w-4 h-4 opacity-70" />
+                <ChevronRight className="w-4 h-4 opacity-70 group-hover:translate-x-1 transition-transform" />
               </h3>
-              <p className="text-sm opacity-80 mt-1">登录体验更多功能</p>
+              <p className="text-sm text-white/80 mt-1">登录体验更多功能</p>
             </div>
           </button>
         )}
       </div>
 
-      <div className="mx-4 -mt-12 relative z-20">
-        <div 
+      <div className="mx-4 -mt-16 relative z-20">
+        <button 
           onClick={() => handleBenefitClick('vip')}
-          className="bg-gradient-to-r from-amber-100 via-amber-50 to-amber-100 rounded-2xl p-4 shadow-lg border border-amber-200 cursor-pointer hover:shadow-xl transition-all"
+          className="w-full bg-gradient-to-r from-amber-100 via-amber-50 to-amber-100 rounded-2xl p-4 shadow-lg border border-amber-200/50 cursor-pointer hover:shadow-xl transition-all shine text-left"
+          data-testid="button-vip-banner"
         >
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center shadow-md">
+              <div className="w-11 h-11 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center shadow-md">
                 <Crown className="w-5 h-5 text-white" />
               </div>
               <div>
                 <span className="text-amber-800 font-bold block">VIP医疗守护金</span>
-                <span className="text-[10px] text-amber-600 font-medium bg-amber-200/50 px-1.5 py-0.5 rounded">新年特惠</span>
+                <span className="text-[10px] text-amber-600 font-medium bg-amber-200/50 px-2 py-0.5 rounded-full">新年特惠</span>
               </div>
             </div>
-            <button className="px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-full shadow-md transition-colors">
+            <span className="btn-primary-gradient px-4 py-2 text-xs">
               立即查看
-            </button>
+            </span>
           </div>
-        </div>
+        </button>
       </div>
 
       <div className="px-4 mt-4 grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between h-28">
-          <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-primary mb-2">
-            <Gift className="w-4 h-4" />
+        <div className="stat-card">
+          <div className="w-9 h-9 gradient-primary rounded-xl flex items-center justify-center mb-3">
+            <Sparkles className="w-4 h-4 text-white" />
           </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-800">{wallet?.balancePoints || 0}</p>
-            <p className="text-xs text-gray-500 font-medium">我的积分</p>
-          </div>
+          <p className="stat-value">{wallet?.balancePoints || 0}</p>
+          <p className="stat-label">我的积分</p>
         </div>
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-between h-28">
-          <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center text-green-600 mb-2">
-            <Wallet className="w-4 h-4" />
+        <div className="stat-card">
+          <div className="w-9 h-9 gradient-success rounded-xl flex items-center justify-center mb-3">
+            <Wallet className="w-4 h-4 text-white" />
           </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-800">
-              {parseFloat(wallet?.balanceCashAvailable || '0').toFixed(2)} 
-              <span className="text-sm font-normal text-gray-400">¥</span>
-            </p>
-            <p className="text-xs text-gray-500 font-medium">账户余额</p>
-          </div>
+          <p className="stat-value">
+            {parseFloat(wallet?.balanceCashAvailable || '0').toFixed(2)} 
+            <span className="text-sm font-normal text-gray-400 ml-1">¥</span>
+          </p>
+          <p className="stat-label">账户余额</p>
         </div>
       </div>
 
-      <div className="px-4 mt-2 grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
-          <p className="text-xl font-bold text-primary">{spinBalance?.availableSpins || 0}</p>
-          <p className="text-xs text-gray-500">抽奖次数</p>
+      <div className="px-4 mt-3 grid grid-cols-2 gap-3">
+        <div className="card-elevated p-4 text-center">
+          <p className="text-2xl font-bold text-primary">{spinBalance?.availableSpins || 0}</p>
+          <p className="text-xs text-gray-400 mt-1">抽奖次数</p>
         </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-center">
-          <p className="text-xl font-bold text-orange-500">{checkinStatus?.currentStreak || 0}</p>
-          <p className="text-xs text-gray-500">连续签到天数</p>
+        <div className="card-elevated p-4 text-center">
+          <p className="text-2xl font-bold text-orange-500">{checkinStatus?.currentStreak || 0}</p>
+          <p className="text-xs text-gray-400 mt-1">连续签到</p>
         </div>
       </div>
 
       <div className="px-4 mt-6">
-        <h3 className="font-bold text-gray-800 mb-4 px-1">福利中心</h3>
+        <h3 className="section-title mb-3">福利中心</h3>
         <div className="grid grid-cols-2 gap-3">
           {benefits.map((benefit) => (
             <button
               key={benefit.id}
               onClick={() => handleBenefitClick(benefit.id)}
-              className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 flex items-center gap-3 hover:shadow-md hover:border-blue-100 transition-all text-left"
+              className={`card-elevated p-4 flex items-center gap-3 hover:shadow-md transition-all text-left bg-gradient-to-br ${benefit.gradient}`}
               data-testid={`button-benefit-${benefit.id}`}
             >
-              <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm">
                 {benefit.icon}
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="font-bold text-gray-800 text-sm truncate">{benefit.title}</h4>
-                <p className="text-xs text-gray-400 mt-0.5 truncate">{benefit.description}</p>
-                <span className="text-[10px] text-primary font-medium mt-1 inline-block">{benefit.action}</span>
+                <h4 className="font-semibold text-gray-800 text-sm truncate">{benefit.title}</h4>
+                <p className="text-[10px] text-gray-400 mt-0.5 truncate">{benefit.description}</p>
+                <span className="text-[10px] text-primary font-semibold mt-1 inline-block">{benefit.action}</span>
               </div>
             </button>
           ))}
         </div>
       </div>
 
-      <div className="px-4 mt-6">
-        <h3 className="font-bold text-gray-800 mb-4 px-1 flex items-center gap-2">
+      <div className="px-4 mt-6 mb-4">
+        <h3 className="section-title mb-3">
           <Clock className="w-4 h-4 text-primary" />
           每日任务
         </h3>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-50">
+        <div className="card-elevated divide-y divide-gray-50">
           {tasks.map((task, index) => (
             <button
               key={index}
               onClick={task.action}
-              className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
+              className="w-full p-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors text-left"
               data-testid={`button-task-${index}`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                  <Gift className="w-4 h-4 text-primary" />
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${task.completed ? 'bg-gray-100' : 'gradient-primary'}`}>
+                  <Gift className={`w-4 h-4 ${task.completed ? 'text-gray-400' : 'text-white'}`} />
                 </div>
                 <div>
                   <p className="font-medium text-gray-800 text-sm">{task.title}</p>
-                  <p className="text-xs text-green-600 font-medium">{task.reward}</p>
+                  <p className="text-xs text-emerald-500 font-medium">{task.reward}</p>
                 </div>
               </div>
-              <span className={`text-xs font-medium px-3 py-1 rounded-full ${task.completed ? 'text-gray-400 bg-gray-100' : 'text-primary bg-blue-50'}`}>
+              <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${task.completed ? 'text-gray-400 bg-gray-100' : 'text-primary bg-primary/10'}`}>
                 {task.completed ? '已完成' : '去完成'}
               </span>
             </button>
@@ -337,15 +341,15 @@ export default function MinePage() {
       <Dialog open={showLoginDialog} onOpenChange={setShowLoginDialog}>
         <DialogContent className="max-w-sm mx-auto rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-center">{isRegisterMode ? '注册账号' : '登录账号'}</DialogTitle>
+            <DialogTitle className="text-center font-bold">{isRegisterMode ? '注册账号' : '登录账号'}</DialogTitle>
           </DialogHeader>
           
           <div className="py-4 space-y-4">
             <div className="text-center mb-6">
-              <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <User className="w-10 h-10 text-primary" />
+              <div className="w-20 h-20 gradient-primary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <User className="w-10 h-10 text-white" />
               </div>
-              <p className="text-sm text-gray-500">{isRegisterMode ? '创建账号享受完整功能' : '登录后可享受完整功能'}</p>
+              <p className="text-sm text-gray-400">{isRegisterMode ? '创建账号享受完整功能' : '登录后可享受完整功能'}</p>
             </div>
 
             <input
@@ -353,7 +357,7 @@ export default function MinePage() {
               placeholder="请输入手机号"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full bg-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all"
+              className="input-modern"
               data-testid="input-phone"
             />
             
@@ -362,7 +366,7 @@ export default function MinePage() {
               placeholder="请输入密码（至少6位）"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all"
+              className="input-modern"
               data-testid="input-password"
             />
 
@@ -372,7 +376,7 @@ export default function MinePage() {
                 placeholder="请输入邀请码"
                 value={inviteCodeInput}
                 onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
-                className="w-full bg-gray-100 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all"
+                className="input-modern"
                 data-testid="input-invite-code"
               />
             )}
@@ -380,7 +384,7 @@ export default function MinePage() {
             <button
               onClick={handleSubmitAuth}
               disabled={isSubmitting}
-              className="w-full bg-primary text-white rounded-xl py-3 font-semibold flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
+              className="btn-primary-gradient w-full flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
               data-testid="button-login-submit"
             >
               <LogIn className="w-4 h-4" />
@@ -389,7 +393,7 @@ export default function MinePage() {
 
             <button
               onClick={() => setIsRegisterMode(!isRegisterMode)}
-              className="w-full text-primary text-sm py-2"
+              className="w-full text-primary text-sm py-2 font-medium"
             >
               {isRegisterMode ? '已有账号？点击登录' : '没有账号？点击注册'}
             </button>
@@ -415,29 +419,29 @@ export default function MinePage() {
       <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
         <DialogContent className="max-w-sm mx-auto rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-center flex items-center justify-center gap-2">
+            <DialogTitle className="text-center flex items-center justify-center gap-2 font-bold">
               <Share2 className="w-5 h-5 text-primary" />
               邀请好友
             </DialogTitle>
           </DialogHeader>
           
           <div className="py-4 space-y-4">
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 text-center text-white">
-              <h3 className="font-bold text-lg mb-2">邀请好友得奖励</h3>
-              <p className="text-sm opacity-90">每邀请一位好友注册，获得50积分</p>
-              <div className="mt-4 bg-white/20 rounded-xl py-3 px-4">
-                <p className="text-xs opacity-80 mb-1">我的邀请码</p>
+            <div className="gradient-primary rounded-2xl p-6 text-center text-white shine">
+              <h3 className="font-bold text-lg mb-2 text-shadow-sm">邀请好友得奖励</h3>
+              <p className="text-sm text-white/80">每邀请一位好友注册，获得50积分</p>
+              <div className="mt-4 bg-white/15 rounded-xl py-3 px-4 backdrop-blur-sm">
+                <p className="text-xs text-white/70 mb-1">我的邀请码</p>
                 <p className="font-bold text-xl tracking-wider">{inviteCode}</p>
               </div>
             </div>
 
-            <div className="bg-gray-100 rounded-xl p-4">
-              <p className="text-xs text-gray-500 mb-2">邀请链接</p>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <p className="text-xs text-gray-400 mb-2">邀请链接</p>
               <div className="flex items-center gap-2">
-                <p className="flex-1 text-sm text-gray-700 truncate">{inviteLink}</p>
+                <p className="flex-1 text-sm text-gray-600 truncate font-mono">{inviteLink}</p>
                 <button
                   onClick={handleCopyInvite}
-                  className="p-2 bg-primary text-white rounded-lg flex-shrink-0"
+                  className="p-2.5 gradient-primary text-white rounded-xl shadow-lg flex-shrink-0"
                   data-testid="button-copy-invite"
                 >
                   {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}

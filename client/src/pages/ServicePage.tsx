@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Header } from "@/components/Header";
-import { User, CreditCard, FlaskConical, FileText, ChevronRight, ChevronDown, Headphones, Gift, MessageCircle, X, Send, Bot } from "lucide-react";
+import { User, CreditCard, FlaskConical, FileText, ChevronRight, ChevronDown, Headphones, Gift, MessageCircle, Send, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -53,50 +53,50 @@ export default function ServicePage() {
   };
 
   return (
-    <div className="pb-24 min-h-screen bg-gray-50/50">
+    <div className="page-container">
       <Header title="客服中心" showProfile={false} />
 
-      {/* Welcome Card */}
       <div className="px-4 mt-4">
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+        <div className="gradient-primary rounded-3xl p-6 text-white shadow-xl relative overflow-hidden shine">
           <div className="relative z-10 flex items-center gap-4">
-            <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/10">
+            <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
               <User className="w-7 h-7" />
             </div>
             <div>
-              <h3 className="font-bold text-lg">您好, 亲爱的用户</h3>
+              <h3 className="font-bold text-lg text-shadow-sm">您好, 亲爱的用户</h3>
               <p className="text-sm opacity-90 font-medium mt-1">欢迎来到客服中心</p>
             </div>
           </div>
-          <div className="mt-6 flex items-center gap-2 bg-white/10 w-fit px-3 py-1.5 rounded-full backdrop-blur-sm">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(74,222,128,0.5)]"></div>
+          <div className="mt-6 flex items-center gap-2 bg-white/15 w-fit px-4 py-2 rounded-full backdrop-blur-sm">
+            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.6)]"></div>
             <span className="text-xs font-semibold">客服在线</span>
           </div>
           
-          {/* Decorative shapes */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-8 -mt-8" />
-          <div className="absolute bottom-0 right-10 w-24 h-24 bg-purple-500/20 rounded-full blur-2xl" />
+          <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl -mr-12 -mt-12" />
+          <div className="absolute bottom-0 right-10 w-28 h-28 bg-purple-400/20 rounded-full blur-2xl" />
         </div>
       </div>
 
-      {/* Service Action Card */}
       <div className="px-4 mt-6">
-        <SectionHeader icon={<Headphones className="text-orange-500" />} title="客服服务" />
+        <h3 className="section-title mb-3">
+          <Headphones className="w-4 h-4 text-primary" />
+          客服服务
+        </h3>
         
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div className="card-elevated p-5">
           <div className="flex items-center gap-4 mb-5">
-            <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center">
-              <Gift className="w-6 h-6 text-orange-500" />
+            <div className="w-12 h-12 gradient-warm rounded-2xl flex items-center justify-center shadow-lg">
+              <Gift className="w-6 h-6 text-white" />
             </div>
             <div>
               <h4 className="font-bold text-gray-800">福利社区</h4>
-              <p className="text-xs text-gray-500 mt-1">专业客服团队 • 快速响应</p>
+              <p className="text-xs text-gray-400 mt-1">专业客服团队 · 快速响应</p>
             </div>
           </div>
           
           <button 
             onClick={() => setShowContactDialog(true)}
-            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl py-3.5 font-semibold shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            className="btn-primary-gradient w-full flex items-center justify-center gap-2"
             data-testid="button-contact-service"
           >
             <MessageCircle className="w-4 h-4" />
@@ -106,42 +106,48 @@ export default function ServicePage() {
         </div>
       </div>
 
-      {/* FAQ Section */}
       <div className="px-4 mt-8">
-        <SectionHeader icon={<MessageCircle className="text-primary" />} title="常见问题" />
+        <h3 className="section-title mb-3">
+          <MessageCircle className="w-4 h-4 text-primary" />
+          常见问题
+        </h3>
         
         <div className="space-y-3">
           {faqItems.map((item, index) => (
             <div 
               key={index} 
-              className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all"
+              className="card-elevated overflow-hidden"
             >
               <button 
                 onClick={() => toggleFaq(index)}
-                className="w-full p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors text-left"
+                className="w-full p-4 flex items-center gap-4 hover:bg-gray-50/50 transition-colors text-left"
                 data-testid={`button-faq-${index}`}
               >
-                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-primary flex-shrink-0">
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary flex-shrink-0">
                   {item.icon}
                 </div>
                 <div className="flex-1">
-                  <h4 className="font-bold text-gray-800 text-sm">{item.title}</h4>
-                  <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>
+                  <h4 className="font-semibold text-gray-800 text-sm">{item.title}</h4>
+                  <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>
                 </div>
-                {expandedFaq === index ? (
-                  <ChevronDown className="w-5 h-5 text-primary transition-transform" />
-                ) : (
-                  <ChevronRight className="w-5 h-5 text-gray-300 transition-transform" />
-                )}
+                <div className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center transition-all",
+                  expandedFaq === index ? "bg-primary text-white" : "bg-gray-100 text-gray-400"
+                )}>
+                  {expandedFaq === index ? (
+                    <ChevronDown className="w-4 h-4" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4" />
+                  )}
+                </div>
               </button>
               
-              {/* Expandable Answer */}
               <div className={cn(
                 "overflow-hidden transition-all duration-300",
                 expandedFaq === index ? "max-h-96" : "max-h-0"
               )}>
                 <div className="px-4 pb-4 pt-0">
-                  <div className="bg-blue-50 rounded-xl p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+                  <div className="bg-primary/5 rounded-xl p-4 text-sm text-gray-600 leading-relaxed whitespace-pre-line border border-primary/10">
                     {item.answer}
                   </div>
                 </div>
@@ -151,7 +157,6 @@ export default function ServicePage() {
         </div>
       </div>
 
-      {/* Contact Dialog */}
       <Dialog open={showContactDialog} onOpenChange={setShowContactDialog}>
         <DialogContent className="max-w-sm mx-auto rounded-2xl">
           <DialogHeader>
@@ -163,16 +168,16 @@ export default function ServicePage() {
           
           {messageSent ? (
             <div className="py-8 text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <MessageCircle className="w-8 h-8 text-green-600" />
+              <div className="w-16 h-16 gradient-success rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                <MessageCircle className="w-8 h-8 text-white" />
               </div>
               <h3 className="font-bold text-gray-800">消息已发送</h3>
               <p className="text-sm text-gray-500 mt-2">客服将尽快回复您</p>
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="bg-blue-50 rounded-xl p-4">
-                <p className="text-sm text-gray-700">
+              <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
+                <p className="text-sm text-gray-600">
                   您好！我是365智慧问诊客服助手，请描述您遇到的问题，我们将尽快为您解答。
                 </p>
               </div>
@@ -181,14 +186,14 @@ export default function ServicePage() {
                 value={contactMessage}
                 onChange={(e) => setContactMessage(e.target.value)}
                 placeholder="请输入您的问题..."
-                className="w-full h-32 bg-gray-100 rounded-xl p-4 text-sm resize-none focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all"
+                className="input-modern h-32 resize-none"
                 data-testid="input-contact-message"
               />
               
               <button
                 onClick={handleSendMessage}
                 disabled={!contactMessage.trim()}
-                className="w-full bg-primary text-white rounded-xl py-3 font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="btn-primary-gradient w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="button-send-contact"
               >
                 <Send className="w-4 h-4" />
@@ -198,17 +203,6 @@ export default function ServicePage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function SectionHeader({ icon, title }: { icon: React.ReactNode, title: string }) {
-  return (
-    <div className="flex items-center gap-2 mb-3 px-1">
-      <div className="w-5 h-5">
-        {icon}
-      </div>
-      <h2 className="font-bold text-gray-800">{title}</h2>
     </div>
   );
 }
