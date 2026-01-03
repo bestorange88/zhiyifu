@@ -13,6 +13,11 @@ const tabs = [
 export function BottomNav() {
   const [location] = useLocation();
 
+  // Hide bottom nav on tool chat pages
+  if (location.startsWith("/tools/")) {
+    return null;
+  }
+
   return (
     <div className="bottom-nav-container">
       <div className="max-w-md mx-auto px-4 flex justify-between items-center gap-2 h-16">
