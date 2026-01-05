@@ -25,6 +25,7 @@ import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminWithdrawsPage from "@/pages/admin/AdminWithdrawsPage";
 import AdminAgentsPage from "@/pages/admin/AdminAgentsPage";
+import AdminGroupsPage from "@/pages/admin/AdminGroupsPage";
 import AdminOrdersPage from "@/pages/admin/AdminOrdersPage";
 import AdminStatsPage from "@/pages/admin/AdminStatsPage";
 
@@ -59,6 +60,7 @@ function AdminRouter() {
         <Route path="/admin/orders" component={AdminOrdersPage} />
         <Route path="/admin/withdraws" component={AdminWithdrawsPage} />
         <Route path="/admin/agents" component={AdminAgentsPage} />
+        <Route path="/admin/groups" component={AdminGroupsPage} />
         <Route path="/admin/stats" component={AdminStatsPage} />
       </Switch>
     </AdminAuthProvider>
