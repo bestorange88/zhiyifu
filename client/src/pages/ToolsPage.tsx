@@ -26,17 +26,23 @@ export const tools: Tool[] = [
   { id: '6', title: '中药疗理', description: 'AI中药保健疗理分析与提议', icon: <FlaskConical className="w-6 h-6" />, category: 'AI 问诊', color: 'bg-gradient-to-br from-emerald-500 to-teal-500' },
   { id: '7', title: '算命/运势', description: '八字命理分析您的性格特点、婚姻运势、财运事业', icon: <Sparkles className="w-6 h-6" />, category: '起名/算命', color: 'gradient-purple' },
   { id: '8', title: '星座查询', description: '分析性格特点、运势趋势、恋爱匹配', icon: <Sparkles className="w-6 h-6" />, category: '起名/算命', color: 'bg-gradient-to-br from-indigo-500 to-violet-500' },
+  { id: '9', title: '心理咨询', description: '倾听您的困扰，提供专业心理疏导与建议', icon: <Brain className="w-6 h-6" />, category: 'AI 问诊', color: 'bg-gradient-to-br from-purple-500 to-indigo-500' },
   { id: '10', title: '法律咨询', description: '用法律专业知识分析责任、风险、维权方式', icon: <Scale className="w-6 h-6" />, category: '法律', color: 'bg-gradient-to-br from-slate-600 to-slate-700' },
   { id: '11', title: '内科问诊', description: '包括呼吸内科、消化内科、心血管内科等医疗问诊', icon: <Brain className="w-6 h-6" />, category: 'AI 问诊', color: 'bg-gradient-to-br from-red-500 to-rose-600' },
   { id: '12', title: '智能写作', description: '如新闻/小说/报告/文案', icon: <FileText className="w-6 h-6" />, category: '教育（论文）', color: 'bg-gradient-to-br from-teal-500 to-cyan-500' },
   { id: '13', title: '妇科问诊', description: '专注女性健康与保养！AI隐私问诊', icon: <Heart className="w-6 h-6" />, category: 'AI 问诊', color: 'bg-gradient-to-br from-rose-400 to-pink-500' },
   { id: '14', title: '新生儿童起名', description: '吉利且朗朗上口的名字建议', icon: <Baby className="w-6 h-6" />, category: '起名/算命', color: 'bg-gradient-to-br from-amber-500 to-orange-500' },
+  { id: '15', title: '儿科问诊', description: '儿童常见病咨询与育儿健康指导', icon: <Baby className="w-6 h-6" />, category: 'AI 问诊', color: 'bg-gradient-to-br from-sky-400 to-blue-500' },
   { id: '16', title: '外科问诊', description: '外科: 包括普通外科、骨科、神经外科等', icon: <Bone className="w-6 h-6" />, category: 'AI 问诊', color: 'bg-gradient-to-br from-gray-600 to-gray-700' },
+  { id: '17', title: '皮肤科问诊', description: '皮肤问题诊断与护理建议', icon: <Eye className="w-6 h-6" />, category: 'AI 问诊', color: 'bg-gradient-to-br from-orange-400 to-amber-500' },
+  { id: '18', title: '营养膳食', description: '个性化饮食规划与营养搭配建议', icon: <Heart className="w-6 h-6" />, category: 'AI 问诊', color: 'bg-gradient-to-br from-lime-500 to-green-500' },
   { id: '19', title: '科研众筹', description: '科研辅助，药物靶点预测、分子模拟', icon: <FlaskConical className="w-6 h-6" />, category: 'AI 问诊', color: 'bg-gradient-to-br from-violet-500 to-purple-600' },
+  { id: '20', title: 'AI绘图', description: '专家级AI绘画生成，支持多种风格', icon: <Sparkles className="w-6 h-6" />, category: '创意工具', color: 'gradient-purple' },
   { id: '21', title: '法律风险评估', description: '评估您的行为与法律风险', icon: <Eye className="w-6 h-6" />, category: '法律', color: 'bg-gradient-to-br from-neutral-600 to-neutral-700' },
+  { id: '22', title: '论文辅导', description: '学术论文写作指导与润色', icon: <FileText className="w-6 h-6" />, category: '教育（论文）', color: 'bg-gradient-to-br from-blue-500 to-indigo-500' },
 ];
 
-const categories = ['全部', 'AI 问诊', '法律', '起名/算命', '教育（论文）'];
+const categories = ['全部', 'AI 问诊', '法律', '起名/算命', '教育（论文）', '创意工具'];
 
 export default function ToolsPage() {
   const [, setLocation] = useLocation();

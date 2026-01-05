@@ -354,4 +354,25 @@ export function registerApiRoutes(app: Express): void {
       res.status(400).json({ error: error.message });
     }
   });
+
+  app.get("/api/admin/orders", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const status = req.query.status as string | undefined;
+      const result = await adminService.getOrderList(status, page, limit);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/stats", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const result = await adminService.getSystemStats();
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
 }

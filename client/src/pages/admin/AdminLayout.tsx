@@ -1,6 +1,6 @@
 import { useState, ReactNode } from "react";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Users, CreditCard, UserCheck, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, Users, CreditCard, UserCheck, LogOut, Menu, X, ShoppingBag, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAdminAuth } from "@/lib/adminAuth";
 
@@ -22,8 +22,10 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
   const menuItems = [
     { id: "dashboard", label: "仪表盘", icon: LayoutDashboard, path: "/admin/dashboard" },
     { id: "users", label: "用户管理", icon: Users, path: "/admin/users" },
+    { id: "orders", label: "订单管理", icon: ShoppingBag, path: "/admin/orders" },
     { id: "withdraws", label: "提现管理", icon: CreditCard, path: "/admin/withdraws" },
     { id: "agents", label: "代理审核", icon: UserCheck, path: "/admin/agents" },
+    { id: "stats", label: "数据统计", icon: BarChart3, path: "/admin/stats" },
   ];
 
   const handleLogout = () => {

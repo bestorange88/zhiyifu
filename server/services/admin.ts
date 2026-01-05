@@ -128,12 +128,15 @@ export async function getWithdrawList(status?: string, page = 1, limit = 20) {
   const offset = (page - 1) * limit;
   
   let query = db.select().from(withdraws);
+  let countQuery = db.select({ count: count() }).from(withdraws);
+  
   if (status) {
     query = query.where(eq(withdraws.status, status)) as any;
+    countQuery = countQuery.where(eq(withdraws.status, status)) as any;
   }
   
   const list = await query.orderBy(desc(withdraws.createdAt)).limit(limit).offset(offset);
-  const [total] = await db.select({ count: count() }).from(withdraws);
+  const [total] = await countQuery;
   
   const listWithUser = await Promise.all(
     list.map(async (w) => {
@@ -196,4 +199,74 @@ export async function updateUserStatus(userId: number, status: string) {
     .set({ status })
     .where(eq(users.id, userId));
   return { success: true };
+}
+
+export async function getOrderList(status?: string, page = 1, limit = 20) {
+  const offset = (page - 1) * limit;
+  
+  let query = db.select().from(orders);
+  let countQuery = db.select({ count: count() }).from(orders);
+  
+  if (status) {
+    query = query.where(eq(orders.status, status)) as any;
+    countQuery = countQuery.where(eq(orders.status, status)) as any;
+  }
+  
+  const list = await query.orderBy(desc(orders.createdAt)).limit(limit).offset(offset);
+  const [total] = await countQuery;
+  
+  const listWithUser = await Promise.all(
+    list.map(async (o) => {
+      const [user] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, o.userId)).limit(1);
+      return { ...o, userPhone: user?.phone || "未知" };
+    })
+  );
+  
+  return {
+    orders: listWithUser,
+    total: total?.count || 0,
+    page,
+    limit,
+  };
+}
+
+export async function getSystemStats() {
+  const [userCount] = await db.select({ count: count() }).from(users);
+  const [orderCount] = await db.select({ count: count() }).from(orders);
+  const [withdrawPending] = await db.select({ count: count() }).from(withdraws).where(eq(withdraws.status, "applied"));
+  const [agentPending] = await db.select({ count: count() }).from(agentApplications).where(eq(agentApplications.status, "pending"));
+  
+  const [vip1Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 1));
+  const [vip2Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 2));
+  const [vip3Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 3));
+  
+  const completedOrders = await db.select({ amount: orders.amount }).from(orders).where(eq(orders.status, "completed"));
+  const totalRevenue = completedOrders.reduce((sum, o) => sum + parseFloat(o.amount), 0);
+  
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  
+  const [todayUsers] = await db.select({ count: count() }).from(users).where(sql`${users.createdAt} >= ${todayStart}`);
+  const [todayOrders] = await db.select({ count: count() }).from(orders).where(sql`${orders.createdAt} >= ${todayStart}`);
+  const [todayWithdraws] = await db.select({ count: count() }).from(withdraws).where(sql`${withdraws.createdAt} >= ${todayStart}`);
+  
+  const todayCompletedOrders = await db.select({ amount: orders.amount }).from(orders)
+    .where(sql`${orders.createdAt} >= ${todayStart} AND ${orders.status} = 'completed'`);
+  const todayRevenue = todayCompletedOrders.reduce((sum, o) => sum + parseFloat(o.amount), 0);
+  
+  return {
+    totalUsers: userCount?.count || 0,
+    vipUsers: (vip1Count?.count || 0) + (vip2Count?.count || 0) + (vip3Count?.count || 0),
+    totalOrders: orderCount?.count || 0,
+    totalRevenue: totalRevenue.toFixed(2),
+    pendingWithdraws: withdrawPending?.count || 0,
+    pendingAgents: agentPending?.count || 0,
+    vip1Count: vip1Count?.count || 0,
+    vip2Count: vip2Count?.count || 0,
+    vip3Count: vip3Count?.count || 0,
+    todayUsers: todayUsers?.count || 0,
+    todayOrders: todayOrders?.count || 0,
+    todayRevenue: todayRevenue.toFixed(2),
+    todayWithdraws: todayWithdraws?.count || 0,
+  };
 }

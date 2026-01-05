@@ -23,6 +23,8 @@ import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminWithdrawsPage from "@/pages/admin/AdminWithdrawsPage";
 import AdminAgentsPage from "@/pages/admin/AdminAgentsPage";
+import AdminOrdersPage from "@/pages/admin/AdminOrdersPage";
+import AdminStatsPage from "@/pages/admin/AdminStatsPage";
 
 function UserRouter() {
   return (
@@ -50,8 +52,10 @@ function AdminRouter() {
         <Route path="/admin" component={AdminLoginPage} />
         <Route path="/admin/dashboard" component={AdminDashboard} />
         <Route path="/admin/users" component={AdminUsersPage} />
+        <Route path="/admin/orders" component={AdminOrdersPage} />
         <Route path="/admin/withdraws" component={AdminWithdrawsPage} />
         <Route path="/admin/agents" component={AdminAgentsPage} />
+        <Route path="/admin/stats" component={AdminStatsPage} />
       </Switch>
     </AdminAuthProvider>
   );

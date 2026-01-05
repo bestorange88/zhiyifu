@@ -57,6 +57,7 @@ export default function HomePage() {
                 </div>
                 
                 <button 
+                  onClick={() => setLocation('/vip')}
                   className="mt-4 bg-white text-primary hover:bg-white/90 transition-colors rounded-xl px-4 py-2.5 text-sm font-bold w-full shadow-lg"
                   data-testid="button-hero-experience"
                 >
@@ -67,7 +68,7 @@ export default function HomePage() {
           </div>
 
           <button 
-            onClick={() => handleToolClick('ai-drawing')}
+            onClick={() => handleToolClick('20')}
             className="card-elevated p-4 flex flex-col justify-between h-32 relative overflow-hidden group cursor-pointer text-left"
             data-testid="button-ai-drawing"
           >
