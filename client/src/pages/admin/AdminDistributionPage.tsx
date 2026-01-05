@@ -40,7 +40,8 @@ export default function AdminDistributionPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return [];
-      return res.json();
+      const data = await res.json();
+      return data.users || data || [];
     },
     enabled: !!token,
   });

@@ -46,7 +46,8 @@ export default function AdminFinancePage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return [];
-      return res.json();
+      const data = await res.json();
+      return data.withdraws || data || [];
     },
     enabled: !!token,
   });
@@ -58,7 +59,8 @@ export default function AdminFinancePage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return [];
-      return res.json();
+      const data = await res.json();
+      return data.deposits || data || [];
     },
     enabled: !!token,
   });

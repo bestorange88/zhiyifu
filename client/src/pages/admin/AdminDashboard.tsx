@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { 
   LayoutDashboard, Users, CreditCard, UserCheck, LogOut, 
@@ -34,8 +34,13 @@ export default function AdminDashboard() {
     enabled: !!token,
   });
 
+  useEffect(() => {
+    if (!admin) {
+      setLocation("/admin");
+    }
+  }, [admin, setLocation]);
+
   if (!admin) {
-    setLocation("/admin");
     return null;
   }
 

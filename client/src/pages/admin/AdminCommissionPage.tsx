@@ -30,7 +30,8 @@ export default function AdminCommissionPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return [];
-      return res.json();
+      const data = await res.json();
+      return data.commissions || data || [];
     },
     enabled: !!token,
   });

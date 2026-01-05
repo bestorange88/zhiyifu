@@ -1,4 +1,4 @@
-import { useState, ReactNode } from "react";
+import { useState, ReactNode, useEffect } from "react";
 import { useLocation } from "wouter";
 import { LayoutDashboard, Users, CreditCard, UserCheck, LogOut, Menu, X, ShoppingBag, BarChart3, MessageSquare, Wallet, Gift, Share2, Coins, Crown, Settings, FileText, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,8 +14,13 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
   const { admin, logout } = useAdminAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  useEffect(() => {
+    if (!admin) {
+      setLocation("/admin");
+    }
+  }, [admin, setLocation]);
+
   if (!admin) {
-    setLocation("/admin");
     return null;
   }
 
