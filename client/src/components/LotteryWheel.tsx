@@ -243,6 +243,17 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
               积分
             </div>
           </div>
+
+          <div className="mt-4 bg-white/10 rounded-lg p-3">
+            <h4 className="text-white text-xs font-semibold mb-2 text-center">活动规则</h4>
+            <ul className="text-white/80 text-xs space-y-1">
+              <li>1. 每日签到可获得抽奖机会</li>
+              <li>2. 现金奖励将自动发放至账户余额</li>
+              <li>3. 积分奖励可用于兑换会员服务</li>
+              <li>4. 每次抽奖消耗1次抽奖机会</li>
+              <li>5. 本活动最终解释权归平台所有</li>
+            </ul>
+          </div>
         </div>
 
         {showResult && wonPrize && (
