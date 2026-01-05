@@ -519,6 +519,44 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  // ============ USER SERVICE CHAT ============
+  app.get("/api/service/session", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const session = await adminService.getUserServiceSession(req.userId!);
+      res.json(session);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/service/session", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const session = await adminService.createUserServiceSession(req.userId!);
+      res.status(201).json(session);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/service/messages", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const messages = await adminService.getUserServiceMessages(req.userId!);
+      res.json(messages);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/service/messages", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { content } = req.body;
+      const message = await adminService.sendUserServiceMessage(req.userId!, content);
+      res.status(201).json(message);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ============ ADMIN SYSTEM SETTINGS ============
   app.get("/api/admin/settings", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {

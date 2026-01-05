@@ -8,10 +8,12 @@ import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 
 interface ChatMessage {
-  id: string;
-  role: "user" | "assistant";
+  id: number;
+  sessionId: number;
+  senderType: string;
+  senderId: number;
   content: string;
-  time: Date;
+  createdAt: string;
 }
 
 interface ChatGroup {
@@ -86,19 +88,74 @@ export default function ServicePage() {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [showGroupChat, setShowGroupChat] = useState<ChatGroup | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content: "您好！我是云智医服智能客服，很高兴为您服务。请问有什么可以帮助您的吗？",
-      time: new Date(),
-    },
-  ]);
   const [input, setInput] = useState("");
   const [groupInput, setGroupInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const groupScrollRef = useRef<HTMLDivElement>(null);
+
+  const { data: serviceSession, refetch: refetchSession } = useQuery({
+    queryKey: ["/api/service/session"],
+    queryFn: async () => {
+      const res = await fetch("/api/service/session", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!token && showChat,
+  });
+
+  const createSessionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/service/session", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to create session");
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchSession();
+    },
+  });
+
+  useEffect(() => {
+    if (showChat && token && serviceSession === null && !createSessionMutation.isPending) {
+      createSessionMutation.mutate();
+    }
+  }, [showChat, token, serviceSession]);
+
+  const { data: serviceMessages, refetch: refetchServiceMessages } = useQuery<ChatMessage[]>({
+    queryKey: ["/api/service/messages"],
+    queryFn: async () => {
+      const res = await fetch("/api/service/messages", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!token && showChat && !!serviceSession,
+    refetchInterval: 3000,
+  });
+
+  const sendServiceMessageMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await fetch("/api/service/messages", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) throw new Error("Failed to send message");
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchServiceMessages();
+      setInput("");
+    },
+  });
 
   const { data: userGroups } = useQuery<ChatGroup[]>({
     queryKey: ["/api/groups"],
@@ -164,34 +221,12 @@ export default function ServicePage() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isTyping]);
+  }, [serviceMessages]);
 
   const handleSend = async (text?: string) => {
     const messageText = text || input.trim();
-    if (!messageText) return;
-
-    const userMessage: ChatMessage = {
-      id: `user_${Date.now()}`,
-      role: "user",
-      content: messageText,
-      time: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsTyping(true);
-
-    setTimeout(() => {
-      const response = getAutoResponse(messageText);
-      const assistantMessage: ChatMessage = {
-        id: `assistant_${Date.now()}`,
-        role: "assistant",
-        content: response,
-        time: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-      setIsTyping(false);
-    }, 1000 + Math.random() * 1000);
+    if (!messageText || sendServiceMessageMutation.isPending) return;
+    sendServiceMessageMutation.mutate(messageText);
   };
 
   const handleQuickReply = (text: string) => {
@@ -331,60 +366,69 @@ export default function ServicePage() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={cn(
-                "flex gap-2",
-                msg.role === "user" ? "flex-row-reverse" : "flex-row"
-              )}
-            >
-              <div
-                className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                  msg.role === "user"
-                    ? "bg-gradient-to-br from-primary to-cyan-500"
-                    : "bg-gradient-to-br from-orange-400 to-red-500"
-                )}
-              >
-                {msg.role === "user" ? (
-                  <User className="w-4 h-4 text-white" />
-                ) : (
-                  <Bot className="w-4 h-4 text-white" />
-                )}
-              </div>
-              <div
-                className={cn(
-                  "max-w-[75%] rounded-2xl px-4 py-3",
-                  msg.role === "user"
-                    ? "bg-gradient-to-br from-primary to-cyan-500 text-white rounded-tr-sm"
-                    : "bg-white text-gray-800 shadow-sm border border-gray-100 rounded-tl-sm"
-                )}
-              >
-                <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
-                <p
-                  className={cn(
-                    "text-[10px] mt-1",
-                    msg.role === "user" ? "text-white/70" : "text-gray-400"
-                  )}
-                >
-                  {format(msg.time, "HH:mm")}
-                </p>
-              </div>
-            </div>
-          ))}
-
-          {isTyping && (
+          {(!serviceMessages || serviceMessages.length === 0) && (
             <div className="flex gap-2">
               <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-orange-400 to-red-500">
                 <Bot className="w-4 h-4 text-white" />
               </div>
-              <div className="bg-white text-gray-800 shadow-sm border border-gray-100 rounded-2xl rounded-tl-sm px-4 py-3">
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+              <div className="max-w-[75%] rounded-2xl px-4 py-3 bg-white text-gray-800 shadow-sm border border-gray-100 rounded-tl-sm">
+                <p className="text-sm leading-relaxed whitespace-pre-line">您好！我是云智医服在线客服，很高兴为您服务。请问有什么可以帮助您的吗？</p>
+              </div>
+            </div>
+          )}
+          {serviceMessages && serviceMessages.map((msg) => {
+            const isUser = msg.senderType === "user";
+            return (
+              <div
+                key={msg.id}
+                className={cn(
+                  "flex gap-2",
+                  isUser ? "flex-row-reverse" : "flex-row"
+                )}
+              >
+                <div
+                  className={cn(
+                    "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                    isUser
+                      ? "bg-gradient-to-br from-primary to-cyan-500"
+                      : "bg-gradient-to-br from-orange-400 to-red-500"
+                  )}
+                >
+                  {isUser ? (
+                    <User className="w-4 h-4 text-white" />
+                  ) : (
+                    <Bot className="w-4 h-4 text-white" />
+                  )}
                 </div>
+                <div
+                  className={cn(
+                    "max-w-[75%] rounded-2xl px-4 py-3",
+                    isUser
+                      ? "bg-gradient-to-br from-primary to-cyan-500 text-white rounded-tr-sm"
+                      : "bg-white text-gray-800 shadow-sm border border-gray-100 rounded-tl-sm"
+                  )}
+                >
+                  <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
+                  <p
+                    className={cn(
+                      "text-[10px] mt-1",
+                      isUser ? "text-white/70" : "text-gray-400"
+                    )}
+                  >
+                    {format(new Date(msg.createdAt), "HH:mm")}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+
+          {sendServiceMessageMutation.isPending && (
+            <div className="flex gap-2 flex-row-reverse">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-primary to-cyan-500">
+                <Loader2 className="w-4 h-4 text-white animate-spin" />
+              </div>
+              <div className="max-w-[75%] rounded-2xl px-4 py-3 bg-gradient-to-br from-primary to-cyan-500 text-white rounded-tr-sm opacity-60">
+                <p className="text-sm">发送中...</p>
               </div>
             </div>
           )}
@@ -415,16 +459,16 @@ export default function ServicePage() {
             />
             <button
               onClick={() => handleSend()}
-              disabled={!input.trim() || isTyping}
+              disabled={!input.trim() || sendServiceMessageMutation.isPending}
               className={cn(
                 "w-10 h-10 rounded-full flex items-center justify-center transition-all",
-                input.trim() && !isTyping
+                input.trim() && !sendServiceMessageMutation.isPending
                   ? "bg-gradient-to-br from-primary to-cyan-500 text-white shadow-lg"
                   : "bg-gray-200 text-gray-400"
               )}
               data-testid="button-send-chat"
             >
-              {isTyping ? (
+              {sendServiceMessageMutation.isPending ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
                 <Send className="w-5 h-5" />

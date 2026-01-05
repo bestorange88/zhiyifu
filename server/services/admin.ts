@@ -626,3 +626,66 @@ export async function adjustUserBalance(
   
   return { success: true, newBalance: newValue };
 }
+
+// ============ USER SERVICE CHAT (for frontend users) ============
+export async function getUserServiceSession(userId: number) {
+  const [session] = await db.select()
+    .from(serviceChatSessions)
+    .where(eq(serviceChatSessions.userId, userId))
+    .orderBy(desc(serviceChatSessions.createdAt))
+    .limit(1);
+  
+  if (!session || session.status === "closed") {
+    return null;
+  }
+  
+  return session;
+}
+
+export async function createUserServiceSession(userId: number) {
+  const existing = await getUserServiceSession(userId);
+  if (existing) {
+    return existing;
+  }
+  
+  const [session] = await db.insert(serviceChatSessions)
+    .values({
+      userId,
+      status: "open",
+    })
+    .returning();
+  
+  return session;
+}
+
+export async function getUserServiceMessages(userId: number) {
+  const session = await getUserServiceSession(userId);
+  if (!session) {
+    return [];
+  }
+  
+  const messages = await db.select()
+    .from(serviceChatMessages)
+    .where(eq(serviceChatMessages.sessionId, session.id))
+    .orderBy(serviceChatMessages.createdAt);
+  
+  return messages;
+}
+
+export async function sendUserServiceMessage(userId: number, content: string) {
+  let session = await getUserServiceSession(userId);
+  if (!session) {
+    session = await createUserServiceSession(userId);
+  }
+  
+  const [message] = await db.insert(serviceChatMessages)
+    .values({
+      sessionId: session.id,
+      senderType: "user",
+      senderId: userId,
+      content,
+    })
+    .returning();
+  
+  return message;
+}
