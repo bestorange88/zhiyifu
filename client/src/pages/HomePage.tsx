@@ -57,7 +57,7 @@ export default function HomePage() {
                 </div>
                 
                 <button 
-                  onClick={() => setLocation('/vip')}
+                  onClick={() => setLocation('/insurance')}
                   className="mt-4 bg-white text-primary hover:bg-white/90 transition-colors rounded-xl px-4 py-2.5 text-sm font-bold w-full shadow-lg"
                   data-testid="button-hero-experience"
                 >
