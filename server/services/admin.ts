@@ -601,8 +601,6 @@ export async function adjustUserBalance(
   const currentValue = currency === "cny" ? parseFloat(wallet.balanceCashAvailable) : wallet.balancePoints;
   const newValue = currentValue + amount;
   
-  if (newValue < 0) throw new Error("余额不能为负数");
-  
   await db.update(wallets)
     .set({ [field]: currency === "cny" ? newValue.toFixed(2) : newValue })
     .where(eq(wallets.userId, userId));
