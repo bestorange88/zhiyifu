@@ -220,7 +220,9 @@ export const groupMembers = pgTable("group_members", {
 export const groupMessages = pgTable("group_messages", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").notNull().references(() => chatGroups.id),
-  userId: integer("user_id").notNull().references(() => users.id),
+  userId: integer("user_id").references(() => users.id),
+  senderType: varchar("sender_type", { length: 20 }).default("user").notNull(),
+  senderName: varchar("sender_name", { length: 100 }),
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

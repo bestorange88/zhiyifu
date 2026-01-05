@@ -38,7 +38,9 @@ interface UserForGroup {
 interface GroupMessage {
   id: number;
   groupId: number;
-  userId: number;
+  userId: number | null;
+  senderType: string;
+  senderName: string | null;
   content: string;
   createdAt: string;
   phone: string | null;
@@ -441,28 +443,42 @@ export default function AdminGroupsPage() {
                 暂无消息，开始对话吧
               </div>
             ) : (
-              chatMessages.map((msg) => (
-                <div key={msg.id} className="flex gap-2">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center flex-shrink-0">
-                    <Users className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {msg.phone || `用户 ${msg.userId}`}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {format(new Date(msg.createdAt), "MM-dd HH:mm")}
-                      </span>
+              chatMessages.map((msg) => {
+                const isAdmin = msg.senderType === "admin";
+                const displayName = isAdmin ? (msg.senderName || "管理员") : (msg.phone || `用户 ${msg.userId}`);
+                return (
+                  <div key={msg.id} className={cn("flex gap-2", isAdmin && "flex-row-reverse")}>
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                      isAdmin 
+                        ? "bg-gradient-to-br from-orange-400 to-red-500" 
+                        : "bg-gradient-to-br from-primary to-cyan-500"
+                    )}>
+                      <Users className="w-4 h-4 text-white" />
                     </div>
-                    <div className="bg-white dark:bg-gray-800 rounded-lg px-3 py-2 shadow-sm border border-gray-100 dark:border-gray-700">
-                      <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">
-                        {msg.content}
-                      </p>
+                    <div className="flex-1">
+                      <div className={cn("flex items-center gap-2 mb-1", isAdmin && "justify-end")}>
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {displayName}
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          {format(new Date(msg.createdAt), "MM-dd HH:mm")}
+                        </span>
+                      </div>
+                      <div className={cn(
+                        "rounded-lg px-3 py-2 shadow-sm",
+                        isAdmin 
+                          ? "bg-gradient-to-br from-orange-400 to-red-500 text-white ml-auto max-w-[80%]" 
+                          : "bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 max-w-[80%]"
+                      )}>
+                        <p className="text-sm whitespace-pre-line">
+                          {msg.content}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
 
             {sendMessageMutation.isPending && (

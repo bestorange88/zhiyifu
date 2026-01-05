@@ -26,7 +26,9 @@ interface ChatGroup {
 interface GroupMessage {
   id: number;
   groupId: number;
-  userId: number;
+  userId: number | null;
+  senderType: string;
+  senderName: string | null;
   content: string;
   createdAt: string;
   phone: string | null;
@@ -257,6 +259,8 @@ export default function ServicePage() {
           {groupMessages && groupMessages.length > 0 ? (
             groupMessages.map((msg) => {
               const isMe = msg.userId === user?.id;
+              const isAdmin = msg.senderType === "admin";
+              const displayName = isAdmin ? (msg.senderName || "管理员") : (msg.phone || `用户${msg.userId}`);
               return (
                 <div
                   key={msg.id}
@@ -270,14 +274,16 @@ export default function ServicePage() {
                       "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
                       isMe
                         ? "bg-gradient-to-br from-primary to-cyan-500"
-                        : "bg-gradient-to-br from-purple-400 to-pink-500"
+                        : isAdmin 
+                          ? "bg-gradient-to-br from-orange-400 to-red-500"
+                          : "bg-gradient-to-br from-purple-400 to-pink-500"
                     )}
                   >
                     <User className="w-4 h-4 text-white" />
                   </div>
                   <div className="max-w-[75%]">
                     {!isMe && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{msg.phone || `用户${msg.userId}`}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{displayName}</p>
                     )}
                     <div
                       className={cn(
