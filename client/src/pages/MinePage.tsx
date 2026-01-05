@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles } from "lucide-react";
+import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles, Moon, Sun, Trash2, Info, Shield, MessageCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -21,7 +21,14 @@ export default function MinePage() {
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [showLotteryDialog, setShowLotteryDialog] = useState(false);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return document.documentElement.classList.contains('dark');
+    }
+    return false;
+  });
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -174,6 +181,7 @@ export default function MinePage() {
               </button>
             )}
             <button 
+              onClick={() => setShowSettingsDialog(true)}
               className="p-2.5 bg-white/15 hover:bg-white/25 rounded-xl backdrop-blur-sm transition-colors"
               data-testid="button-settings"
             >
@@ -451,6 +459,75 @@ export default function MinePage() {
               <p className="text-xs text-gray-400">
                 已邀请 <span className="text-primary font-bold">{referralSummary?.directCount || 0}</span> 位好友
               </p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
+        <DialogContent className="max-w-sm mx-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-center flex items-center justify-center gap-2 font-bold">
+              <Settings className="w-5 h-5 text-gray-600" />
+              设置
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-2">
+            <button
+              onClick={() => {
+                const newMode = !isDarkMode;
+                setIsDarkMode(newMode);
+                if (newMode) {
+                  document.documentElement.classList.add('dark');
+                  localStorage.setItem('theme', 'dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                  localStorage.setItem('theme', 'light');
+                }
+              }}
+              className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              data-testid="button-toggle-theme"
+            >
+              <div className="flex items-center gap-3">
+                {isDarkMode ? <Moon className="w-5 h-5 text-indigo-500" /> : <Sun className="w-5 h-5 text-amber-500" />}
+                <span className="font-medium">深色模式</span>
+              </div>
+              <div className={`w-12 h-6 rounded-full transition-colors ${isDarkMode ? 'bg-indigo-500' : 'bg-gray-300'} relative`}>
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${isDarkMode ? 'translate-x-7' : 'translate-x-1'}`} />
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                localStorage.clear();
+                sessionStorage.clear();
+                toast({
+                  title: "缓存已清除",
+                  description: "应用缓存已成功清除",
+                });
+              }}
+              className="w-full flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              data-testid="button-clear-cache"
+            >
+              <Trash2 className="w-5 h-5 text-red-500" />
+              <span className="font-medium">清除缓存</span>
+            </button>
+
+            <button
+              onClick={() => setLocation('/service')}
+              className="w-full flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              data-testid="button-contact-service"
+            >
+              <MessageCircle className="w-5 h-5 text-green-500" />
+              <span className="font-medium">联系客服</span>
+            </button>
+
+            <div className="pt-4 border-t border-gray-100 dark:border-gray-700 mt-4">
+              <div className="text-center space-y-2">
+                <p className="text-xs text-gray-400">云智医服 v1.0.0</p>
+                <p className="text-xs text-gray-400">云端智能医疗服务平台</p>
+              </div>
             </div>
           </div>
         </DialogContent>
