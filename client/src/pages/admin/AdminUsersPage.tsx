@@ -88,14 +88,14 @@ export default function AdminUsersPage() {
   });
 
   const adjustBalanceMutation = useMutation({
-    mutationFn: async ({ userId, amount, reason }: { userId: number; amount: number; reason: string }) => {
+    mutationFn: async ({ userId, amount, currency, reason }: { userId: number; amount: number; currency: string; reason: string }) => {
       const res = await fetch(`/api/admin/users/${userId}/balance`, {
         method: "POST",
         headers: { 
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ amount, reason }),
+        body: JSON.stringify({ amount, currency, reason }),
       });
       if (!res.ok) throw new Error("Failed to adjust balance");
       return res.json();
@@ -123,6 +123,7 @@ export default function AdminUsersPage() {
     adjustBalanceMutation.mutate({ 
       userId: selectedUser.id, 
       amount: finalAmount, 
+      currency: "cny",
       reason: balanceReason || (balanceType === "add" ? "管理员加款" : "管理员扣款")
     });
   };
