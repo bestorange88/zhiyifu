@@ -765,10 +765,21 @@ export function registerApiRoutes(app: Express): void {
   app.post("/api/admin/users/:id/balance", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {
       const userId = parseInt(req.params.id);
-      const { amount, currency, reason } = req.body;
-      const result = await adminService.adjustUserBalance(req.adminId!, userId, amount, currency, reason);
+      const { amount, currency = "cny", reason = "" } = req.body;
+      
+      if (amount === undefined || amount === null) {
+        return res.status(400).json({ error: "请输入金额" });
+      }
+      
+      const numAmount = typeof amount === "string" ? parseFloat(amount) : amount;
+      if (isNaN(numAmount)) {
+        return res.status(400).json({ error: "金额格式无效" });
+      }
+      
+      const result = await adminService.adjustUserBalance(req.adminId!, userId, numAmount, currency, reason);
       res.json(result);
     } catch (error: any) {
+      console.error("Balance adjustment error:", error);
       res.status(400).json({ error: error.message });
     }
   });
