@@ -16,6 +16,7 @@ import ToolChatPage from "@/pages/ToolChatPage";
 import VipPage from "@/pages/VipPage";
 import ReferralPage from "@/pages/ReferralPage";
 import InsurancePage from "@/pages/InsurancePage";
+import CheckInPage from "@/pages/CheckInPage";
 import NotFound from "@/pages/not-found";
 
 // Admin Pages
@@ -36,6 +37,7 @@ function UserRouter() {
         <Route path="/tools/:id" component={ToolChatPage} />
         <Route path="/vip" component={VipPage} />
         <Route path="/insurance" component={InsurancePage} />
+        <Route path="/checkin" component={CheckInPage} />
         <Route path="/referral" component={ReferralPage} />
         <Route path="/chat" component={ChatPage} />
         <Route path="/service" component={ServicePage} />

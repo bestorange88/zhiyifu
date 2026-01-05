@@ -139,7 +139,7 @@ export default function MinePage() {
       title: '每日签到', 
       reward: '+10积分', 
       completed: checkinStatus?.checkedToday || false,
-      action: handleCheckin,
+      action: () => setLocation('/checkin'),
     },
     { 
       title: '完成一次AI问诊', 
@@ -273,10 +273,14 @@ export default function MinePage() {
           <p className="text-2xl font-bold text-primary">{spinBalance?.availableSpins || 0}</p>
           <p className="text-xs text-gray-400 mt-1">抽奖次数</p>
         </div>
-        <div className="card-elevated p-4 text-center">
+        <button 
+          onClick={() => setLocation('/checkin')}
+          className="card-elevated p-4 text-center hover:bg-gray-50/50 transition-colors"
+          data-testid="button-checkin-streak"
+        >
           <p className="text-2xl font-bold text-orange-500">{checkinStatus?.currentStreak || 0}</p>
           <p className="text-xs text-gray-400 mt-1">连续签到</p>
-        </div>
+        </button>
       </div>
 
       <div className="px-4 mt-6">
