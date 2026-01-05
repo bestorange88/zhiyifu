@@ -1,6 +1,35 @@
 import type { Express } from "express";
 import { AuthRequest, authMiddleware } from "../middleware/auth";
 import { AdminRequest, adminAuthMiddleware } from "../middleware/adminAuth";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(process.cwd(), "attached_assets", "uploads");
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("只允许上传图片文件"));
+    }
+  },
+});
 import * as authService from "../services/auth";
 import * as walletService from "../services/wallet";
 import * as checkinService from "../services/checkin";
@@ -299,6 +328,16 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/admin/users/:id", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const result = await adminService.getUserDetail(userId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.post("/api/admin/users/:id/status", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {
       const userId = parseInt(req.params.id);
@@ -495,6 +534,18 @@ export function registerApiRoutes(app: Express): void {
       const { key, value } = req.body;
       const setting = await adminService.setSystemSetting(key, value);
       res.json(setting);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/upload", adminAuthMiddleware, upload.single("file"), async (req: AdminRequest, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "请选择文件" });
+      }
+      const url = `/uploads/${req.file.filename}`;
+      res.json({ url, filename: req.file.filename });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

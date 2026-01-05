@@ -2,17 +2,27 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { 
   LayoutDashboard, Users, CreditCard, UserCheck, LogOut, 
-  Menu, X, TrendingUp, Clock, AlertCircle, ChevronRight, ShoppingBag, BarChart3
+  Menu, X, TrendingUp, Clock, AlertCircle, ChevronRight, ShoppingBag, BarChart3, Crown, Wallet
 } from "lucide-react";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { useQuery } from "@tanstack/react-query";
 
 interface DashboardStats {
   totalUsers: number;
+  vipUsers: number;
   pendingWithdraws: number;
   pendingAgentApps: number;
   totalOrders: number;
+  totalRevenue: number;
+  todayUsers: number;
+  todayOrders: number;
+  todayRevenue: number;
+  todayWithdraws: number;
+  vip1Count: number;
+  vip2Count: number;
+  vip3Count: number;
   recentUsers: any[];
   recentWithdraws: any[];
 }
@@ -50,7 +60,6 @@ export default function AdminDashboard() {
     { id: "orders", label: "订单管理", icon: ShoppingBag, path: "/admin/orders" },
     { id: "withdraws", label: "提现管理", icon: CreditCard, path: "/admin/withdraws" },
     { id: "agents", label: "代理审核", icon: UserCheck, path: "/admin/agents" },
-    { id: "stats", label: "数据统计", icon: BarChart3, path: "/admin/stats" },
   ];
 
   const handleLogout = () => {
@@ -135,46 +144,97 @@ export default function AdminDashboard() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <div className="bg-white rounded-xl p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-gray-500 text-sm">总用户数</span>
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Users className="w-5 h-5 text-blue-600" />
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+                <div className="bg-white rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-gray-500 text-xs">总用户数</span>
+                    <Users className="w-4 h-4 text-blue-500" />
                   </div>
-                  <p className="text-3xl font-bold text-gray-800">{stats?.totalUsers || 0}</p>
+                  <p className="text-2xl font-bold text-gray-800">{stats?.totalUsers || 0}</p>
                 </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-gray-500 text-xs">VIP会员</span>
+                    <Crown className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <p className="text-2xl font-bold text-gray-800">{stats?.vipUsers || 0}</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-gray-500 text-xs">总订单数</span>
+                    <ShoppingBag className="w-4 h-4 text-green-500" />
+                  </div>
+                  <p className="text-2xl font-bold text-gray-800">{stats?.totalOrders || 0}</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-gray-500 text-xs">总收入</span>
+                    <Wallet className="w-4 h-4 text-purple-500" />
+                  </div>
+                  <p className="text-2xl font-bold text-gray-800">¥{stats?.totalRevenue || 0}</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-gray-500 text-xs">待处理提现</span>
+                    <CreditCard className="w-4 h-4 text-orange-500" />
+                  </div>
+                  <p className="text-2xl font-bold text-gray-800">{stats?.pendingWithdraws || 0}</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-gray-500 text-xs">待审核代理</span>
+                    <UserCheck className="w-4 h-4 text-pink-500" />
+                  </div>
+                  <p className="text-2xl font-bold text-gray-800">{stats?.pendingAgentApps || 0}</p>
+                </div>
+              </div>
 
-                <div className="bg-white rounded-xl p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-gray-500 text-sm">待处理提现</span>
-                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <CreditCard className="w-5 h-5 text-orange-600" />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <Card className="p-6">
+                  <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5" />
+                    今日数据
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center py-2 border-b">
+                      <span className="text-gray-500">今日新增用户</span>
+                      <span className="font-bold text-blue-600">{stats?.todayUsers || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b">
+                      <span className="text-gray-500">今日新增订单</span>
+                      <span className="font-bold text-green-600">{stats?.todayOrders || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b">
+                      <span className="text-gray-500">今日收入</span>
+                      <span className="font-bold text-purple-600">¥{stats?.todayRevenue || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-gray-500">今日提现申请</span>
+                      <span className="font-bold text-orange-600">{stats?.todayWithdraws || 0}</span>
                     </div>
                   </div>
-                  <p className="text-3xl font-bold text-gray-800">{stats?.pendingWithdraws || 0}</p>
-                </div>
+                </Card>
 
-                <div className="bg-white rounded-xl p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-gray-500 text-sm">待审核代理</span>
-                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                      <UserCheck className="w-5 h-5 text-purple-600" />
+                <Card className="p-6">
+                  <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <Crown className="w-5 h-5" />
+                    VIP分布
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center py-2 border-b">
+                      <span className="text-gray-500">VIP1 会员</span>
+                      <span className="font-bold">{stats?.vip1Count || 0} 人</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b">
+                      <span className="text-gray-500">VIP2 会员</span>
+                      <span className="font-bold">{stats?.vip2Count || 0} 人</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-gray-500">VIP3 会员</span>
+                      <span className="font-bold">{stats?.vip3Count || 0} 人</span>
                     </div>
                   </div>
-                  <p className="text-3xl font-bold text-gray-800">{stats?.pendingAgentApps || 0}</p>
-                </div>
-
-                <div className="bg-white rounded-xl p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-gray-500 text-sm">总订单数</span>
-                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                      <TrendingUp className="w-5 h-5 text-green-600" />
-                    </div>
-                  </div>
-                  <p className="text-3xl font-bold text-gray-800">{stats?.totalOrders || 0}</p>
-                </div>
+                </Card>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

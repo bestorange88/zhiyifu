@@ -1,29 +1,71 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
-import { Users, Search, ChevronLeft, ChevronRight, Ban, CheckCircle } from "lucide-react";
+import { Users, Search, ChevronLeft, ChevronRight, Ban, CheckCircle, Plus, Minus, Eye, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "./AdminLayout";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card } from "@/components/ui/card";
+
+interface UserDetail {
+  id: number;
+  phone: string;
+  inviteCode: string;
+  vipLevel: number;
+  status: string;
+  createdAt: string;
+  wallet: {
+    balanceCashAvailable: string;
+    balanceCashPending: string;
+    balanceGift: string;
+    totalDeposited: string;
+    totalWithdrawn: string;
+    totalEarnings: string;
+  } | null;
+  invitedBy: string | null;
+  referralCount: number;
+}
 
 export default function AdminUsersPage() {
   const { token } = useAdminAuth();
   const { toast } = useToast();
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [balanceModalOpen, setBalanceModalOpen] = useState(false);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [balanceAmount, setBalanceAmount] = useState("");
+  const [balanceReason, setBalanceReason] = useState("");
+  const [balanceType, setBalanceType] = useState<"add" | "subtract">("add");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["/api/admin/users", page],
+    queryKey: ["/api/admin/users", page, searchQuery],
     queryFn: async () => {
-      const res = await fetch(`/api/admin/users?page=${page}&limit=20`, {
+      const params = new URLSearchParams({ page: String(page), limit: "20" });
+      if (searchQuery) params.append("search", searchQuery);
+      const res = await fetch(`/api/admin/users?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to load users");
       return res.json();
     },
     enabled: !!token,
+  });
+
+  const { data: userDetail, isLoading: loadingDetail } = useQuery<UserDetail>({
+    queryKey: ["/api/admin/users", selectedUser?.id, "detail"],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/users/${selectedUser.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load user detail");
+      return res.json();
+    },
+    enabled: !!selectedUser && detailModalOpen,
   });
 
   const updateStatusMutation = useMutation({
@@ -45,6 +87,59 @@ export default function AdminUsersPage() {
     },
   });
 
+  const adjustBalanceMutation = useMutation({
+    mutationFn: async ({ userId, amount, reason }: { userId: number; amount: number; reason: string }) => {
+      const res = await fetch(`/api/admin/users/${userId}/balance`, {
+        method: "POST",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ amount, reason }),
+      });
+      if (!res.ok) throw new Error("Failed to adjust balance");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      setBalanceModalOpen(false);
+      setBalanceAmount("");
+      setBalanceReason("");
+      toast({ title: "余额调整成功" });
+    },
+    onError: () => {
+      toast({ title: "余额调整失败", variant: "destructive" });
+    },
+  });
+
+  const handleBalanceAdjust = () => {
+    if (!selectedUser || !balanceAmount) return;
+    const amount = parseFloat(balanceAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({ title: "请输入有效金额", variant: "destructive" });
+      return;
+    }
+    const finalAmount = balanceType === "subtract" ? -amount : amount;
+    adjustBalanceMutation.mutate({ 
+      userId: selectedUser.id, 
+      amount: finalAmount, 
+      reason: balanceReason || (balanceType === "add" ? "管理员加款" : "管理员扣款")
+    });
+  };
+
+  const openBalanceModal = (user: any, type: "add" | "subtract") => {
+    setSelectedUser(user);
+    setBalanceType(type);
+    setBalanceAmount("");
+    setBalanceReason("");
+    setBalanceModalOpen(true);
+  };
+
+  const openDetailModal = (user: any) => {
+    setSelectedUser(user);
+    setDetailModalOpen(true);
+  };
+
   const totalPages = Math.ceil((data?.total || 0) / 20);
 
   return (
@@ -53,7 +148,13 @@ export default function AdminUsersPage() {
         <div className="p-4 border-b flex items-center justify-between gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input placeholder="搜索用户..." className="pl-10" />
+            <Input 
+              placeholder="搜索手机号..." 
+              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              data-testid="input-search-users"
+            />
           </div>
           <span className="text-sm text-gray-500">共 {data?.total || 0} 位用户</span>
         </div>
@@ -112,27 +213,55 @@ export default function AdminUsersPage() {
                       {new Date(user.createdAt).toLocaleDateString("zh-CN")}
                     </td>
                     <td className="px-4 py-3">
-                      {user.status === "active" ? (
+                      <div className="flex items-center gap-1">
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => updateStatusMutation.mutate({ userId: user.id, status: "banned" })}
-                          className="text-red-600 border-red-200 hover:bg-red-50"
+                          onClick={() => openBalanceModal(user, "add")}
+                          className="text-green-600 border-green-200"
+                          data-testid={`button-add-balance-${user.id}`}
                         >
-                          <Ban className="w-3 h-3 mr-1" />
-                          禁用
+                          <Plus className="w-3 h-3" />
                         </Button>
-                      ) : (
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => updateStatusMutation.mutate({ userId: user.id, status: "active" })}
-                          className="text-green-600 border-green-200 hover:bg-green-50"
+                          onClick={() => openBalanceModal(user, "subtract")}
+                          className="text-red-600 border-red-200"
+                          data-testid={`button-subtract-balance-${user.id}`}
                         >
-                          <CheckCircle className="w-3 h-3 mr-1" />
-                          启用
+                          <Minus className="w-3 h-3" />
                         </Button>
-                      )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openDetailModal(user)}
+                          data-testid={`button-user-detail-${user.id}`}
+                        >
+                          <Eye className="w-3 h-3" />
+                        </Button>
+                        {user.status === "active" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateStatusMutation.mutate({ userId: user.id, status: "banned" })}
+                            className="text-red-600 border-red-200"
+                            data-testid={`button-ban-user-${user.id}`}
+                          >
+                            <Ban className="w-3 h-3" />
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateStatusMutation.mutate({ userId: user.id, status: "active" })}
+                            className="text-green-600 border-green-200"
+                            data-testid={`button-enable-user-${user.id}`}
+                          >
+                            <CheckCircle className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -172,6 +301,126 @@ export default function AdminUsersPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={balanceModalOpen} onOpenChange={setBalanceModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{balanceType === "add" ? "加款" : "扣款"} - {selectedUser?.phone}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>金额</Label>
+              <Input
+                type="number"
+                placeholder="请输入金额"
+                value={balanceAmount}
+                onChange={(e) => setBalanceAmount(e.target.value)}
+                data-testid="input-balance-amount"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>备注</Label>
+              <Input
+                placeholder="请输入备注（可选）"
+                value={balanceReason}
+                onChange={(e) => setBalanceReason(e.target.value)}
+                data-testid="input-balance-reason"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setBalanceModalOpen(false)}>
+                取消
+              </Button>
+              <Button 
+                onClick={handleBalanceAdjust}
+                disabled={adjustBalanceMutation.isPending}
+                className={balanceType === "add" ? "bg-green-600" : "bg-red-600"}
+                data-testid="button-confirm-balance"
+              >
+                {adjustBalanceMutation.isPending ? "处理中..." : "确认"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={detailModalOpen} onOpenChange={setDetailModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>用户详情</DialogTitle>
+          </DialogHeader>
+          {loadingDetail ? (
+            <div className="py-8 text-center text-gray-500">加载中...</div>
+          ) : userDetail ? (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-gray-500">手机号</Label>
+                  <p className="font-medium">{userDetail.phone}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">邀请码</Label>
+                  <p className="font-mono text-purple-600">{userDetail.inviteCode}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">VIP等级</Label>
+                  <p>{userDetail.vipLevel > 0 ? `VIP${userDetail.vipLevel}` : "普通用户"}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">状态</Label>
+                  <p className={userDetail.status === "active" ? "text-green-600" : "text-red-600"}>
+                    {userDetail.status === "active" ? "正常" : "禁用"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">注册时间</Label>
+                  <p>{new Date(userDetail.createdAt).toLocaleString("zh-CN")}</p>
+                </div>
+                <div>
+                  <Label className="text-xs text-gray-500">邀请人</Label>
+                  <p>{userDetail.invitedBy || "无"}</p>
+                </div>
+              </div>
+
+              <Card className="p-4">
+                <h4 className="font-semibold mb-3">钱包信息</h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-gray-500">可用余额</span>
+                    <p className="font-bold text-green-600">¥{userDetail.wallet?.balanceCashAvailable || "0.00"}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">冻结余额</span>
+                    <p className="font-bold text-orange-600">¥{userDetail.wallet?.balanceCashPending || "0.00"}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">赠送余额</span>
+                    <p className="font-bold">¥{userDetail.wallet?.balanceGift || "0.00"}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">累计充值</span>
+                    <p className="font-bold">¥{userDetail.wallet?.totalDeposited || "0.00"}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">累计提现</span>
+                    <p className="font-bold">¥{userDetail.wallet?.totalWithdrawn || "0.00"}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">累计收益</span>
+                    <p className="font-bold">¥{userDetail.wallet?.totalEarnings || "0.00"}</p>
+                  </div>
+                </div>
+              </Card>
+
+              <div className="flex justify-between items-center text-sm text-gray-500">
+                <span>邀请人数: {userDetail.referralCount || 0} 人</span>
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-gray-500">加载失败</div>
+          )}
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }

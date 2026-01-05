@@ -37,7 +37,6 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
     { id: "service", label: "客服中心", icon: Headphones, path: "/admin/service" },
     { id: "groups", label: "群组管理", icon: MessageSquare, path: "/admin/groups" },
     { id: "agents", label: "代理审核", icon: UserCheck, path: "/admin/agents" },
-    { id: "stats", label: "数据统计", icon: BarChart3, path: "/admin/stats" },
     { id: "settings", label: "系统设置", icon: Settings, path: "/admin/settings" },
   ];
 
