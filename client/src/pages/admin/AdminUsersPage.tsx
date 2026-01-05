@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Users, Search, ChevronLeft, ChevronRight, Ban, CheckCircle, Plus, Minus, Eye, X } from "lucide-react";
+import { Users, Search, ChevronLeft, ChevronRight, Ban, CheckCircle, Plus, Minus, Eye, X, GitBranch, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +37,7 @@ export default function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [relationshipModalOpen, setRelationshipModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [balanceAmount, setBalanceAmount] = useState("");
   const [balanceReason, setBalanceReason] = useState("");
@@ -66,6 +67,18 @@ export default function AdminUsersPage() {
       return res.json();
     },
     enabled: !!selectedUser && detailModalOpen,
+  });
+
+  const { data: relationshipData, isLoading: loadingRelationship } = useQuery({
+    queryKey: ["/api/admin/users", selectedUser?.id, "relationship"],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/users/${selectedUser.id}/relationship`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load relationship");
+      return res.json();
+    },
+    enabled: !!selectedUser && relationshipModalOpen,
   });
 
   const updateStatusMutation = useMutation({
@@ -139,6 +152,11 @@ export default function AdminUsersPage() {
   const openDetailModal = (user: any) => {
     setSelectedUser(user);
     setDetailModalOpen(true);
+  };
+
+  const openRelationshipModal = (user: any) => {
+    setSelectedUser(user);
+    setRelationshipModalOpen(true);
   };
 
   const totalPages = Math.ceil((data?.total || 0) / 20);
@@ -240,6 +258,15 @@ export default function AdminUsersPage() {
                           data-testid={`button-user-detail-${user.id}`}
                         >
                           <Eye className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openRelationshipModal(user)}
+                          className="text-purple-600 border-purple-200"
+                          data-testid={`button-user-relationship-${user.id}`}
+                        >
+                          <GitBranch className="w-3 h-3" />
                         </Button>
                         {user.status === "active" ? (
                           <Button
@@ -415,6 +442,90 @@ export default function AdminUsersPage() {
 
               <div className="flex justify-between items-center text-sm text-gray-500">
                 <span>邀请人数: {userDetail.referralCount || 0} 人</span>
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-gray-500">加载失败</div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={relationshipModalOpen} onOpenChange={setRelationshipModalOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitBranch className="w-5 h-5 text-purple-600" />
+              上下级关系 - {selectedUser?.phone}
+            </DialogTitle>
+          </DialogHeader>
+          {loadingRelationship ? (
+            <div className="py-8 text-center text-gray-500">加载中...</div>
+          ) : relationshipData ? (
+            <div className="space-y-4 py-4">
+              <div className="p-3 bg-purple-50 rounded-lg text-center">
+                <p className="text-sm text-gray-500">当前用户</p>
+                <p className="font-bold text-lg">{relationshipData.user?.phone}</p>
+                <p className="text-xs text-purple-600">邀请码: {relationshipData.user?.inviteCode}</p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <ArrowUp className="w-4 h-4 text-blue-500" />
+                  上级链 ({relationshipData.upline?.length || 0}层)
+                </div>
+                {relationshipData.upline?.length > 0 ? (
+                  <div className="space-y-1 pl-6">
+                    {relationshipData.upline.map((parent: any) => (
+                      <div 
+                        key={parent.id} 
+                        className="flex items-center justify-between p-2 bg-blue-50 rounded text-sm"
+                      >
+                        <span className="font-medium">{parent.phone}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">第{parent.level}级</span>
+                          {parent.vipLevel > 0 && (
+                            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs rounded">
+                              VIP{parent.vipLevel}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="pl-6 text-sm text-gray-400">无上级</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <ArrowDown className="w-4 h-4 text-green-500" />
+                  直推下级 ({relationshipData.downline?.length || 0}人)
+                </div>
+                {relationshipData.downline?.length > 0 ? (
+                  <div className="space-y-1 pl-6">
+                    {relationshipData.downline.map((child: any) => (
+                      <div 
+                        key={child.id} 
+                        className="flex items-center justify-between p-2 bg-green-50 rounded text-sm"
+                      >
+                        <span className="font-medium">{child.phone}</span>
+                        <div className="flex items-center gap-2">
+                          {child.subCount > 0 && (
+                            <span className="text-xs text-gray-500">下级{child.subCount}人</span>
+                          )}
+                          {child.vipLevel > 0 && (
+                            <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs rounded">
+                              VIP{child.vipLevel}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="pl-6 text-sm text-gray-400">无下级</p>
+                )}
               </div>
             </div>
           ) : (

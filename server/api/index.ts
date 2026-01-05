@@ -793,4 +793,14 @@ export function registerApiRoutes(app: Express): void {
       res.status(400).json({ error: error.message });
     }
   });
+
+  app.get("/api/admin/users/:id/relationship", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const tree = await adminService.getUserRelationshipTree(userId);
+      res.json(tree);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
 }

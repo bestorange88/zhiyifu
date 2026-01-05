@@ -670,6 +670,63 @@ export async function getUserServiceMessages(userId: number) {
   return messages;
 }
 
+// ============ USER RELATIONSHIP TREE ============
+export async function getUserRelationshipTree(userId: number) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) {
+    throw new Error("用户不存在");
+  }
+
+  const upline: Array<{ id: number; phone: string; level: number; vipLevel: number }> = [];
+  let currentId = user.inviterId;
+  let level = 1;
+  
+  while (currentId && level <= 10) {
+    const [parent] = await db.select({
+      id: users.id,
+      phone: users.phone,
+      inviterId: users.inviterId,
+      vipLevel: users.vipLevel,
+    }).from(users).where(eq(users.id, currentId)).limit(1);
+    
+    if (parent) {
+      upline.push({ id: parent.id, phone: parent.phone || "", level, vipLevel: parent.vipLevel });
+      currentId = parent.inviterId;
+      level++;
+    } else {
+      break;
+    }
+  }
+
+  const directDownline = await db.select({
+    id: users.id,
+    phone: users.phone,
+    vipLevel: users.vipLevel,
+    createdAt: users.createdAt,
+  }).from(users).where(eq(users.inviterId, userId)).orderBy(desc(users.createdAt)).limit(50);
+
+  const downlineWithCount = await Promise.all(
+    directDownline.map(async (d) => {
+      const [subCount] = await db.select({ count: count() }).from(users).where(eq(users.inviterId, d.id));
+      return {
+        ...d,
+        subCount: subCount?.count || 0,
+      };
+    })
+  );
+
+  return {
+    user: {
+      id: user.id,
+      phone: user.phone,
+      inviteCode: user.inviteCode,
+      vipLevel: user.vipLevel,
+    },
+    upline,
+    downline: downlineWithCount,
+  };
+}
+
 export async function sendUserServiceMessage(userId: number, content: string) {
   let session = await getUserServiceSession(userId);
   if (!session) {
