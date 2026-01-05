@@ -86,10 +86,15 @@ export async function confirmVipPurchase(userId: number, orderId: number) {
     })
     .where(eq(users.id, userId));
 
+  if (plan.dailyExtraSpins && plan.dailyExtraSpins > 0) {
+    await addSpins(userId, plan.dailyExtraSpins);
+  }
+
   return {
     success: true,
     vipLevel: plan.level,
     expireAt,
+    dailyExtraSpins: plan.dailyExtraSpins || 0,
   };
 }
 
