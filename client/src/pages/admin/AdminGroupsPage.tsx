@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Users, Plus, Trash2, Edit2, X, Check, UserPlus } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Users, Plus, Trash2, Edit2, X, Check, UserPlus, MessageCircle, Send, ArrowLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +10,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "./AdminLayout";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface GroupMember {
   id: number;
@@ -33,6 +35,15 @@ interface UserForGroup {
   status: string;
 }
 
+interface GroupMessage {
+  id: number;
+  groupId: number;
+  userId: number;
+  content: string;
+  createdAt: string;
+  phone: string | null;
+}
+
 export default function AdminGroupsPage() {
   const { token } = useAdminAuth();
   const { toast } = useToast();
@@ -41,6 +52,9 @@ export default function AdminGroupsPage() {
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<number[]>([]);
+  const [chatGroup, setChatGroup] = useState<Group | null>(null);
+  const [chatInput, setChatInput] = useState("");
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   const { data: groups, isLoading } = useQuery<Group[]>({
     queryKey: ["/api/admin/groups"],
@@ -129,6 +143,52 @@ export default function AdminGroupsPage() {
       toast({ title: "删除失败", variant: "destructive" });
     },
   });
+
+  const { data: chatMessages, refetch: refetchMessages } = useQuery<GroupMessage[]>({
+    queryKey: ["/api/admin/groups", chatGroup?.id, "messages"],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/groups/${chatGroup!.id}/messages?limit=100`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!token && !!chatGroup,
+    refetchInterval: 3000,
+  });
+
+  const sendMessageMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await fetch(`/api/admin/groups/${chatGroup!.id}/messages`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) throw new Error("Failed to send message");
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchMessages();
+      setChatInput("");
+    },
+    onError: () => {
+      toast({ title: "发送失败", variant: "destructive" });
+    },
+  });
+
+  useEffect(() => {
+    if (chatScrollRef.current && chatMessages) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
+
+  const handleSendMessage = () => {
+    if (!chatInput.trim() || sendMessageMutation.isPending) return;
+    sendMessageMutation.mutate(chatInput.trim());
+  };
 
   const resetForm = () => {
     setShowCreateDialog(false);
@@ -228,6 +288,15 @@ export default function AdminGroupsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setChatGroup(group)}
+                          data-testid={`button-chat-group-${group.id}`}
+                        >
+                          <MessageCircle className="w-3 h-3 mr-1" />
+                          对话
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -336,6 +405,96 @@ export default function AdminGroupsPage() {
                 data-testid="button-submit-group"
               >
                 {createMutation.isPending || updateMutation.isPending ? "保存中..." : "保存"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!chatGroup} onOpenChange={() => setChatGroup(null)}>
+        <DialogContent className="max-w-2xl h-[600px] flex flex-col p-0">
+          <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-gray-700">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setChatGroup(null)}
+              data-testid="button-close-chat"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div className="flex-1">
+              <h2 className="font-bold text-gray-900 dark:text-gray-100">
+                {chatGroup?.name}
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {chatGroup?.members.length || 0} 成员
+              </p>
+            </div>
+          </div>
+
+          <div
+            ref={chatScrollRef}
+            className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900"
+          >
+            {(!chatMessages || chatMessages.length === 0) ? (
+              <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+                暂无消息，开始对话吧
+              </div>
+            ) : (
+              chatMessages.map((msg) => (
+                <div key={msg.id} className="flex gap-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center flex-shrink-0">
+                    <Users className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {msg.phone || `用户 ${msg.userId}`}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {format(new Date(msg.createdAt), "MM-dd HH:mm")}
+                      </span>
+                    </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg px-3 py-2 shadow-sm border border-gray-100 dark:border-gray-700">
+                      <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-line">
+                        {msg.content}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+
+            {sendMessageMutation.isPending && (
+              <div className="flex gap-2 justify-end">
+                <div className="bg-primary/10 text-primary rounded-lg px-3 py-2 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">发送中...</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <div className="flex items-center gap-2">
+              <Input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
+                placeholder="输入消息..."
+                className="flex-1"
+                data-testid="input-admin-group-message"
+              />
+              <Button
+                onClick={handleSendMessage}
+                disabled={!chatInput.trim() || sendMessageMutation.isPending}
+                data-testid="button-send-admin-group-message"
+              >
+                {sendMessageMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
               </Button>
             </div>
           </div>

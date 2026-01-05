@@ -165,3 +165,37 @@ export async function getAllUsersForGroupSelection() {
   }).from(users).where(eq(users.status, "active"));
   return usersList;
 }
+
+export async function getAdminGroupMessages(groupId: number, limit: number = 50) {
+  const messages = await db
+    .select({
+      id: groupMessages.id,
+      groupId: groupMessages.groupId,
+      userId: groupMessages.userId,
+      content: groupMessages.content,
+      createdAt: groupMessages.createdAt,
+      phone: users.phone,
+    })
+    .from(groupMessages)
+    .leftJoin(users, eq(groupMessages.userId, users.id))
+    .where(eq(groupMessages.groupId, groupId))
+    .orderBy(desc(groupMessages.createdAt))
+    .limit(limit);
+  
+  return messages.reverse();
+}
+
+export async function sendAdminGroupMessage(groupId: number, adminId: number, content: string) {
+  const [group] = await db.select().from(chatGroups).where(eq(chatGroups.id, groupId));
+  if (!group) {
+    throw new Error("群组不存在");
+  }
+
+  const [message] = await db.insert(groupMessages).values({
+    groupId,
+    userId: adminId,
+    content,
+  }).returning();
+  
+  return message;
+}

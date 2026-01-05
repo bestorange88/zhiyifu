@@ -487,6 +487,28 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/admin/groups/:id/messages", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const limit = parseInt(req.query.limit as string) || 50;
+      const messages = await groupService.getAdminGroupMessages(groupId, limit);
+      res.json(messages);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/groups/:id/messages", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const { content } = req.body;
+      const message = await groupService.sendAdminGroupMessage(groupId, req.adminId!, content);
+      res.status(201).json(message);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ============ USER GROUP ENDPOINTS ============
   app.get("/api/groups", authMiddleware, async (req: AuthRequest, res) => {
     try {
