@@ -82,7 +82,8 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
       const sliceAngle = 360 / 12;
       const targetAngle = prizeIndex * sliceAngle + sliceAngle / 2;
       const spins = 5 + Math.random() * 3;
-      const finalRotation = rotation + spins * 360 + (360 - targetAngle);
+      const baseSpins = Math.floor(rotation / 360) + Math.floor(spins) + 1;
+      const finalRotation = baseSpins * 360 + (360 - targetAngle);
 
       setRotation(finalRotation);
 
