@@ -1,6 +1,6 @@
 import { useState, ReactNode } from "react";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Users, CreditCard, UserCheck, LogOut, Menu, X, ShoppingBag, BarChart3, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Users, CreditCard, UserCheck, LogOut, Menu, X, ShoppingBag, BarChart3, MessageSquare, Wallet, Gift, Share2, Coins, Crown, Settings, FileText, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAdminAuth } from "@/lib/adminAuth";
 
@@ -23,10 +23,17 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
     { id: "dashboard", label: "仪表盘", icon: LayoutDashboard, path: "/admin/dashboard" },
     { id: "users", label: "用户管理", icon: Users, path: "/admin/users" },
     { id: "orders", label: "订单管理", icon: ShoppingBag, path: "/admin/orders" },
-    { id: "withdraws", label: "提现管理", icon: CreditCard, path: "/admin/withdraws" },
-    { id: "agents", label: "代理审核", icon: UserCheck, path: "/admin/agents" },
+    { id: "finance", label: "充提管理", icon: Wallet, path: "/admin/finance" },
+    { id: "lottery", label: "抽奖管理", icon: Gift, path: "/admin/lottery" },
+    { id: "distribution", label: "分销管理", icon: Share2, path: "/admin/distribution" },
+    { id: "commission", label: "佣金管理", icon: Coins, path: "/admin/commission" },
+    { id: "membership", label: "会员中心", icon: Crown, path: "/admin/membership" },
+    { id: "content", label: "内容管理", icon: FileText, path: "/admin/content" },
+    { id: "service", label: "客服中心", icon: Headphones, path: "/admin/service" },
     { id: "groups", label: "群组管理", icon: MessageSquare, path: "/admin/groups" },
+    { id: "agents", label: "代理审核", icon: UserCheck, path: "/admin/agents" },
     { id: "stats", label: "数据统计", icon: BarChart3, path: "/admin/stats" },
+    { id: "settings", label: "系统设置", icon: Settings, path: "/admin/settings" },
   ];
 
   const handleLogout = () => {

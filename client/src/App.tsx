@@ -28,6 +28,14 @@ import AdminAgentsPage from "@/pages/admin/AdminAgentsPage";
 import AdminGroupsPage from "@/pages/admin/AdminGroupsPage";
 import AdminOrdersPage from "@/pages/admin/AdminOrdersPage";
 import AdminStatsPage from "@/pages/admin/AdminStatsPage";
+import AdminSettingsPage from "@/pages/admin/AdminSettingsPage";
+import AdminFinancePage from "@/pages/admin/AdminFinancePage";
+import AdminLotteryPage from "@/pages/admin/AdminLotteryPage";
+import AdminDistributionPage from "@/pages/admin/AdminDistributionPage";
+import AdminCommissionPage from "@/pages/admin/AdminCommissionPage";
+import AdminMembershipPage from "@/pages/admin/AdminMembershipPage";
+import AdminContentPage from "@/pages/admin/AdminContentPage";
+import AdminServicePage from "@/pages/admin/AdminServicePage";
 
 function UserRouter() {
   return (
@@ -58,10 +66,18 @@ function AdminRouter() {
         <Route path="/admin/dashboard" component={AdminDashboard} />
         <Route path="/admin/users" component={AdminUsersPage} />
         <Route path="/admin/orders" component={AdminOrdersPage} />
-        <Route path="/admin/withdraws" component={AdminWithdrawsPage} />
-        <Route path="/admin/agents" component={AdminAgentsPage} />
+        <Route path="/admin/finance" component={AdminFinancePage} />
+        <Route path="/admin/lottery" component={AdminLotteryPage} />
+        <Route path="/admin/distribution" component={AdminDistributionPage} />
+        <Route path="/admin/commission" component={AdminCommissionPage} />
+        <Route path="/admin/membership" component={AdminMembershipPage} />
+        <Route path="/admin/content" component={AdminContentPage} />
+        <Route path="/admin/service" component={AdminServicePage} />
         <Route path="/admin/groups" component={AdminGroupsPage} />
+        <Route path="/admin/agents" component={AdminAgentsPage} />
         <Route path="/admin/stats" component={AdminStatsPage} />
+        <Route path="/admin/settings" component={AdminSettingsPage} />
+        <Route path="/admin/withdraws" component={AdminWithdrawsPage} />
       </Switch>
     </AdminAuthProvider>
   );

@@ -479,4 +479,196 @@ export function registerApiRoutes(app: Express): void {
       res.status(400).json({ error: error.message });
     }
   });
+
+  // ============ ADMIN SYSTEM SETTINGS ============
+  app.get("/api/admin/settings", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const settings = await adminService.getSystemSettings();
+      res.json(settings);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/settings", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const { key, value } = req.body;
+      const setting = await adminService.setSystemSetting(key, value);
+      res.json(setting);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN DEPOSITS ============
+  app.get("/api/admin/deposits", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const deposits = await adminService.getDepositList();
+      res.json(deposits);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/deposits/:id/review", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const depositId = parseInt(req.params.id);
+      const { approved } = req.body;
+      const result = await adminService.reviewDeposit(depositId, approved);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN LOTTERY ============
+  app.get("/api/admin/lottery/prizes", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const prizes = await adminService.getLotteryPrizes();
+      res.json(prizes);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/admin/lottery/prizes/:id", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const prizeId = parseInt(req.params.id);
+      const result = await adminService.updateLotteryPrize(prizeId, req.body);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/lottery/spins", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const spins = await adminService.getLotterySpins();
+      res.json(spins);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN DISTRIBUTION ============
+  app.get("/api/admin/distribution/users", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const users = await adminService.getDistributionUsers();
+      res.json(users);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/distribution/referrals", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const referrals = await adminService.getReferralRecords();
+      res.json(referrals);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN COMMISSIONS ============
+  app.get("/api/admin/commissions", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const commissions = await adminService.getCommissionRecords();
+      res.json(commissions);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN VIP PLANS ============
+  app.get("/api/admin/vip-plans", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const plans = await adminService.getVipPlans();
+      res.json(plans);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/admin/vip-plans/:id", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const planId = parseInt(req.params.id);
+      const result = await adminService.updateVipPlan(planId, req.body);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN FEATURE FLAGS ============
+  app.get("/api/admin/features", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const features = await adminService.getFeatureFlags();
+      res.json(features);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/features", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const { key, enabled } = req.body;
+      const result = await adminService.setFeatureFlag(key, enabled);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN CUSTOMER SERVICE ============
+  app.get("/api/admin/service/sessions", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const sessions = await adminService.getServiceSessions();
+      res.json(sessions);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/service/sessions/:id/messages", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const messages = await adminService.getServiceMessages(sessionId);
+      res.json(messages);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/service/sessions/:id/messages", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const sessionId = parseInt(req.params.id);
+      const { content } = req.body;
+      const message = await adminService.sendServiceMessage(sessionId, req.adminId!, content);
+      res.json(message);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN USER BALANCE ADJUSTMENT ============
+  app.post("/api/admin/users/:id/balance", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const { amount, currency, reason } = req.body;
+      const result = await adminService.adjustUserBalance(req.adminId!, userId, amount, currency, reason);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/users/:id/detail", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const detail = await adminService.getUserDetail(userId);
+      res.json(detail);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
 }

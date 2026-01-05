@@ -225,6 +225,81 @@ export const groupMessages = pgTable("group_messages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// ============ SYSTEM SETTINGS ============
+export const systemSettings = pgTable("system_settings", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 100 }).unique().notNull(),
+  value: text("value"),
+  description: text("description"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ============ FEATURE FLAGS ============
+export const featureFlags = pgTable("feature_flags", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 100 }).unique().notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  enabled: boolean("enabled").default(true).notNull(),
+  description: text("description"),
+});
+
+// ============ DEPOSITS ============
+export const deposits = pgTable("deposits", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  status: varchar("status", { length: 20 }).default("pending").notNull(),
+  method: varchar("method", { length: 30 }),
+  proofImage: text("proof_image"),
+  remark: text("remark"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  reviewedAt: timestamp("reviewed_at"),
+});
+
+// ============ ADMIN ACTIONS (BALANCE ADJUSTMENTS) ============
+export const adminActions = pgTable("admin_actions", {
+  id: serial("id").primaryKey(),
+  adminId: integer("admin_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  action: varchar("action", { length: 50 }).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }),
+  currency: varchar("currency", { length: 30 }),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ============ COMMISSION RECORDS ============
+export const commissionRecords = pgTable("commission_records", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  fromUserId: integer("from_user_id").notNull().references(() => users.id),
+  orderId: integer("order_id").references(() => orders.id),
+  level: integer("level").notNull(),
+  rate: decimal("rate", { precision: 4, scale: 2 }).notNull(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  status: varchar("status", { length: 20 }).default("credited").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ============ CUSTOMER SERVICE CHAT ============
+export const serviceChatSessions = pgTable("service_chat_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  adminId: integer("admin_id"),
+  status: varchar("status", { length: 20 }).default("open").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  closedAt: timestamp("closed_at"),
+});
+
+export const serviceChatMessages = pgTable("service_chat_messages", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => serviceChatSessions.id),
+  senderType: varchar("sender_type", { length: 20 }).notNull(),
+  senderId: integer("sender_id").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ============ INSERT SCHEMAS ============
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertWalletSchema = createInsertSchema(wallets).omit({ id: true, updatedAt: true });
@@ -239,6 +314,13 @@ export const insertMessageSchema = createInsertSchema(messages).omit({ id: true,
 export const insertChatGroupSchema = createInsertSchema(chatGroups).omit({ id: true, createdAt: true });
 export const insertGroupMemberSchema = createInsertSchema(groupMembers).omit({ id: true, joinedAt: true });
 export const insertGroupMessageSchema = createInsertSchema(groupMessages).omit({ id: true, createdAt: true });
+export const insertSystemSettingSchema = createInsertSchema(systemSettings).omit({ id: true, updatedAt: true });
+export const insertFeatureFlagSchema = createInsertSchema(featureFlags).omit({ id: true });
+export const insertDepositSchema = createInsertSchema(deposits).omit({ id: true, createdAt: true });
+export const insertAdminActionSchema = createInsertSchema(adminActions).omit({ id: true, createdAt: true });
+export const insertCommissionRecordSchema = createInsertSchema(commissionRecords).omit({ id: true, createdAt: true });
+export const insertServiceChatSessionSchema = createInsertSchema(serviceChatSessions).omit({ id: true, createdAt: true });
+export const insertServiceChatMessageSchema = createInsertSchema(serviceChatMessages).omit({ id: true, createdAt: true });
 
 // ============ TYPES ============
 export type User = typeof users.$inferSelect;
@@ -267,6 +349,20 @@ export type GroupMember = typeof groupMembers.$inferSelect;
 export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
 export type GroupMessage = typeof groupMessages.$inferSelect;
 export type InsertGroupMessage = z.infer<typeof insertGroupMessageSchema>;
+export type SystemSetting = typeof systemSettings.$inferSelect;
+export type InsertSystemSetting = z.infer<typeof insertSystemSettingSchema>;
+export type FeatureFlag = typeof featureFlags.$inferSelect;
+export type InsertFeatureFlag = z.infer<typeof insertFeatureFlagSchema>;
+export type Deposit = typeof deposits.$inferSelect;
+export type InsertDeposit = z.infer<typeof insertDepositSchema>;
+export type AdminAction = typeof adminActions.$inferSelect;
+export type InsertAdminAction = z.infer<typeof insertAdminActionSchema>;
+export type CommissionRecord = typeof commissionRecords.$inferSelect;
+export type InsertCommissionRecord = z.infer<typeof insertCommissionRecordSchema>;
+export type ServiceChatSession = typeof serviceChatSessions.$inferSelect;
+export type InsertServiceChatSession = z.infer<typeof insertServiceChatSessionSchema>;
+export type ServiceChatMessage = typeof serviceChatMessages.$inferSelect;
+export type InsertServiceChatMessage = z.infer<typeof insertServiceChatMessageSchema>;
 
 // ============ API SCHEMAS ============
 export const registerSchema = z.object({
@@ -312,4 +408,15 @@ export const adminWithdrawReviewSchema = z.object({
 export const adminAgentReviewSchema = z.object({
   approved: z.boolean(),
   reviewNote: z.string().optional(),
+});
+
+export const adminBalanceAdjustSchema = z.object({
+  userId: z.number().positive(),
+  amount: z.number(),
+  currency: z.enum(["cash", "points"]),
+  reason: z.string().optional(),
+});
+
+export const adminDepositReviewSchema = z.object({
+  approved: z.boolean(),
 });

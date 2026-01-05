@@ -1,6 +1,10 @@
 import { db } from "../db";
-import { admins, users, wallets, withdraws, orders, agentApplications, userRanks } from "@shared/schema";
-import { eq, desc, sql, count } from "drizzle-orm";
+import { 
+  admins, users, wallets, withdraws, orders, agentApplications, userRanks,
+  systemSettings, featureFlags, deposits, adminActions, commissionRecords,
+  serviceChatSessions, serviceChatMessages, wheelPrizes, wheelSpins, vipPlans, ledger
+} from "@shared/schema";
+import { eq, desc, sql, count, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -268,5 +272,328 @@ export async function getSystemStats() {
     todayOrders: todayOrders?.count || 0,
     todayRevenue: todayRevenue.toFixed(2),
     todayWithdraws: todayWithdraws?.count || 0,
+  };
+}
+
+// ============ SYSTEM SETTINGS ============
+export async function getSystemSettings() {
+  const settings = await db.select().from(systemSettings);
+  return settings;
+}
+
+export async function setSystemSetting(key: string, value: string) {
+  const [existing] = await db.select().from(systemSettings).where(eq(systemSettings.key, key)).limit(1);
+  
+  if (existing) {
+    await db.update(systemSettings)
+      .set({ value, updatedAt: new Date() })
+      .where(eq(systemSettings.key, key));
+  } else {
+    await db.insert(systemSettings).values({ key, value });
+  }
+  
+  return { success: true, key, value };
+}
+
+// ============ DEPOSITS ============
+export async function getDepositList(page = 1, limit = 50) {
+  const offset = (page - 1) * limit;
+  const list = await db.select().from(deposits).orderBy(desc(deposits.createdAt)).limit(limit).offset(offset);
+  const [total] = await db.select({ count: count() }).from(deposits);
+  
+  const listWithUser = await Promise.all(
+    list.map(async (d) => {
+      const [user] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, d.userId)).limit(1);
+      return { ...d, userPhone: user?.phone || "未知" };
+    })
+  );
+  
+  return { deposits: listWithUser, total: total?.count || 0, page, limit };
+}
+
+export async function reviewDeposit(depositId: number, approved: boolean) {
+  const [deposit] = await db.select().from(deposits).where(eq(deposits.id, depositId)).limit(1);
+  
+  if (!deposit) throw new Error("充值记录不存在");
+  if (deposit.status !== "pending") throw new Error("充值已处理");
+  
+  await db.update(deposits)
+    .set({
+      status: approved ? "approved" : "rejected",
+      reviewedAt: new Date(),
+    })
+    .where(eq(deposits.id, depositId));
+  
+  if (approved) {
+    const [wallet] = await db.select().from(wallets).where(eq(wallets.userId, deposit.userId)).limit(1);
+    if (wallet) {
+      await db.update(wallets)
+        .set({ balance: (parseFloat(wallet.balance) + parseFloat(deposit.amount)).toFixed(2) })
+        .where(eq(wallets.userId, deposit.userId));
+      
+      await db.insert(ledger).values({
+        userId: deposit.userId,
+        type: "income",
+        amount: deposit.amount,
+        currency: "cny",
+        description: "充值到账",
+      });
+    }
+  }
+  
+  return { success: true };
+}
+
+// ============ LOTTERY ============
+export async function getLotteryPrizes() {
+  const prizes = await db.select().from(wheelPrizes).orderBy(wheelPrizes.displayOrder);
+  return prizes;
+}
+
+export async function updateLotteryPrize(prizeId: number, data: any) {
+  const updateData: any = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.type !== undefined) updateData.type = data.type;
+  if (data.amount !== undefined) updateData.amount = data.amount;
+  if (data.probability !== undefined) updateData.probability = data.probability;
+  if (data.stock !== undefined) updateData.stock = data.stock;
+  if (data.displayOrder !== undefined) updateData.displayOrder = data.displayOrder;
+  if (data.isActive !== undefined) updateData.isActive = data.isActive;
+  
+  await db.update(wheelPrizes)
+    .set(updateData)
+    .where(eq(wheelPrizes.id, prizeId));
+  
+  return { success: true };
+}
+
+export async function getLotterySpins() {
+  const spins = await db.select().from(wheelSpins).orderBy(desc(wheelSpins.createdAt)).limit(100);
+  
+  const spinsWithUser = await Promise.all(
+    spins.map(async (s) => {
+      const [user] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, s.userId)).limit(1);
+      return { ...s, userPhone: user?.phone || "未知" };
+    })
+  );
+  
+  return spinsWithUser;
+}
+
+// ============ DISTRIBUTION ============
+export async function getDistributionUsers(page = 1, limit = 50) {
+  const offset = (page - 1) * limit;
+  const usersWithRank = await db.select({
+    id: users.id,
+    phone: users.phone,
+    inviteCode: users.inviteCode,
+    createdAt: users.createdAt,
+  }).from(users).orderBy(desc(users.createdAt)).limit(limit).offset(offset);
+  
+  const [total] = await db.select({ count: count() }).from(users);
+  
+  const result = await Promise.all(
+    usersWithRank.map(async (u) => {
+      const [rank] = await db.select().from(userRanks).where(eq(userRanks.userId, u.id)).limit(1);
+      const [referralCount] = await db.select({ count: count() }).from(users).where(eq(users.inviterId, u.id));
+      return {
+        ...u,
+        rankLevel: rank?.currentRank || 0,
+        directCount: referralCount?.count || 0,
+      };
+    })
+  );
+  
+  return { users: result, total: total?.count || 0, page, limit };
+}
+
+export async function getReferralRecords() {
+  const records = await db.select({
+    id: users.id,
+    phone: users.phone,
+    inviterId: users.inviterId,
+    createdAt: users.createdAt,
+  }).from(users).where(sql`${users.inviterId} IS NOT NULL`).orderBy(desc(users.createdAt)).limit(100);
+  
+  const result = await Promise.all(
+    records.map(async (r) => {
+      const [inviter] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, r.inviterId!)).limit(1);
+      return {
+        ...r,
+        inviterPhone: inviter?.phone || "未知",
+      };
+    })
+  );
+  
+  return result;
+}
+
+// ============ COMMISSIONS ============
+export async function getCommissionRecords(page = 1, limit = 50) {
+  const offset = (page - 1) * limit;
+  const records = await db.select().from(commissionRecords).orderBy(desc(commissionRecords.createdAt)).limit(limit).offset(offset);
+  const [total] = await db.select({ count: count() }).from(commissionRecords);
+  
+  const result = await Promise.all(
+    records.map(async (r) => {
+      const [user] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, r.userId)).limit(1);
+      const [source] = r.sourceUserId 
+        ? await db.select({ phone: users.phone }).from(users).where(eq(users.id, r.sourceUserId)).limit(1)
+        : [null];
+      return {
+        ...r,
+        userPhone: user?.phone || "未知",
+        sourcePhone: source?.phone || "-",
+      };
+    })
+  );
+  
+  return { commissions: result, total: total?.count || 0, page, limit };
+}
+
+// ============ VIP PLANS ============
+export async function getVipPlans() {
+  const plans = await db.select().from(vipPlans).orderBy(vipPlans.level);
+  return plans;
+}
+
+export async function updateVipPlan(planId: number, data: any) {
+  const updateData: any = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.price !== undefined) updateData.price = data.price;
+  if (data.dailyExtraSpins !== undefined) updateData.dailyExtraSpins = data.dailyExtraSpins;
+  if (data.withdrawMinAmount !== undefined) updateData.withdrawMinAmount = data.withdrawMinAmount;
+  if (data.withdrawSpeed !== undefined) updateData.withdrawSpeed = data.withdrawSpeed;
+  if (data.winMultiplier !== undefined) updateData.winMultiplier = data.winMultiplier;
+  
+  await db.update(vipPlans)
+    .set(updateData)
+    .where(eq(vipPlans.id, planId));
+  
+  return { success: true };
+}
+
+// ============ FEATURE FLAGS ============
+export async function getFeatureFlags() {
+  const flags = await db.select().from(featureFlags);
+  return flags;
+}
+
+export async function setFeatureFlag(key: string, enabled: boolean) {
+  const [existing] = await db.select().from(featureFlags).where(eq(featureFlags.key, key)).limit(1);
+  
+  if (existing) {
+    await db.update(featureFlags)
+      .set({ enabled, updatedAt: new Date() })
+      .where(eq(featureFlags.key, key));
+  } else {
+    await db.insert(featureFlags).values({ key, enabled });
+  }
+  
+  return { success: true, key, enabled };
+}
+
+// ============ CUSTOMER SERVICE ============
+export async function getServiceSessions() {
+  const sessions = await db.select().from(serviceChatSessions).orderBy(desc(serviceChatSessions.updatedAt));
+  
+  const result = await Promise.all(
+    sessions.map(async (s) => {
+      const [user] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, s.userId)).limit(1);
+      const [msgCount] = await db.select({ count: count() }).from(serviceChatMessages).where(eq(serviceChatMessages.sessionId, s.id));
+      return {
+        ...s,
+        userPhone: user?.phone || "未知",
+        messageCount: msgCount?.count || 0,
+      };
+    })
+  );
+  
+  return result;
+}
+
+export async function getServiceMessages(sessionId: number) {
+  const messages = await db.select().from(serviceChatMessages)
+    .where(eq(serviceChatMessages.sessionId, sessionId))
+    .orderBy(serviceChatMessages.createdAt);
+  return messages;
+}
+
+export async function sendServiceMessage(sessionId: number, adminId: number, content: string) {
+  const [message] = await db.insert(serviceChatMessages)
+    .values({
+      sessionId,
+      senderType: "admin",
+      senderId: adminId,
+      content,
+    })
+    .returning();
+  
+  await db.update(serviceChatSessions)
+    .set({ updatedAt: new Date() })
+    .where(eq(serviceChatSessions.id, sessionId));
+  
+  return message;
+}
+
+// ============ USER BALANCE ADJUSTMENT ============
+export async function adjustUserBalance(
+  adminId: number,
+  userId: number,
+  amount: number,
+  currency: string,
+  reason: string
+) {
+  const [wallet] = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
+  
+  if (!wallet) throw new Error("用户钱包不存在");
+  
+  const field = currency === "cny" ? "balance" : "points";
+  const currentValue = currency === "cny" ? parseFloat(wallet.balance) : wallet.points;
+  const newValue = currentValue + amount;
+  
+  if (newValue < 0) throw new Error("余额不能为负数");
+  
+  await db.update(wallets)
+    .set({ [field]: currency === "cny" ? newValue.toFixed(2) : newValue })
+    .where(eq(wallets.userId, userId));
+  
+  await db.insert(ledger).values({
+    userId,
+    type: amount > 0 ? "income" : "expense",
+    amount: Math.abs(amount).toString(),
+    currency,
+    description: `管理员调整: ${reason}`,
+  });
+  
+  await db.insert(adminActions).values({
+    adminId,
+    action: "balance_adjustment",
+    targetType: "user",
+    targetId: userId,
+    details: JSON.stringify({ amount, currency, reason }),
+  });
+  
+  return { success: true, newBalance: newValue };
+}
+
+export async function getUserDetail(userId: number) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw new Error("用户不存在");
+  
+  const [wallet] = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
+  const [rank] = await db.select().from(userRanks).where(eq(userRanks.userId, userId)).limit(1);
+  const [referralCount] = await db.select({ count: count() }).from(users).where(eq(users.inviterId, userId));
+  
+  const userOrders = await db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt)).limit(10);
+  const userWithdraws = await db.select().from(withdraws).where(eq(withdraws.userId, userId)).orderBy(desc(withdraws.createdAt)).limit(10);
+  
+  return {
+    user,
+    wallet,
+    rank,
+    referralCount: referralCount?.count || 0,
+    recentOrders: userOrders,
+    recentWithdraws: userWithdraws,
   };
 }
