@@ -1,14 +1,33 @@
 import { useState, useRef, useEffect } from "react";
 import { Header } from "@/components/Header";
-import { User, CreditCard, FlaskConical, FileText, ChevronRight, ChevronDown, Headphones, Gift, MessageCircle, Send, Bot, ArrowLeft, Loader2 } from "lucide-react";
+import { User, CreditCard, FlaskConical, FileText, ChevronRight, ChevronDown, Headphones, Gift, MessageCircle, Send, Bot, ArrowLeft, Loader2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   time: Date;
+}
+
+interface ChatGroup {
+  id: number;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+}
+
+interface GroupMessage {
+  id: number;
+  groupId: number;
+  userId: number;
+  content: string;
+  createdAt: string;
+  phone: string | null;
 }
 
 const faqItems = [
@@ -63,8 +82,10 @@ function getAutoResponse(message: string): string {
 }
 
 export default function ServicePage() {
+  const { user, token } = useAuth();
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
   const [showChat, setShowChat] = useState(false);
+  const [showGroupChat, setShowGroupChat] = useState<ChatGroup | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
@@ -74,8 +95,66 @@ export default function ServicePage() {
     },
   ]);
   const [input, setInput] = useState("");
+  const [groupInput, setGroupInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const groupScrollRef = useRef<HTMLDivElement>(null);
+
+  const { data: userGroups } = useQuery<ChatGroup[]>({
+    queryKey: ["/api/groups"],
+    queryFn: async () => {
+      const res = await fetch("/api/groups", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!token,
+  });
+
+  const { data: groupMessages, refetch: refetchGroupMessages } = useQuery<GroupMessage[]>({
+    queryKey: ["/api/groups", showGroupChat?.id, "messages"],
+    queryFn: async () => {
+      if (!showGroupChat) return [];
+      const res = await fetch(`/api/groups/${showGroupChat.id}/messages`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!showGroupChat && !!token,
+    refetchInterval: 5000,
+  });
+
+  const sendGroupMessageMutation = useMutation({
+    mutationFn: async ({ groupId, content }: { groupId: number; content: string }) => {
+      const res = await fetch(`/api/groups/${groupId}/messages`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) throw new Error("Failed to send message");
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchGroupMessages();
+      setGroupInput("");
+    },
+  });
+
+  const handleSendGroupMessage = () => {
+    if (!groupInput.trim() || !showGroupChat) return;
+    sendGroupMessageMutation.mutate({ groupId: showGroupChat.id, content: groupInput.trim() });
+  };
+
+  useEffect(() => {
+    if (groupScrollRef.current) {
+      groupScrollRef.current.scrollTop = groupScrollRef.current.scrollHeight;
+    }
+  }, [groupMessages]);
 
   const toggleFaq = (index: number) => {
     setExpandedFaq(expandedFaq === index ? null : index);
@@ -118,6 +197,115 @@ export default function ServicePage() {
   const handleQuickReply = (text: string) => {
     handleSend(text);
   };
+
+  if (showGroupChat) {
+    return (
+      <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-4 py-3 flex items-center gap-3 sticky top-0 z-20">
+          <button 
+            onClick={() => setShowGroupChat(null)}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+            data-testid="button-back-group"
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+          </button>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white bg-gradient-to-br from-purple-500 to-pink-500">
+            <Users className="w-5 h-5" />
+          </div>
+          <div className="flex-1">
+            <h1 className="font-bold text-gray-800 dark:text-white">{showGroupChat.name}</h1>
+            <span className="text-xs text-gray-500 dark:text-gray-400">群组聊天</span>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={groupScrollRef}>
+          {groupMessages && groupMessages.length > 0 ? (
+            groupMessages.map((msg) => {
+              const isMe = msg.userId === user?.id;
+              return (
+                <div
+                  key={msg.id}
+                  className={cn(
+                    "flex gap-2",
+                    isMe ? "flex-row-reverse" : "flex-row"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                      isMe
+                        ? "bg-gradient-to-br from-primary to-cyan-500"
+                        : "bg-gradient-to-br from-purple-400 to-pink-500"
+                    )}
+                  >
+                    <User className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="max-w-[75%]">
+                    {!isMe && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{msg.phone || `用户${msg.userId}`}</p>
+                    )}
+                    <div
+                      className={cn(
+                        "rounded-2xl px-4 py-3",
+                        isMe
+                          ? "bg-gradient-to-br from-primary to-cyan-500 text-white rounded-tr-sm"
+                          : "bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 shadow-sm border border-gray-100 dark:border-gray-700 rounded-tl-sm"
+                      )}
+                    >
+                      <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
+                      <p
+                        className={cn(
+                          "text-[10px] mt-1",
+                          isMe ? "text-white/70" : "text-gray-400"
+                        )}
+                      >
+                        {format(new Date(msg.createdAt), "HH:mm")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center text-gray-500 dark:text-gray-400 py-10">
+              暂无消息，发送第一条消息吧
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 p-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={groupInput}
+              onChange={(e) => setGroupInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendGroupMessage()}
+              placeholder="输入消息..."
+              className="flex-1 px-4 py-3 bg-gray-100 dark:bg-gray-700 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 dark:text-white"
+              data-testid="input-group-message"
+            />
+            <button
+              onClick={handleSendGroupMessage}
+              disabled={!groupInput.trim() || sendGroupMessageMutation.isPending}
+              className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+                groupInput.trim() && !sendGroupMessageMutation.isPending
+                  ? "bg-gradient-to-br from-primary to-cyan-500 text-white shadow-lg"
+                  : "bg-gray-200 dark:bg-gray-600 text-gray-400"
+              )}
+              data-testid="button-send-group"
+            >
+              {sendGroupMessageMutation.isPending ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (showChat) {
     return (
@@ -301,6 +489,41 @@ export default function ServicePage() {
           <p className="text-center text-xs text-gray-400 mt-3 font-medium">24小时在线客服</p>
         </div>
       </div>
+
+      {user && userGroups && userGroups.length > 0 && (
+        <div className="px-4 mt-6">
+          <h3 className="section-title mb-3">
+            <Users className="w-4 h-4 text-primary" />
+            我的群组
+          </h3>
+          
+          <div className="space-y-3">
+            {userGroups.map((group) => (
+              <div 
+                key={group.id}
+                className="card-elevated p-4"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
+                    <Users className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-bold text-gray-800 dark:text-white">{group.name}</h4>
+                    <p className="text-xs text-gray-400 mt-1">{group.description || "群组聊天"}</p>
+                  </div>
+                  <button
+                    onClick={() => setShowGroupChat(group)}
+                    className="px-4 py-2 bg-primary/10 text-primary rounded-full text-sm font-medium hover:bg-primary/20 transition-colors"
+                    data-testid={`button-enter-group-${group.id}`}
+                  >
+                    进入
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="px-4 mt-8 pb-24">
         <h3 className="section-title mb-3">
