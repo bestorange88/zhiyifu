@@ -52,7 +52,10 @@ export default function CheckInPage() {
   });
 
   const checkinMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/checkin"),
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/checkin");
+      return res.json();
+    },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/checkin/status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/checkin/history"] });
