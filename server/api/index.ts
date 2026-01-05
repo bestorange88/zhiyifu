@@ -10,6 +10,7 @@ import * as withdrawService from "../services/withdraw";
 import * as referralService from "../services/referral";
 import * as adminService from "../services/admin";
 import * as agentService from "../services/agent";
+import * as groupService from "../services/group";
 import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema } from "@shared/schema";
 
 export function registerApiRoutes(app: Express): void {
@@ -371,6 +372,109 @@ export function registerApiRoutes(app: Express): void {
     try {
       const result = await adminService.getSystemStats();
       res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN GROUP MANAGEMENT ============
+  app.get("/api/admin/groups", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const groups = await groupService.getGroupList();
+      res.json(groups);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/groups", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const { name, description, memberIds } = req.body;
+      const group = await groupService.createGroup(name, description);
+      if (memberIds && memberIds.length > 0) {
+        await groupService.setGroupMembers(group.id, memberIds);
+      }
+      const fullGroup = await groupService.getGroupById(group.id);
+      res.status(201).json(fullGroup);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/groups/:id", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const group = await groupService.getGroupById(groupId);
+      if (!group) {
+        return res.status(404).json({ error: "群组不存在" });
+      }
+      res.json(group);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/admin/groups/:id", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const { name, description, isActive, memberIds } = req.body;
+      await groupService.updateGroup(groupId, { name, description, isActive });
+      if (memberIds !== undefined) {
+        await groupService.setGroupMembers(groupId, memberIds);
+      }
+      const fullGroup = await groupService.getGroupById(groupId);
+      res.json(fullGroup);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/admin/groups/:id", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      await groupService.deleteGroup(groupId);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/users-for-group", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const users = await groupService.getAllUsersForGroupSelection();
+      res.json(users);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ USER GROUP ENDPOINTS ============
+  app.get("/api/groups", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const groups = await groupService.getUserGroups(req.userId!);
+      res.json(groups);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/groups/:id/messages", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const limit = parseInt(req.query.limit as string) || 50;
+      const messages = await groupService.getGroupMessages(groupId, req.userId!, limit);
+      res.json(messages);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/groups/:id/messages", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const { content } = req.body;
+      const message = await groupService.sendGroupMessage(groupId, req.userId!, content);
+      res.status(201).json(message);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
