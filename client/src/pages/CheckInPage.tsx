@@ -13,6 +13,7 @@ import { zhCN } from "date-fns/locale";
 interface CheckinStatus {
   checkedToday: boolean;
   currentStreak: number;
+  cycleDay: number;
   nextReward: { daysNeeded: number; extraSpins: number } | null;
   monthProgress: number;
   monthCashReward: number;
@@ -27,13 +28,21 @@ interface CheckinRecord {
 }
 
 const STREAK_REWARDS = [
-  { day: 1, reward: "10积分+1次抽奖" },
-  { day: 2, reward: "10积分+1次抽奖" },
-  { day: 3, reward: "10积分+2次抽奖" },
-  { day: 4, reward: "10积分+1次抽奖" },
-  { day: 5, reward: "10积分+1次抽奖" },
-  { day: 6, reward: "10积分+1次抽奖" },
-  { day: 7, reward: "10积分+3次抽奖" },
+  { day: 1, reward: "1次抽奖" },
+  { day: 2, reward: "1次抽奖" },
+  { day: 3, reward: "1次抽奖 +1次", isBonus: true },
+  { day: 4, reward: "1次抽奖" },
+  { day: 5, reward: "1次抽奖" },
+  { day: 6, reward: "1次抽奖" },
+  { day: 7, reward: "1次抽奖 +2次", isBonus: true },
+  { day: 8, reward: "1次抽奖" },
+  { day: 9, reward: "1次抽奖" },
+  { day: 10, reward: "1次抽奖" },
+  { day: 11, reward: "1次抽奖" },
+  { day: 12, reward: "1次抽奖" },
+  { day: 13, reward: "1次抽奖" },
+  { day: 14, reward: "1次抽奖" },
+  { day: 15, reward: "1次抽奖 +5次", isBonus: true },
 ];
 
 export default function CheckInPage() {
@@ -88,8 +97,8 @@ export default function CheckInPage() {
     checkinMutation.mutate();
   };
 
-  const currentStreak = status?.currentStreak || 0;
-  const currentDay = currentStreak > 0 ? ((currentStreak - 1) % 7) + 1 : 0;
+  const totalStreak = status?.currentStreak || 0;
+  const currentDay = status?.cycleDay || 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white dark:from-gray-900 dark:to-gray-800 pb-20">
@@ -118,7 +127,10 @@ export default function CheckInPage() {
             {status?.checkedToday ? "今日已签到" : "今日未签到"}
           </h2>
           <p className="text-white/90 text-sm">
-            已连续签到 <span className="font-bold text-lg">{status?.currentStreak || 0}</span> 天
+            已连续签到 <span className="font-bold text-lg">{totalStreak}</span> 天
+            {totalStreak >= 15 && (
+              <span className="ml-2 text-xs">(周期第{currentDay}天)</span>
+            )}
           </p>
         </div>
       </div>
@@ -128,19 +140,20 @@ export default function CheckInPage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
               <Gift className="w-5 h-5 text-orange-500" />
-              7天连续签到奖励
+              15天连续签到奖励
             </h3>
-            <span className="text-xs text-gray-500">第 {currentDay}/7 天</span>
+            <span className="text-xs text-gray-500">第 {currentDay}/15 天</span>
           </div>
           
-          <div className="grid grid-cols-7 gap-1 mb-4">
+          <div className="grid grid-cols-5 gap-1 mb-4">
             {STREAK_REWARDS.map((item, index) => {
               const dayNum = index + 1;
               const isCompleted = status?.checkedToday 
                 ? dayNum <= currentDay 
                 : dayNum < currentDay;
-              const isToday = !status?.checkedToday && dayNum === (currentDay + 1 > 7 ? 1 : currentDay + 1);
+              const isToday = !status?.checkedToday && dayNum === (currentDay + 1 > 15 ? 1 : currentDay + 1);
               const isPending = !isCompleted && !isToday;
+              const hasBonus = (item as any).isBonus;
               
               return (
                 <div 
@@ -153,7 +166,7 @@ export default function CheckInPage() {
                         : "bg-gray-50 dark:bg-gray-800"
                   }`}
                 >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 ${
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center mb-1 ${
                     isCompleted 
                       ? "bg-orange-500 text-white" 
                       : isToday 
@@ -166,8 +179,8 @@ export default function CheckInPage() {
                       <span className="text-xs font-bold">{item.day}</span>
                     )}
                   </div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">第{item.day}天</span>
-                  {(item.day === 3 || item.day === 7) && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{item.day}天</span>
+                  {hasBonus && (
                     <div className="absolute -top-1 -right-1">
                       <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
                     </div>
@@ -220,7 +233,7 @@ export default function CheckInPage() {
           <div className="space-y-2 text-sm">
             <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
               <span className="text-gray-600 dark:text-gray-300">每日签到</span>
-              <span className="font-medium text-orange-600">10积分 + 1次抽奖</span>
+              <span className="font-medium text-orange-600">1次抽奖</span>
             </div>
             <div className="flex items-center justify-between p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
               <span className="text-gray-600 dark:text-gray-300">连续3天签到</span>
@@ -232,11 +245,15 @@ export default function CheckInPage() {
             </div>
             <div className="flex items-center justify-between p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
               <span className="text-gray-600 dark:text-gray-300">连续15天签到</span>
-              <span className="font-medium text-orange-600">额外 +5次抽奖</span>
+              <span className="font-medium text-orange-600">额外 +5次 (完成后重置)</span>
             </div>
             <div className="flex items-center justify-between p-2 bg-gradient-to-r from-orange-100 to-amber-100 dark:from-orange-900/30 dark:to-amber-900/30 rounded-lg">
               <span className="text-gray-600 dark:text-gray-300">连续30天签到</span>
               <span className="font-medium text-orange-600">额外 58元现金</span>
+            </div>
+            <div className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
+              <span className="text-gray-600 dark:text-gray-300">断签惩罚</span>
+              <span className="font-medium text-red-600">扣3天连续签到</span>
             </div>
           </div>
         </Card>

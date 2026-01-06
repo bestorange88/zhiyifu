@@ -4,11 +4,36 @@ import { eq, sql, desc } from "drizzle-orm";
 import { addCashFrozen } from "./wallet";
 
 const DEFAULT_RANK_RULES = [
-  { rank: 1, name: "V1", directRequired: 3, team3genRequired: 10, directCommissionRate: "0.10", indirectCommissionRate: "0.05", cashBonus: "0" },
-  { rank: 2, name: "V2", directRequired: 10, team3genRequired: 50, directCommissionRate: "0.10", indirectCommissionRate: "0.05", cashBonus: "588" },
-  { rank: 3, name: "V3", directRequired: 30, team3genRequired: 200, directCommissionRate: "0.10", indirectCommissionRate: "0.05", cashBonus: "1288" },
-  { rank: 4, name: "V4", directRequired: 100, team3genRequired: 1000, directCommissionRate: "0.10", indirectCommissionRate: "0.05", cashBonus: "2888" },
-  { rank: 5, name: "V5", directRequired: 300, team3genRequired: 5000, directCommissionRate: "0.10", indirectCommissionRate: "0.05", cashBonus: "8888" },
+  { 
+    rank: 1, name: "V1", openingFee: "198", directRequired: 3, team3genRequired: 0, 
+    directCommissionRate: "0.10", indirectCommissionRate: "0", cashBonus: "0",
+    dailySpins: 2, withdrawMinAmount: "100", withdrawSpeed: "T+1", winMultiplier: "1.2",
+    hasVipService: true, hasUnlimitedAI: false, hasPromoBonus: false, hasPriorityWelfare: false
+  },
+  { 
+    rank: 2, name: "V2", openingFee: "298", directRequired: 10, team3genRequired: 60, 
+    directCommissionRate: "0.10", indirectCommissionRate: "0.05", cashBonus: "588",
+    dailySpins: 3, withdrawMinAmount: "50", withdrawSpeed: "T+0", winMultiplier: "1.3",
+    hasVipService: true, hasUnlimitedAI: true, hasPromoBonus: false, hasPriorityWelfare: false
+  },
+  { 
+    rank: 3, name: "V3", openingFee: "298", directRequired: 30, team3genRequired: 200, 
+    directCommissionRate: "0.10", indirectCommissionRate: "0.05", cashBonus: "1288",
+    dailySpins: 4, withdrawMinAmount: "40", withdrawSpeed: "T+0", winMultiplier: "1.4",
+    hasVipService: true, hasUnlimitedAI: true, hasPromoBonus: true, hasPriorityWelfare: true
+  },
+  { 
+    rank: 4, name: "V4", openingFee: "498", directRequired: 50, team3genRequired: 300, 
+    directCommissionRate: "0.10", indirectCommissionRate: "0.05", cashBonus: "2888",
+    dailySpins: 5, withdrawMinAmount: "30", withdrawSpeed: "T+0", winMultiplier: "1.5",
+    hasVipService: true, hasUnlimitedAI: true, hasPromoBonus: true, hasPriorityWelfare: true
+  },
+  { 
+    rank: 5, name: "V5", openingFee: "598", directRequired: 200, team3genRequired: 2000, 
+    directCommissionRate: "0.10", indirectCommissionRate: "0.05", cashBonus: "8888",
+    dailySpins: 5, withdrawMinAmount: "30", withdrawSpeed: "T+0", winMultiplier: "1.6",
+    hasVipService: true, hasUnlimitedAI: true, hasPromoBonus: true, hasPriorityWelfare: true
+  },
 ];
 
 export async function getRankRules() {

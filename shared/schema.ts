@@ -132,11 +132,20 @@ export const rankRules = pgTable("rank_rules", {
   id: serial("id").primaryKey(),
   rank: integer("rank").unique().notNull(),
   name: varchar("name", { length: 20 }).notNull(),
+  openingFee: decimal("opening_fee", { precision: 10, scale: 2 }).default("0"),
   directRequired: integer("direct_required").default(0),
   team3genRequired: integer("team_3gen_required").default(0),
   directCommissionRate: decimal("direct_commission_rate", { precision: 4, scale: 2 }).default("0.10"),
   indirectCommissionRate: decimal("indirect_commission_rate", { precision: 4, scale: 2 }).default("0.05"),
   cashBonus: decimal("cash_bonus", { precision: 10, scale: 2 }).default("0"),
+  dailySpins: integer("daily_spins").default(0),
+  withdrawMinAmount: decimal("withdraw_min_amount", { precision: 10, scale: 2 }).default("100"),
+  withdrawSpeed: varchar("withdraw_speed", { length: 10 }).default("T+1"),
+  winMultiplier: decimal("win_multiplier", { precision: 3, scale: 2 }).default("1.0"),
+  hasVipService: boolean("has_vip_service").default(false),
+  hasUnlimitedAI: boolean("has_unlimited_ai").default(false),
+  hasPromoBonus: boolean("has_promo_bonus").default(false),
+  hasPriorityWelfare: boolean("has_priority_welfare").default(false),
 });
 
 export const userRanks = pgTable("user_ranks", {

@@ -28,11 +28,20 @@ interface RankRule {
   id: number;
   rank: number;
   name: string;
+  openingFee: string;
   directRequired: number;
   team3genRequired: number;
   directCommissionRate: string;
   indirectCommissionRate: string;
   cashBonus: string;
+  dailySpins: number;
+  withdrawMinAmount: string;
+  withdrawSpeed: string;
+  winMultiplier: string;
+  hasVipService: boolean;
+  hasUnlimitedAI: boolean;
+  hasPromoBonus: boolean;
+  hasPriorityWelfare: boolean;
 }
 
 interface DirectReferral {
@@ -240,37 +249,83 @@ export default function ReferralPage() {
         <div className="bg-white rounded-2xl p-5 shadow-lg">
           <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
             <TrendingUp className="w-4 h-4 text-blue-500" />
-            等级晋升
+            代理等级体系
           </h3>
           
-          <div className="space-y-3">
-            {rankRules?.map((rule: any) => {
+          <div className="space-y-4">
+            {rankRules?.map((rule: RankRule) => {
               const isCurrentOrBelow = rule.rank <= (referralSummary?.currentRank || 0);
               return (
                 <div 
                   key={rule.id}
-                  className={`flex items-center justify-between p-3 rounded-xl ${
+                  className={`p-4 rounded-xl ${
                     isCurrentOrBelow ? "bg-purple-50 border border-purple-200" : "bg-gray-50"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      isCurrentOrBelow ? "bg-purple-500" : "bg-gray-300"
-                    }`}>
-                      <Star className="w-5 h-5 text-white" />
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                        isCurrentOrBelow ? "bg-purple-500" : "bg-gray-300"
+                      }`}>
+                        <Star className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-800">{rule.name}</p>
+                        <p className="text-xs text-orange-600 font-medium">开通费: ¥{rule.openingFee}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-gray-800">{rule.name}</p>
-                      <p className="text-xs text-gray-500">
-                        直推{rule.directRequired}人 · 团队{rule.team3genRequired}人
-                      </p>
-                    </div>
+                    {parseFloat(rule.cashBonus) > 0 && (
+                      <span className="text-orange-500 font-bold text-sm">
+                        奖励¥{rule.cashBonus}
+                      </span>
+                    )}
                   </div>
-                  {parseFloat(rule.cashBonus) > 0 && (
-                    <span className="text-orange-500 font-bold">
-                      +¥{rule.cashBonus}
+                  
+                  <div className="text-xs text-gray-600 mb-2">
+                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded mr-2">
+                      直推{rule.directRequired}人
                     </span>
-                  )}
+                    {rule.team3genRequired > 0 && (
+                      <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                        三代内{rule.team3genRequired}人
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-1 text-xs">
+                    <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                      直推{(parseFloat(rule.directCommissionRate) * 100).toFixed(0)}%
+                    </span>
+                    {parseFloat(rule.indirectCommissionRate) > 0 && (
+                      <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                        间推{(parseFloat(rule.indirectCommissionRate) * 100).toFixed(0)}%
+                      </span>
+                    )}
+                    <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
+                      {rule.dailySpins}次/日抽奖
+                    </span>
+                    <span className="bg-teal-100 text-teal-700 px-2 py-0.5 rounded">
+                      {rule.winMultiplier}x倍率
+                    </span>
+                    <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">
+                      提现¥{rule.withdrawMinAmount}起
+                    </span>
+                    <span className="bg-pink-100 text-pink-700 px-2 py-0.5 rounded">
+                      {rule.withdrawSpeed}到账
+                    </span>
+                    {rule.hasVipService && (
+                      <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded">VIP客服</span>
+                    )}
+                    {rule.hasUnlimitedAI && (
+                      <span className="bg-cyan-100 text-cyan-700 px-2 py-0.5 rounded">AI无限</span>
+                    )}
+                    {rule.hasPromoBonus && (
+                      <span className="bg-rose-100 text-rose-700 px-2 py-0.5 rounded">推广加成</span>
+                    )}
+                    {rule.hasPriorityWelfare && (
+                      <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded">优先福利</span>
+                    )}
+                  </div>
                 </div>
               );
             })}

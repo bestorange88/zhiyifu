@@ -10,7 +10,7 @@ const STREAK_REWARDS: Record<number, number> = {
 };
 const MONTH_CASH_REWARD = 58;
 const BREAK_PENALTY = 3;
-const STREAK_RESET = 15;
+const STREAK_CYCLE = 15;
 
 function getTodayDate(): string {
   return new Date().toISOString().split("T")[0];
@@ -37,11 +37,12 @@ export async function getCheckinStatus(userId: number) {
     .limit(1);
 
   const checkedToday = !!todayCheckin;
-  const currentStreak = todayCheckin?.streakCount || lastCheckin?.streakCount || 0;
+  const totalStreak = todayCheckin?.streakCount || lastCheckin?.streakCount || 0;
+  const cycleDay = totalStreak > 0 ? ((totalStreak - 1) % STREAK_CYCLE) + 1 : 0;
   
   let nextReward = null;
   for (const [streak, reward] of Object.entries(STREAK_REWARDS)) {
-    if (currentStreak < parseInt(streak)) {
+    if (cycleDay < parseInt(streak)) {
       nextReward = { daysNeeded: parseInt(streak), extraSpins: reward };
       break;
     }
@@ -49,9 +50,10 @@ export async function getCheckinStatus(userId: number) {
 
   return {
     checkedToday,
-    currentStreak,
+    currentStreak: totalStreak,
+    cycleDay,
     nextReward,
-    monthProgress: currentStreak,
+    monthProgress: totalStreak,
     monthCashReward: MONTH_CASH_REWARD,
   };
 }
@@ -75,32 +77,34 @@ export async function performCheckin(userId: number) {
     .orderBy(desc(checkins.createdAt))
     .limit(1);
 
-  let newStreak = 1;
+  let totalStreak = 1;
+  let cycleDay = 1;
   
   if (lastCheckin) {
     const lastDate = lastCheckin.checkDate;
     
     if (lastDate === yesterday) {
-      newStreak = lastCheckin.streakCount + 1;
+      totalStreak = lastCheckin.streakCount + 1;
+      cycleDay = ((lastCheckin.streakCount - 1) % STREAK_CYCLE) + 2;
+      if (cycleDay > STREAK_CYCLE) {
+        cycleDay = 1;
+      }
     } else {
-      newStreak = Math.max(1, lastCheckin.streakCount - BREAK_PENALTY + 1);
-    }
-
-    if (newStreak > STREAK_RESET) {
-      newStreak = 1;
+      totalStreak = Math.max(1, lastCheckin.streakCount - BREAK_PENALTY);
+      cycleDay = ((totalStreak - 1) % STREAK_CYCLE) + 1;
     }
   }
 
   let rewardSpins = 1;
   
-  if (STREAK_REWARDS[newStreak]) {
-    rewardSpins += STREAK_REWARDS[newStreak];
+  if (STREAK_REWARDS[cycleDay]) {
+    rewardSpins += STREAK_REWARDS[cycleDay];
   }
 
   const [checkin] = await db.insert(checkins).values({
     userId,
     checkDate: today,
-    streakCount: newStreak,
+    streakCount: totalStreak,
     rewardSpinTimes: rewardSpins,
   }).returning();
 
@@ -113,16 +117,19 @@ export async function performCheckin(userId: number) {
 
   await addPoints(userId, 10, "checkin_bonus", checkin.id, "每日签到奖励");
 
-  if (newStreak >= 30) {
+  let monthReward = null;
+  if (totalStreak >= 30 && totalStreak % 30 === 0) {
     await addCashFrozen(userId, MONTH_CASH_REWARD, "checkin_bonus", checkin.id, "连续30天签到奖励");
+    monthReward = MONTH_CASH_REWARD;
   }
 
   return {
     success: true,
-    streakCount: newStreak,
+    streakCount: totalStreak,
+    cycleDay,
     rewardSpins,
     bonusPoints: 10,
-    monthReward: newStreak >= 30 ? MONTH_CASH_REWARD : null,
+    monthReward,
   };
 }
 
