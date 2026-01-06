@@ -421,6 +421,44 @@ export const adminAgentReviewSchema = z.object({
   reviewNote: z.string().optional(),
 });
 
+const decimalOrNull = z.preprocess(
+  (val) => {
+    if (val === null || val === undefined || val === "") return undefined;
+    const str = String(val);
+    if (!/^\d+(\.\d+)?$/.test(str)) throw new Error("必须是有效的非负数字");
+    return str;
+  },
+  z.string().optional()
+);
+
+const intOrNull = z.preprocess(
+  (val) => {
+    if (val === null || val === undefined || val === "") return undefined;
+    const num = Number(val);
+    if (isNaN(num) || num < 0 || !Number.isInteger(num)) throw new Error("必须是非负整数");
+    return num;
+  },
+  z.number().int().min(0).optional()
+);
+
+export const adminRankUpdateSchema = z.object({
+  name: z.string().min(1).max(20).optional(),
+  openingFee: decimalOrNull,
+  directRequired: intOrNull,
+  team3genRequired: intOrNull,
+  directCommissionRate: decimalOrNull,
+  indirectCommissionRate: decimalOrNull,
+  cashBonus: decimalOrNull,
+  dailySpins: intOrNull,
+  withdrawMinAmount: decimalOrNull,
+  withdrawSpeed: z.preprocess((v) => (v === null ? undefined : v), z.string().max(10).optional()),
+  winMultiplier: decimalOrNull,
+  hasVipService: z.preprocess((v) => (v === null ? undefined : v), z.boolean().optional()),
+  hasUnlimitedAI: z.preprocess((v) => (v === null ? undefined : v), z.boolean().optional()),
+  hasPromoBonus: z.preprocess((v) => (v === null ? undefined : v), z.boolean().optional()),
+  hasPriorityWelfare: z.preprocess((v) => (v === null ? undefined : v), z.boolean().optional()),
+});
+
 export const adminBalanceAdjustSchema = z.object({
   userId: z.number().positive(),
   amount: z.number(),

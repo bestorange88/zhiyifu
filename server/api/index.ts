@@ -40,7 +40,7 @@ import * as referralService from "../services/referral";
 import * as adminService from "../services/admin";
 import * as agentService from "../services/agent";
 import * as groupService from "../services/group";
-import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema } from "@shared/schema";
+import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema, adminRankUpdateSchema } from "@shared/schema";
 
 export function registerApiRoutes(app: Express): void {
   // ============ AUTH ============
@@ -606,6 +606,30 @@ export function registerApiRoutes(app: Express): void {
       }
       const url = `/uploads/${req.file.filename}`;
       res.json({ url, filename: req.file.filename });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN RANK RULES ============
+  app.get("/api/admin/ranks", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const ranks = await referralService.getAllRankRulesAdmin();
+      res.json(ranks);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/admin/ranks/:rank", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const rankNum = parseInt(req.params.rank);
+      if (isNaN(rankNum) || rankNum < 1 || rankNum > 10) {
+        return res.status(400).json({ error: "无效的等级参数" });
+      }
+      const updates = adminRankUpdateSchema.parse(req.body);
+      const result = await referralService.updateRankRule(rankNum, updates);
+      res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

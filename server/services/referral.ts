@@ -49,6 +49,42 @@ export async function getRankRules() {
   return rules;
 }
 
+export async function updateRankRule(rank: number, updates: {
+  name?: string;
+  openingFee?: string;
+  directRequired?: number;
+  team3genRequired?: number;
+  directCommissionRate?: string;
+  indirectCommissionRate?: string;
+  cashBonus?: string;
+  dailySpins?: number;
+  withdrawMinAmount?: string;
+  withdrawSpeed?: string;
+  winMultiplier?: string;
+  hasVipService?: boolean;
+  hasUnlimitedAI?: boolean;
+  hasPromoBonus?: boolean;
+  hasPriorityWelfare?: boolean;
+}) {
+  const [existing] = await db.select().from(rankRules).where(eq(rankRules.rank, rank)).limit(1);
+  
+  if (!existing) {
+    throw new Error("等级规则不存在");
+  }
+
+  const [updated] = await db.update(rankRules)
+    .set(updates)
+    .where(eq(rankRules.rank, rank))
+    .returning();
+  
+  return updated;
+}
+
+export async function getAllRankRulesAdmin() {
+  await getRankRules();
+  return db.select().from(rankRules).orderBy(rankRules.rank);
+}
+
 export async function getReferralSummary(userId: number) {
   const [userRank] = await db.select().from(userRanks).where(eq(userRanks.userId, userId)).limit(1);
   

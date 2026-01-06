@@ -36,6 +36,7 @@ import AdminCommissionPage from "@/pages/admin/AdminCommissionPage";
 import AdminMembershipPage from "@/pages/admin/AdminMembershipPage";
 import AdminContentPage from "@/pages/admin/AdminContentPage";
 import AdminServicePage from "@/pages/admin/AdminServicePage";
+import AdminVipRanksPage from "@/pages/admin/AdminVipRanksPage";
 
 function UserRouter() {
   return (
@@ -71,6 +72,7 @@ function AdminRouter() {
         <Route path="/admin/distribution" component={AdminDistributionPage} />
         <Route path="/admin/commission" component={AdminCommissionPage} />
         <Route path="/admin/membership" component={AdminMembershipPage} />
+        <Route path="/admin/vipranks" component={AdminVipRanksPage} />
         <Route path="/admin/content" component={AdminContentPage} />
         <Route path="/admin/service" component={AdminServicePage} />
         <Route path="/admin/groups" component={AdminGroupsPage} />

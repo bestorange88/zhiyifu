@@ -1,6 +1,6 @@
 import { useState, ReactNode, useEffect } from "react";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Users, CreditCard, UserCheck, LogOut, Menu, X, ShoppingBag, BarChart3, MessageSquare, Wallet, Gift, Share2, Coins, Crown, Settings, FileText, Headphones } from "lucide-react";
+import { LayoutDashboard, Users, CreditCard, UserCheck, LogOut, Menu, X, ShoppingBag, BarChart3, MessageSquare, Wallet, Gift, Share2, Coins, Crown, Settings, FileText, Headphones, Medal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAdminAuth } from "@/lib/adminAuth";
 
@@ -33,6 +33,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
     { id: "distribution", label: "分销管理", icon: Share2, path: "/admin/distribution" },
     { id: "commission", label: "佣金管理", icon: Coins, path: "/admin/commission" },
     { id: "membership", label: "会员中心", icon: Crown, path: "/admin/membership" },
+    { id: "vipranks", label: "VIP等级", icon: Medal, path: "/admin/vipranks" },
     { id: "content", label: "内容管理", icon: FileText, path: "/admin/content" },
     { id: "service", label: "客服中心", icon: Headphones, path: "/admin/service" },
     { id: "groups", label: "群组管理", icon: MessageSquare, path: "/admin/groups" },
