@@ -324,50 +324,64 @@ export default function AdminVipRanksPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">开通费用</p>
-                      <p className="font-semibold text-lg text-orange-600">{rank.openingFee || "0"}元</p>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                      <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 dark:bg-orange-900/20">
+                        开通费: {rank.openingFee || "0"}元
+                      </Badge>
+                      <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 dark:bg-green-900/20">
+                        升级奖励: {rank.cashBonus || "0"}元
+                      </Badge>
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">升级要求</p>
-                      <p className="font-medium">直推 {rank.directRequired || 0} 人</p>
-                      {(rank.team3genRequired || 0) > 0 && (
-                        <p className="text-sm text-muted-foreground">三代 {rank.team3genRequired} 人</p>
-                      )}
+
+                    <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800">
+                      <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-2 flex items-center gap-1">
+                        <Users className="w-3 h-3" /> 任务
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        <span className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                          直推{rank.directRequired || 0}人
+                        </span>
+                        <span className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                          三代内{rank.team3genRequired || 0}人
+                        </span>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">佣金比例</p>
-                      <p className="font-medium">直推 {(parseFloat(rank.directCommissionRate || "0") * 100).toFixed(0)}%</p>
-                      {parseFloat(rank.indirectCommissionRate || "0") > 0 && (
-                        <p className="text-sm text-muted-foreground">间推 {(parseFloat(rank.indirectCommissionRate || "0") * 100).toFixed(0)}%</p>
-                      )}
+
+                    <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800">
+                      <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-2 flex items-center gap-1">
+                        <Gift className="w-3 h-3" /> 奖励
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="secondary" className="bg-white dark:bg-gray-800">
+                          直推{(parseFloat(rank.directCommissionRate || "0") * 100).toFixed(0)}%
+                        </Badge>
+                        <Badge variant="secondary" className="bg-white dark:bg-gray-800">
+                          间推{(parseFloat(rank.indirectCommissionRate || "0") * 100).toFixed(0)}%
+                        </Badge>
+                        <Badge variant="secondary" className="bg-white dark:bg-gray-800">
+                          {rank.dailySpins || 0}次/日抽奖
+                        </Badge>
+                        <Badge variant="secondary" className="bg-white dark:bg-gray-800">
+                          {rank.winMultiplier || "1.00"}x倍率
+                        </Badge>
+                        <Badge variant="secondary" className="bg-white dark:bg-gray-800">
+                          提现¥{rank.withdrawMinAmount || "0"}起
+                        </Badge>
+                        <Badge variant="secondary" className="bg-white dark:bg-gray-800">
+                          {rank.withdrawSpeed || "T+1"}到账
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">升级奖励</p>
-                      <p className="font-semibold text-green-600">{rank.cashBonus || "0"}元</p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">每日抽奖</p>
-                      <p className="font-medium">{rank.dailySpins || 0} 次</p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">提现规则</p>
-                      <p className="font-medium">{rank.withdrawMinAmount || "0"}元起 / {rank.withdrawSpeed || "T+1"}</p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">中奖倍率</p>
-                      <p className="font-medium">{rank.winMultiplier || "1.0"}x</p>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">特权</p>
+
+                    {(rank.hasVipService || rank.hasUnlimitedAI || rank.hasPromoBonus || rank.hasPriorityWelfare) && (
                       <div className="flex flex-wrap gap-1">
                         {rank.hasVipService && <Badge variant="secondary"><Headphones className="w-3 h-3 mr-1" />VIP客服</Badge>}
                         {rank.hasUnlimitedAI && <Badge variant="secondary"><Sparkles className="w-3 h-3 mr-1" />无限AI</Badge>}
                         {rank.hasPromoBonus && <Badge variant="secondary"><Gift className="w-3 h-3 mr-1" />推广加成</Badge>}
                         {rank.hasPriorityWelfare && <Badge variant="secondary"><Star className="w-3 h-3 mr-1" />优先福利</Badge>}
                       </div>
-                    </div>
+                    )}
                   </div>
                 )}
               </CardContent>
