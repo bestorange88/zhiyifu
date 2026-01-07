@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { db } from "../db";
 import { users, wallets, spinBalance, userRanks } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { updateUserRankStats } from "./referral";
 
 function getJwtSecret(): string {
   const secret = process.env.SESSION_SECRET;
@@ -74,6 +75,16 @@ export async function registerUser(phone: string, password: string, inviterCode:
 
   if (inviterId) {
     await updateInviterStats(inviterId);
+    
+    const [level1] = await db.select({ inviterId: users.inviterId }).from(users).where(eq(users.id, inviterId)).limit(1);
+    if (level1?.inviterId) {
+      await updateInviterStats(level1.inviterId);
+      
+      const [level2] = await db.select({ inviterId: users.inviterId }).from(users).where(eq(users.id, level1.inviterId)).limit(1);
+      if (level2?.inviterId) {
+        await updateInviterStats(level2.inviterId);
+      }
+    }
   }
 
   const token = jwt.sign({ userId: newUser.id }, getJwtSecret(), { expiresIn: "30d" });
@@ -140,9 +151,5 @@ export function verifyToken(token: string): { userId: number } | null {
 }
 
 async function updateInviterStats(inviterId: number) {
-  const directCount = await db.select().from(users).where(eq(users.inviterId, inviterId));
-  
-  await db.update(userRanks)
-    .set({ directCount: directCount.length })
-    .where(eq(userRanks.userId, inviterId));
+  await updateUserRankStats(inviterId);
 }
