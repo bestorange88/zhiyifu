@@ -96,12 +96,16 @@ export default function VipPage() {
 
   const buyMutation = useMutation({
     mutationFn: async (level: number) => {
-      const res = await apiRequest("POST", "/api/vip/buy", { level });
-      return res.json();
+      const buyRes = await apiRequest("POST", "/api/vip/buy", { level });
+      const buyData = await buyRes.json();
+      
+      const confirmRes = await apiRequest("POST", "/api/vip/confirm", { orderId: buyData.orderId });
+      return confirmRes.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/vip/status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/wallet"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/user/me"] });
       toast({
         title: "开通成功",
         description: `恭喜您成为${selectedPlan?.name}会员！`,

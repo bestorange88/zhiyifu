@@ -1,6 +1,6 @@
 import { db } from "../db";
-import { vipPlans, users, orders } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { vipPlans, users, orders, wallets } from "@shared/schema";
+import { eq, sql, and, desc, like } from "drizzle-orm";
 import { deductCashAvailable, addCashAvailable } from "./wallet";
 import { addSpins } from "./spin";
 
@@ -46,6 +46,42 @@ export async function buyVip(userId: number, level: number) {
   
   if (!plan) throw new Error("VIP套餐不存在");
 
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw new Error("用户不存在");
+
+  if (user.vipLevel >= level && user.vipExpireAt && new Date(user.vipExpireAt) > new Date()) {
+    throw new Error("您已开通该等级或更高等级VIP，无需重复购买");
+  }
+
+  const [wallet] = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
+  const availableBalance = parseFloat(wallet?.balanceCashAvailable || "0");
+  const planPrice = parseFloat(plan.price);
+  
+  if (availableBalance < planPrice) {
+    throw new Error(`余额不足，需要¥${plan.price}，当前可用余额¥${availableBalance.toFixed(2)}`);
+  }
+
+  const pendingOrders = await db.select().from(orders)
+    .where(and(
+      eq(orders.userId, userId),
+      eq(orders.status, "pending"),
+      sql`${orders.type} LIKE 'vip%'`
+    ));
+  
+  for (const pendingOrder of pendingOrders) {
+    if (parseFloat(pendingOrder.amount) === parseFloat(plan.price)) {
+      return {
+        orderId: pendingOrder.id,
+        amount: plan.price,
+        planName: plan.name,
+      };
+    }
+  }
+
+  if (pendingOrders.length > 0) {
+    throw new Error("您有未完成的VIP订单，请先完成或联系客服处理");
+  }
+
   const [order] = await db.insert(orders).values({
     userId,
     type: "vip",
@@ -65,12 +101,26 @@ export async function confirmVipPurchase(userId: number, orderId: number) {
   
   if (!order || order.userId !== userId) throw new Error("订单不存在");
   if (order.status !== "pending") throw new Error("订单状态异常");
-
+  const orderType = (order.type || "").toLowerCase();
+  const isVipOrder = !orderType || orderType.includes("vip");
+  if (!isVipOrder) {
+    throw new Error("订单类型异常");
+  }
+  
   const plans = await getVipPlans();
-  const amount = parseFloat(order.amount);
-  const plan = plans.find(p => parseFloat(p.price) === amount);
+  
+  let plan = plans.find(p => parseFloat(p.price) === parseFloat(order.amount));
+  if (!plan) {
+    const levelMatch = order.type.match(/vip_(\d+)/);
+    if (levelMatch) {
+      plan = plans.find(p => p.level === parseInt(levelMatch[1]));
+    }
+  }
   
   if (!plan) throw new Error("套餐不存在");
+
+  const amount = parseFloat(order.amount);
+  await deductCashAvailable(userId, amount, "vip_purchase", orderId, `开通${plan.name}`);
 
   await db.update(orders)
     .set({ status: "paid" })
