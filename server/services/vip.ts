@@ -3,6 +3,7 @@ import { vipPlans, users, orders, wallets } from "@shared/schema";
 import { eq, sql, and, desc, like } from "drizzle-orm";
 import { deductCashAvailable, addCashAvailable } from "./wallet";
 import { addSpins } from "./spin";
+import { distributeReferralCommission } from "./referral";
 
 const DEFAULT_VIP_PLANS = [
   { level: 1, name: "VIP1", price: "98", dailyExtraSpins: 2, withdrawMinAmount: "50", withdrawSpeed: "T+1", winMultiplier: "1.2" },
@@ -139,6 +140,8 @@ export async function confirmVipPurchase(userId: number, orderId: number) {
   if (plan.dailyExtraSpins && plan.dailyExtraSpins > 0) {
     await addSpins(userId, plan.dailyExtraSpins);
   }
+
+  await distributeReferralCommission(userId, amount);
 
   return {
     success: true,
