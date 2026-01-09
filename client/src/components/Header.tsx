@@ -2,6 +2,7 @@ import { User, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
+import logoImage from "@assets/logo.jpg";
 
 interface HeaderProps {
   title?: string;
@@ -31,9 +32,11 @@ export function Header({
         <>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="w-10 h-10 gradient-primary rounded-xl shadow-lg flex items-center justify-center transform hover:scale-105 transition-transform">
-                <span className="text-white text-xs font-bold font-display">云智</span>
-              </div>
+              <img 
+                src={logoImage} 
+                alt="智医服" 
+                className="w-10 h-10 rounded-xl shadow-lg object-cover transform hover:scale-105 transition-transform"
+              />
               <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-white" />
             </div>
             <div>
