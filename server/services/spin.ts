@@ -1,7 +1,7 @@
 import { db } from "../db";
 import { spinBalance, wheelSpins, wheelPrizes } from "@shared/schema";
 import { eq, sql, desc } from "drizzle-orm";
-import { addCashFrozen, addPoints } from "./wallet";
+import { addCashAvailable, addPoints } from "./wallet";
 
 interface Prize {
   id: number;
@@ -93,7 +93,7 @@ export async function performSpin(userId: number, requestId: string) {
   }).returning();
 
   if (selectedPrize.type === "cash" && selectedPrize.amount) {
-    await addCashFrozen(userId, parseFloat(selectedPrize.amount), "spin_win", spin.id, `转盘中奖: ${selectedPrize.name}`);
+    await addCashAvailable(userId, parseFloat(selectedPrize.amount), "spin_win", spin.id, `转盘中奖: ${selectedPrize.name}`);
   } else if (selectedPrize.type === "points" && selectedPrize.amount) {
     await addPoints(userId, parseInt(selectedPrize.amount), "spin_win", spin.id, `转盘中奖: ${selectedPrize.name}`);
   }
