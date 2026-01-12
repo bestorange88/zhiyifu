@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 export type LedgerType = 
   | "checkin_bonus" 
   | "spin_win" 
+  | "spin_commission"
   | "vip_purchase" 
   | "withdraw_apply" 
   | "withdraw_success" 

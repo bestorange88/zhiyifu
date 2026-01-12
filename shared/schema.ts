@@ -285,6 +285,8 @@ export const commissionRecords = pgTable("commission_records", {
   userId: integer("user_id").notNull().references(() => users.id),
   fromUserId: integer("from_user_id").notNull().references(() => users.id),
   orderId: integer("order_id").references(() => orders.id),
+  spinId: integer("spin_id").references(() => wheelSpins.id),
+  sourceType: varchar("source_type", { length: 20 }).default("vip").notNull(),
   level: integer("level").notNull(),
   rate: decimal("rate", { precision: 4, scale: 2 }).notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),

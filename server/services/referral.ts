@@ -1,7 +1,7 @@
 import { db } from "../db";
-import { users, userRanks, rankRules, referralRewards, orders } from "@shared/schema";
+import { users, userRanks, rankRules, referralRewards, orders, commissionRecords } from "@shared/schema";
 import { eq, sql, desc } from "drizzle-orm";
-import { addCashFrozen } from "./wallet";
+import { addCashFrozen, addCashAvailable } from "./wallet";
 
 const DEFAULT_RANK_RULES = [
   { 
@@ -254,4 +254,62 @@ export async function distributeReferralCommission(fromUserId: number, consumeAm
       await addCashFrozen(inviter.inviterId, indirectCommission, "referral_reward", undefined, "间推佣金");
     }
   }
+}
+
+export async function distributeSpinCommission(fromUserId: number, spinId: number, prizeAmount: number) {
+  const [fromUser] = await db.select().from(users).where(eq(users.id, fromUserId)).limit(1);
+  if (!fromUser?.inviterId) return { directCommission: 0, indirectCommission: 0 };
+
+  const directRate = 0.10;
+  const indirectRate = 0.05;
+  
+  let directCommission = 0;
+  let indirectCommission = 0;
+
+  directCommission = prizeAmount * directRate;
+  
+  if (directCommission > 0) {
+    await db.insert(commissionRecords).values({
+      userId: fromUser.inviterId,
+      fromUserId,
+      spinId,
+      sourceType: "spin",
+      level: 1,
+      rate: directRate.toString(),
+      amount: directCommission.toFixed(2),
+      status: "credited",
+    });
+    
+    await addCashAvailable(fromUser.inviterId, directCommission, "spin_commission", spinId, "转盘中奖-直推佣金");
+  }
+
+  const [inviter] = await db.select().from(users).where(eq(users.id, fromUser.inviterId)).limit(1);
+  if (inviter?.inviterId) {
+    indirectCommission = prizeAmount * indirectRate;
+    
+    if (indirectCommission > 0) {
+      await db.insert(commissionRecords).values({
+        userId: inviter.inviterId,
+        fromUserId,
+        spinId,
+        sourceType: "spin",
+        level: 2,
+        rate: indirectRate.toString(),
+        amount: indirectCommission.toFixed(2),
+        status: "credited",
+      });
+      
+      await addCashAvailable(inviter.inviterId, indirectCommission, "spin_commission", spinId, "转盘中奖-间推佣金");
+    }
+  }
+
+  return { directCommission, indirectCommission };
+}
+
+export async function getCommissionRecords(userId: number, limit = 50) {
+  return db.select()
+    .from(commissionRecords)
+    .where(eq(commissionRecords.userId, userId))
+    .orderBy(desc(commissionRecords.createdAt))
+    .limit(limit);
 }
