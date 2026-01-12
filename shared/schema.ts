@@ -469,3 +469,29 @@ export const adminBalanceAdjustSchema = z.object({
 export const adminDepositReviewSchema = z.object({
   approved: z.boolean(),
 });
+
+// ============ SMS VERIFICATION ============
+export const verificationCodes = pgTable("verification_codes", {
+  id: serial("id").primaryKey(),
+  phone: varchar("phone", { length: 20 }).notNull(),
+  code: varchar("code", { length: 10 }).notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  attempts: integer("attempts").default(0).notNull(),
+  used: boolean("used").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const requestCodeSchema = z.object({
+  phone: z.string().regex(/^1[3-9]\d{9}$/, "请输入有效的手机号"),
+});
+
+export const registerWithSmsSchema = z.object({
+  phone: z.string().regex(/^1[3-9]\d{9}$/, "请输入有效的手机号"),
+  code: z.string().length(6, "验证码为6位数字"),
+  password: z.string().min(6, "密码至少6位"),
+  confirmPassword: z.string().min(6, "确认密码至少6位"),
+  inviteCode: z.string().optional(),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "两次输入的密码不一致",
+  path: ["confirmPassword"],
+});

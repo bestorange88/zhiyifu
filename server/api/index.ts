@@ -40,14 +40,29 @@ import * as referralService from "../services/referral";
 import * as adminService from "../services/admin";
 import * as agentService from "../services/agent";
 import * as groupService from "../services/group";
-import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema, adminRankUpdateSchema } from "@shared/schema";
+import * as smsService from "../services/sms";
+import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema, adminRankUpdateSchema, requestCodeSchema, registerWithSmsSchema } from "@shared/schema";
 
 export function registerApiRoutes(app: Express): void {
   // ============ AUTH ============
+  app.post("/api/auth/request-code", async (req, res) => {
+    try {
+      const { phone } = requestCodeSchema.parse(req.body);
+      const result = await smsService.sendVerificationCode(phone);
+      if (result.success) {
+        res.json({ message: result.message });
+      } else {
+        res.status(400).json({ error: result.message });
+      }
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.post("/api/auth/register", async (req, res) => {
     try {
-      const { phone, password, inviteCode } = registerSchema.parse(req.body);
-      const result = await authService.registerUser(phone, password, inviteCode);
+      const data = registerWithSmsSchema.parse(req.body);
+      const result = await authService.registerWithSms(data.phone, data.code, data.password, data.inviteCode);
       res.status(201).json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });

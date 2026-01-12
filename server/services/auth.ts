@@ -4,6 +4,7 @@ import { db } from "../db";
 import { users, wallets, spinBalance, userRanks } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { updateUserRankStats } from "./referral";
+import { verifyCode } from "./sms";
 
 function getJwtSecret(): string {
   const secret = process.env.SESSION_SECRET;
@@ -152,4 +153,83 @@ export function verifyToken(token: string): { userId: number } | null {
 
 async function updateInviterStats(inviterId: number) {
   await updateUserRankStats(inviterId);
+}
+
+export async function registerWithSms(phone: string, code: string, password: string, inviterCode?: string) {
+  const verification = await verifyCode(phone, code);
+  if (!verification.valid) {
+    throw new Error(verification.message);
+  }
+
+  const existingUser = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
+  if (existingUser.length > 0) {
+    throw new Error("该手机号已注册");
+  }
+
+  let inviterId: number | null = null;
+  
+  if (inviterCode && inviterCode !== UNIVERSAL_INVITE_CODE) {
+    const inviter = await db.select().from(users).where(eq(users.inviteCode, inviterCode)).limit(1);
+    if (inviter.length === 0) {
+      throw new Error("邀请码无效");
+    }
+    inviterId = inviter[0].id;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const newInviteCode = generateInviteCode();
+
+  const [newUser] = await db.insert(users).values({
+    phone,
+    passwordHash,
+    inviteCode: newInviteCode,
+    inviterId,
+    vipLevel: 0,
+    status: "active",
+  }).returning();
+
+  await db.insert(wallets).values({
+    userId: newUser.id,
+    balanceCashAvailable: "0",
+    balanceCashFrozen: "0",
+    balancePoints: 0,
+  });
+
+  await db.insert(spinBalance).values({
+    userId: newUser.id,
+    availableSpins: 1,
+  });
+
+  await db.insert(userRanks).values({
+    userId: newUser.id,
+    currentRank: 0,
+    directCount: 0,
+    team3genCount: 0,
+  });
+
+  if (inviterId) {
+    await updateInviterStats(inviterId);
+    
+    const [level1] = await db.select({ inviterId: users.inviterId }).from(users).where(eq(users.id, inviterId)).limit(1);
+    if (level1?.inviterId) {
+      await updateInviterStats(level1.inviterId);
+      
+      const [level2] = await db.select({ inviterId: users.inviterId }).from(users).where(eq(users.id, level1.inviterId)).limit(1);
+      if (level2?.inviterId) {
+        await updateInviterStats(level2.inviterId);
+      }
+    }
+  }
+
+  const token = jwt.sign({ userId: newUser.id }, getJwtSecret(), { expiresIn: "30d" });
+
+  return {
+    user: {
+      id: newUser.id,
+      phone: newUser.phone,
+      inviteCode: newUser.inviteCode,
+      vipLevel: newUser.vipLevel,
+    },
+    token,
+  };
 }
