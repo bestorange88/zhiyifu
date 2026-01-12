@@ -274,6 +274,15 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/referral/commissions", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const records = await referralService.getCommissionRecords(req.userId!);
+      res.json(records);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.get("/api/referral/ranks", async (req, res) => {
     try {
       const ranks = await referralService.getRankRules();

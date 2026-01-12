@@ -61,6 +61,20 @@ interface ReferralReward {
   createdAt: string;
 }
 
+interface CommissionRecord {
+  id: number;
+  userId: number;
+  fromUserId: number;
+  orderId: number | null;
+  spinId: number | null;
+  sourceType: string;
+  level: number;
+  rate: string;
+  amount: string;
+  status: string;
+  createdAt: string;
+}
+
 export default function ReferralPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -83,6 +97,11 @@ export default function ReferralPage() {
 
   const { data: referralRewards } = useQuery<ReferralReward[]>({
     queryKey: ["/api/referral/rewards"],
+    enabled: !!user,
+  });
+
+  const { data: commissionRecords } = useQuery<CommissionRecord[]>({
+    queryKey: ["/api/referral/commissions"],
     enabled: !!user,
   });
 
@@ -379,7 +398,7 @@ export default function ReferralPage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-gray-800 flex items-center gap-2">
               <Gift className="w-4 h-4 text-rose-500" />
-              佣金记录
+              VIP佣金记录
             </h3>
           </div>
           
@@ -402,7 +421,43 @@ export default function ReferralPage() {
           ) : (
             <div className="text-center py-8 text-gray-400">
               <Gift className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>暂无佣金记录</p>
+              <p>暂无VIP佣金记录</p>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl p-5 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-800 flex items-center gap-2">
+              <Star className="w-4 h-4 text-amber-500" />
+              抽奖佣金记录
+            </h3>
+          </div>
+          
+          {commissionRecords && commissionRecords.length > 0 ? (
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {commissionRecords.map((record) => (
+                <div key={record.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <div>
+                    <p className="font-medium text-gray-800">
+                      {record.level === 1 ? "直推分成" : "间推分成"}
+                      <span className="text-xs text-gray-400 ml-1">
+                        ({(parseFloat(record.rate) * 100).toFixed(0)}%)
+                      </span>
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      下级转盘中奖 · {new Date(record.createdAt).toLocaleDateString("zh-CN")}
+                    </p>
+                  </div>
+                  <span className="text-green-600 font-bold">+¥{parseFloat(record.amount).toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-400">
+              <Star className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>暂无抽奖佣金记录</p>
+              <p className="text-xs mt-1">下级中奖后您将获得分成</p>
             </div>
           )}
         </div>
