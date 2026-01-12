@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles, Moon, Sun, Trash2, Info, Shield, MessageCircle } from "lucide-react";
+import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles, Moon, Sun, Trash2, Info, Shield, MessageCircle, Phone } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -32,8 +32,12 @@ export default function MinePage() {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [smsCode, setSmsCode] = useState("");
   const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   
   const { data: wallet } = useWallet();
   const { data: checkinStatus } = useCheckinStatus();
@@ -43,6 +47,41 @@ export default function MinePage() {
 
   const inviteCode = user?.inviteCode || "ADMIN888";
   const inviteLink = `https://365zhmz.com/invite?code=${inviteCode}`;
+
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+
+  const handleSendCode = async () => {
+    if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
+      toast({ title: "请输入正确的手机号", variant: "destructive" });
+      return;
+    }
+    if (countdown > 0 || isSendingCode) return;
+
+    setIsSendingCode(true);
+    try {
+      const response = await fetch("/api/auth/request-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast({ title: "验证码已发送", description: "请查收短信" });
+        setCountdown(60);
+      } else {
+        toast({ title: "发送失败", description: data.error, variant: "destructive" });
+      }
+    } catch (error: any) {
+      toast({ title: "发送失败", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSendingCode(false);
+    }
+  };
 
   const handleCopyInvite = () => {
     navigator.clipboard.writeText(inviteLink);
@@ -108,7 +147,7 @@ export default function MinePage() {
   const handleSubmitAuth = async () => {
     if (isSubmitting) return;
     
-    if (!phone || phone.length !== 11) {
+    if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
       toast({ title: "请输入正确的手机号", variant: "destructive" });
       return;
     }
@@ -116,16 +155,39 @@ export default function MinePage() {
       toast({ title: "密码至少6位", variant: "destructive" });
       return;
     }
-    if (isRegisterMode && !inviteCodeInput) {
-      toast({ title: "请输入邀请码", variant: "destructive" });
-      return;
+    
+    if (isRegisterMode) {
+      if (!smsCode || smsCode.length !== 6) {
+        toast({ title: "请输入6位验证码", variant: "destructive" });
+        return;
+      }
+      if (password !== confirmPassword) {
+        toast({ title: "两次密码不一致", variant: "destructive" });
+        return;
+      }
     }
 
     setIsSubmitting(true);
     try {
       if (isRegisterMode) {
-        await register(phone, password, inviteCodeInput);
+        const response = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone,
+            code: smsCode,
+            password,
+            confirmPassword,
+            inviteCode: inviteCodeInput || undefined,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "注册失败");
+        }
+        localStorage.setItem("auth_token", data.token);
         toast({ title: "注册成功", description: "欢迎加入云智医服！" });
+        window.location.reload();
       } else {
         await login(phone, password);
         toast({ title: "登录成功" });
@@ -133,6 +195,8 @@ export default function MinePage() {
       setShowLoginDialog(false);
       setPhone("");
       setPassword("");
+      setConfirmPassword("");
+      setSmsCode("");
       setInviteCodeInput("");
     } catch (error: any) {
       toast({ title: isRegisterMode ? "注册失败" : "登录失败", description: error.message, variant: "destructive" });
@@ -364,8 +428,32 @@ export default function MinePage() {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="input-modern"
+              maxLength={11}
               data-testid="input-phone"
             />
+
+            {isRegisterMode && (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="请输入验证码"
+                  value={smsCode}
+                  onChange={(e) => setSmsCode(e.target.value.replace(/\D/g, ""))}
+                  className="input-modern flex-1"
+                  maxLength={6}
+                  data-testid="input-sms-code"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendCode}
+                  disabled={countdown > 0 || isSendingCode}
+                  className="px-4 py-3 bg-primary text-white rounded-xl text-sm font-medium whitespace-nowrap disabled:opacity-50"
+                  data-testid="button-send-code"
+                >
+                  {countdown > 0 ? `${countdown}秒` : isSendingCode ? '发送中...' : '获取验证码'}
+                </button>
+              </div>
+            )}
             
             <input
               type="password"
@@ -377,14 +465,24 @@ export default function MinePage() {
             />
 
             {isRegisterMode && (
-              <input
-                type="text"
-                placeholder="请输入邀请码"
-                value={inviteCodeInput}
-                onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
-                className="input-modern"
-                data-testid="input-invite-code"
-              />
+              <>
+                <input
+                  type="password"
+                  placeholder="请再次输入密码"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="input-modern"
+                  data-testid="input-confirm-password"
+                />
+                <input
+                  type="text"
+                  placeholder="请输入邀请码（选填）"
+                  value={inviteCodeInput}
+                  onChange={(e) => setInviteCodeInput(e.target.value.toUpperCase())}
+                  className="input-modern"
+                  data-testid="input-invite-code"
+                />
+              </>
             )}
 
             <button
