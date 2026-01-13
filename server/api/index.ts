@@ -391,6 +391,19 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  app.post("/api/admin/users", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const { phone, password, vipLevel, inviterCode } = req.body;
+      if (!phone || !password) {
+        return res.status(400).json({ error: "手机号和密码不能为空" });
+      }
+      const result = await adminService.adminCreateUser(phone, password, vipLevel || 0, inviterCode);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.post("/api/admin/users/:id/status", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {
       const userId = parseInt(req.params.id);

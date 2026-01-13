@@ -112,6 +112,42 @@ export async function getDashboardStats() {
   };
 }
 
+export async function adminCreateUser(phone: string, password: string, vipLevel = 0, inviterCode?: string) {
+  const existing = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
+  if (existing.length > 0) {
+    throw new Error("该手机号已注册");
+  }
+
+  let inviterId: number | null = null;
+  if (inviterCode) {
+    const [inviter] = await db.select().from(users).where(eq(users.inviteCode, inviterCode)).limit(1);
+    if (inviter) {
+      inviterId = inviter.id;
+    }
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+  const [newUser] = await db.insert(users).values({
+    phone,
+    passwordHash,
+    inviteCode,
+    inviterId,
+    vipLevel,
+    status: "active",
+  }).returning();
+
+  await db.insert(wallets).values({
+    userId: newUser.id,
+    balanceCashAvailable: "0",
+    balanceCashFrozen: "0",
+    balancePoints: 0,
+  });
+
+  return newUser;
+}
+
 export async function getUserList(page = 1, limit = 20) {
   const offset = (page - 1) * limit;
   

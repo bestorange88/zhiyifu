@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Users, Search, ChevronLeft, ChevronRight, Ban, CheckCircle, Plus, Minus, Eye, X, GitBranch, ArrowUp, ArrowDown } from "lucide-react";
+import { Users, Search, ChevronLeft, ChevronRight, Ban, CheckCircle, Plus, Minus, Eye, X, GitBranch, ArrowUp, ArrowDown, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,10 +38,15 @@ export default function AdminUsersPage() {
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [relationshipModalOpen, setRelationshipModalOpen] = useState(false);
+  const [createUserModalOpen, setCreateUserModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [balanceAmount, setBalanceAmount] = useState("");
   const [balanceReason, setBalanceReason] = useState("");
   const [balanceType, setBalanceType] = useState<"add" | "subtract">("add");
+  const [newUserPhone, setNewUserPhone] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserVipLevel, setNewUserVipLevel] = useState(0);
+  const [newUserInviterCode, setNewUserInviterCode] = useState("");
 
   const { data, isLoading } = useQuery({
     queryKey: ["/api/admin/users", page, searchQuery],
@@ -125,6 +130,49 @@ export default function AdminUsersPage() {
     },
   });
 
+  const createUserMutation = useMutation({
+    mutationFn: async (data: { phone: string; password: string; vipLevel: number; inviterCode?: string }) => {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "创建失败");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      setCreateUserModalOpen(false);
+      setNewUserPhone("");
+      setNewUserPassword("");
+      setNewUserVipLevel(0);
+      setNewUserInviterCode("");
+      toast({ title: "用户创建成功" });
+    },
+    onError: (error: any) => {
+      toast({ title: "创建失败", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleCreateUser = () => {
+    if (!newUserPhone || !newUserPassword) {
+      toast({ title: "请填写手机号和密码", variant: "destructive" });
+      return;
+    }
+    createUserMutation.mutate({
+      phone: newUserPhone,
+      password: newUserPassword,
+      vipLevel: newUserVipLevel,
+      inviterCode: newUserInviterCode || undefined,
+    });
+  };
+
   const handleBalanceAdjust = () => {
     if (!selectedUser || !balanceAmount) return;
     const amount = parseFloat(balanceAmount);
@@ -175,7 +223,18 @@ export default function AdminUsersPage() {
               data-testid="input-search-users"
             />
           </div>
-          <span className="text-sm text-gray-500">共 {data?.total || 0} 位用户</span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">共 {data?.total || 0} 位用户</span>
+            <Button
+              size="sm"
+              onClick={() => setCreateUserModalOpen(true)}
+              className="bg-green-600 hover:bg-green-700"
+              data-testid="button-create-user"
+            >
+              <UserPlus className="w-4 h-4 mr-1" />
+              新建用户
+            </Button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -531,6 +590,71 @@ export default function AdminUsersPage() {
           ) : (
             <div className="py-8 text-center text-gray-500">加载失败</div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={createUserModalOpen} onOpenChange={setCreateUserModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-green-500" />
+              新建用户
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>手机号 *</Label>
+              <Input
+                placeholder="请输入手机号"
+                value={newUserPhone}
+                onChange={(e) => setNewUserPhone(e.target.value)}
+                data-testid="input-new-user-phone"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>密码 *</Label>
+              <Input
+                type="password"
+                placeholder="请输入密码"
+                value={newUserPassword}
+                onChange={(e) => setNewUserPassword(e.target.value)}
+                data-testid="input-new-user-password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>VIP等级</Label>
+              <select
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={newUserVipLevel}
+                onChange={(e) => setNewUserVipLevel(parseInt(e.target.value))}
+                data-testid="select-new-user-vip"
+              >
+                <option value={0}>普通用户</option>
+                <option value={1}>VIP1</option>
+                <option value={2}>VIP2</option>
+                <option value={3}>VIP3</option>
+                <option value={4}>VIP4</option>
+                <option value={5}>VIP5</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>邀请码（可选）</Label>
+              <Input
+                placeholder="填写上级邀请码"
+                value={newUserInviterCode}
+                onChange={(e) => setNewUserInviterCode(e.target.value)}
+                data-testid="input-new-user-inviter"
+              />
+            </div>
+            <Button
+              onClick={handleCreateUser}
+              disabled={createUserMutation.isPending}
+              className="w-full bg-green-600 hover:bg-green-700"
+              data-testid="button-submit-create-user"
+            >
+              {createUserMutation.isPending ? "创建中..." : "创建用户"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </AdminLayout>
