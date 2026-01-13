@@ -249,7 +249,11 @@ export default function VipPage() {
             {ranks?.map((rank) => {
               const colors = rankColors[rank.rank] || rankColors[1];
               const features = getFeatures(rank);
-              const isCurrentRank = rankStatus?.level === rank.rank;
+              const currentLevel = rankStatus?.level || 0;
+              const isCurrentRank = currentLevel === rank.rank;
+              const isAlreadyOwned = currentLevel >= rank.rank;
+              const canUpgrade = rank.rank === currentLevel + 1;
+              const isLocked = rank.rank > currentLevel + 1;
               const cashBonus = parseFloat(rank.cashBonus || "0");
               
               return (
@@ -333,11 +337,13 @@ export default function VipPage() {
 
                   <Button
                     onClick={() => handleSelectRank(rank)}
-                    disabled={isCurrentRank || (rankStatus?.level || 0) >= rank.rank}
+                    disabled={isAlreadyOwned || isLocked}
                     className={cn(
                       "w-full",
-                      isCurrentRank || (rankStatus?.level || 0) >= rank.rank
+                      isAlreadyOwned
                         ? "bg-gray-200 text-gray-500"
+                        : isLocked
+                        ? "bg-gray-300 text-gray-500"
                         : rank.rank === 5
                         ? "bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 hover:from-rose-600 hover:via-orange-600 hover:to-amber-600"
                         : rank.rank === 4
@@ -350,7 +356,7 @@ export default function VipPage() {
                     )}
                     data-testid={`button-select-rank-${rank.rank}`}
                   >
-                    {isCurrentRank ? "当前等级" : (rankStatus?.level || 0) >= rank.rank ? "已开通" : "立即开通"}
+                    {isCurrentRank ? "当前等级" : isAlreadyOwned ? "已开通" : isLocked ? `需先开通VIP${rank.rank - 1}` : "立即开通"}
                   </Button>
                 </div>
               );

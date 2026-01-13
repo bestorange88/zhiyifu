@@ -324,8 +324,18 @@ export async function buyRank(userId: number, rank: number) {
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new Error("用户不存在");
 
-  if (user.vipLevel >= rank && user.vipExpireAt && new Date(user.vipExpireAt) > new Date()) {
+  const currentLevel = user.vipLevel || 0;
+  const isVipActive = user.vipExpireAt && new Date(user.vipExpireAt) > new Date();
+
+  if (currentLevel >= rank && isVipActive) {
     throw new Error("您已开通该等级或更高等级VIP，无需重复购买");
+  }
+
+  if (rank > currentLevel + 1) {
+    const requiredLevel = rank - 1;
+    const requiredRule = rules.find(r => r.rank === requiredLevel);
+    const requiredName = requiredRule?.name || `VIP${requiredLevel}`;
+    throw new Error(`请先开通${requiredName}，才能升级到${rule.name}`);
   }
 
   const wallet = await getWallet(userId);
