@@ -1,13 +1,11 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Users, Gift, Crown, Copy, Check, Share2, Zap, TrendingUp, ChevronRight, Star } from "lucide-react";
+import { ArrowLeft, Users, Gift, Crown, Copy, Check, Share2, TrendingUp, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 
 interface ReferralSummary {
   directCount: number;
@@ -15,13 +13,6 @@ interface ReferralSummary {
   currentRank: number;
   currentRankName: string;
   nextRank: any | null;
-}
-
-interface AgentStatus {
-  hasApplied: boolean;
-  status: string | null;
-  appliedAt?: string;
-  reviewNote?: string;
 }
 
 interface RankRule {
@@ -80,10 +71,6 @@ export default function ReferralPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
-  const [showAgentDialog, setShowAgentDialog] = useState(false);
-  const [realName, setRealName] = useState("");
-  const [wechat, setWechat] = useState("");
-  const [reason, setReason] = useState("");
 
   const { data: referralSummary } = useQuery<ReferralSummary>({
     queryKey: ["/api/referral/summary"],
@@ -109,29 +96,6 @@ export default function ReferralPage() {
     queryKey: ["/api/referral/ranks"],
   });
 
-  const { data: agentStatus } = useQuery<AgentStatus>({
-    queryKey: ["/api/agent/status"],
-    enabled: !!user,
-  });
-
-  const applyAgentMutation = useMutation({
-    mutationFn: async (data: { realName: string; wechat: string; reason: string }) => {
-      const res = await apiRequest("POST", "/api/agent/apply", data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/agent/status"] });
-      toast({ title: "申请已提交", description: "我们会尽快审核您的申请" });
-      setShowAgentDialog(false);
-      setRealName("");
-      setWechat("");
-      setReason("");
-    },
-    onError: (error: any) => {
-      toast({ title: "申请失败", description: error.message, variant: "destructive" });
-    },
-  });
-
   const inviteCode = user?.inviteCode || "XXXXXX";
   const inviteLink = `https://365zhmz.com/invite?code=${inviteCode}`;
 
@@ -140,14 +104,6 @@ export default function ReferralPage() {
     setCopied(true);
     toast({ title: "复制成功", description: "邀请链接已复制" });
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleApplyAgent = () => {
-    if (!realName) {
-      toast({ title: "请填写真实姓名", variant: "destructive" });
-      return;
-    }
-    applyAgentMutation.mutate({ realName, wechat, reason });
   };
 
   if (!user) {
@@ -232,43 +188,9 @@ export default function ReferralPage() {
         </div>
 
         <div className="bg-white rounded-2xl p-5 shadow-lg">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-800 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-500" />
-              代理申请
-            </h3>
-            {agentStatus?.status === "approved" && (
-              <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full">
-                已认证
-              </span>
-            )}
-          </div>
-
-          {agentStatus?.status === "pending" ? (
-            <div className="bg-orange-50 rounded-xl p-4 text-center">
-              <p className="text-orange-600 font-medium">申请审核中</p>
-              <p className="text-xs text-orange-500 mt-1">我们会尽快处理您的申请</p>
-            </div>
-          ) : agentStatus?.status === "approved" ? (
-            <div className="bg-green-50 rounded-xl p-4 text-center">
-              <p className="text-green-600 font-medium">您已是认证代理</p>
-              <p className="text-xs text-green-500 mt-1">享受更高佣金比例</p>
-            </div>
-          ) : (
-            <Button
-              onClick={() => setShowAgentDialog(true)}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-500"
-              data-testid="button-apply-agent"
-            >
-              申请成为代理
-            </Button>
-          )}
-        </div>
-
-        <div className="bg-white rounded-2xl p-5 shadow-lg">
           <h3 className="font-bold text-gray-800 flex items-center gap-2 mb-4">
             <TrendingUp className="w-4 h-4 text-blue-500" />
-            代理等级体系
+            VIP等级体系
           </h3>
           
           <div className="space-y-4">
@@ -462,63 +384,6 @@ export default function ReferralPage() {
           )}
         </div>
       </div>
-
-      <Dialog open={showAgentDialog} onOpenChange={setShowAgentDialog}>
-        <DialogContent className="max-w-sm mx-auto rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-center flex items-center justify-center gap-2">
-              <Zap className="w-5 h-5 text-amber-500" />
-              申请成为代理
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="py-4 space-y-4">
-            <div className="bg-amber-50 rounded-xl p-4 text-center">
-              <p className="text-amber-700 font-medium">代理专属权益</p>
-              <p className="text-xs text-amber-600 mt-1">更高佣金比例 · 专属推广支持 · 优先客服响应</p>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">真实姓名 *</label>
-                <Input
-                  placeholder="请输入真实姓名"
-                  value={realName}
-                  onChange={(e) => setRealName(e.target.value)}
-                  data-testid="input-agent-name"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">微信号</label>
-                <Input
-                  placeholder="方便联系您"
-                  value={wechat}
-                  onChange={(e) => setWechat(e.target.value)}
-                  data-testid="input-agent-wechat"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-gray-600 mb-1 block">申请理由</label>
-                <Input
-                  placeholder="简述您的推广计划"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  data-testid="input-agent-reason"
-                />
-              </div>
-            </div>
-
-            <Button
-              onClick={handleApplyAgent}
-              disabled={applyAgentMutation.isPending}
-              className="w-full bg-gradient-to-r from-amber-500 to-orange-500"
-              data-testid="button-submit-agent"
-            >
-              {applyAgentMutation.isPending ? "提交中..." : "提交申请"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
