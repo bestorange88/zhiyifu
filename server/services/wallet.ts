@@ -7,6 +7,8 @@ export type LedgerType =
   | "spin_win" 
   | "spin_commission"
   | "vip_purchase" 
+  | "rank_purchase"
+  | "rank_bonus"
   | "withdraw_apply" 
   | "withdraw_success" 
   | "withdraw_reject"

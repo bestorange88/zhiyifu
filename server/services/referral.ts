@@ -1,7 +1,8 @@
 import { db } from "../db";
 import { users, userRanks, rankRules, referralRewards, orders, commissionRecords } from "@shared/schema";
-import { eq, sql, desc } from "drizzle-orm";
-import { addCashFrozen, addCashAvailable } from "./wallet";
+import { eq, sql, desc, and } from "drizzle-orm";
+import { addCashFrozen, addCashAvailable, deductCashAvailable, getWallet } from "./wallet";
+import { addSpins } from "./spin";
 
 const DEFAULT_RANK_RULES = [
   { 
@@ -312,4 +313,155 @@ export async function getCommissionRecords(userId: number, limit = 50) {
     .where(eq(commissionRecords.userId, userId))
     .orderBy(desc(commissionRecords.createdAt))
     .limit(limit);
+}
+
+export async function buyRank(userId: number, rank: number) {
+  const rules = await getRankRules();
+  const rule = rules.find(r => r.rank === rank);
+  
+  if (!rule) throw new Error("VIP等级不存在");
+
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw new Error("用户不存在");
+
+  if (user.vipLevel >= rank && user.vipExpireAt && new Date(user.vipExpireAt) > new Date()) {
+    throw new Error("您已开通该等级或更高等级VIP，无需重复购买");
+  }
+
+  const wallet = await getWallet(userId);
+  const availableBalance = parseFloat(wallet.balanceCashAvailable || "0");
+  const openingFee = parseFloat(rule.openingFee || "0");
+  
+  if (availableBalance < openingFee) {
+    throw new Error(`余额不足，需要¥${rule.openingFee}，当前可用余额¥${availableBalance.toFixed(2)}`);
+  }
+
+  const pendingOrders = await db.select().from(orders)
+    .where(and(
+      eq(orders.userId, userId),
+      eq(orders.status, "pending"),
+      sql`${orders.type} LIKE 'rank%'`
+    ));
+  
+  for (const pendingOrder of pendingOrders) {
+    if (parseFloat(pendingOrder.amount) === openingFee) {
+      return {
+        orderId: pendingOrder.id,
+        amount: rule.openingFee,
+        rankName: rule.name,
+      };
+    }
+  }
+
+  if (pendingOrders.length > 0) {
+    throw new Error("您有未完成的VIP订单，请先完成或联系客服处理");
+  }
+
+  const [order] = await db.insert(orders).values({
+    userId,
+    type: `rank_${rank}`,
+    amount: rule.openingFee || "0",
+    status: "pending",
+  }).returning();
+
+  return {
+    orderId: order.id,
+    amount: rule.openingFee,
+    rankName: rule.name,
+  };
+}
+
+export async function confirmRankPurchase(userId: number, orderId: number) {
+  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+  
+  if (!order || order.userId !== userId) throw new Error("订单不存在");
+  if (order.status !== "pending") throw new Error("订单状态异常");
+  const orderType = (order.type || "").toLowerCase();
+  const isRankOrder = orderType.includes("rank");
+  if (!isRankOrder) {
+    throw new Error("订单类型异常");
+  }
+  
+  const rules = await getRankRules();
+  
+  let rule = rules.find(r => parseFloat(r.openingFee || "0") === parseFloat(order.amount));
+  if (!rule) {
+    const rankMatch = order.type.match(/rank_(\d+)/);
+    if (rankMatch) {
+      rule = rules.find(r => r.rank === parseInt(rankMatch[1]));
+    }
+  }
+  
+  if (!rule) throw new Error("VIP等级不存在");
+
+  const amount = parseFloat(order.amount);
+  await deductCashAvailable(userId, amount, "rank_purchase", orderId, `开通${rule.name}`);
+
+  await db.update(orders)
+    .set({ status: "paid" })
+    .where(eq(orders.id, orderId));
+
+  const expireAt = new Date();
+  expireAt.setDate(expireAt.getDate() + 30);
+
+  await db.update(users)
+    .set({ 
+      vipLevel: rule.rank,
+      vipExpireAt: expireAt,
+    })
+    .where(eq(users.id, userId));
+
+  const [existingRank] = await db.select().from(userRanks).where(eq(userRanks.userId, userId)).limit(1);
+  if (!existingRank) {
+    await db.insert(userRanks).values({
+      userId,
+      currentRank: rule.rank,
+      directCount: 0,
+      team3genCount: 0,
+      reachedAt: new Date(),
+    });
+  } else if (existingRank.currentRank < rule.rank) {
+    await db.update(userRanks)
+      .set({
+        currentRank: rule.rank,
+        reachedAt: new Date(),
+      })
+      .where(eq(userRanks.userId, userId));
+  }
+
+  if (rule.dailySpins && rule.dailySpins > 0) {
+    await addSpins(userId, rule.dailySpins);
+  }
+
+  if (rule.cashBonus && parseFloat(rule.cashBonus) > 0) {
+    await addCashFrozen(userId, parseFloat(rule.cashBonus), "rank_bonus", orderId, `${rule.name}开通奖励`);
+  }
+
+  await distributeReferralCommission(userId, amount);
+
+  return {
+    success: true,
+    vipLevel: rule.rank,
+    expireAt,
+    dailySpins: rule.dailySpins || 0,
+    cashBonus: rule.cashBonus || "0",
+  };
+}
+
+export async function getRankStatus(userId: number) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw new Error("用户不存在");
+
+  const rules = await getRankRules();
+  const currentRule = rules.find(r => r.rank === user.vipLevel);
+
+  return {
+    level: user.vipLevel,
+    name: currentRule?.name || "普通用户",
+    expireAt: user.vipExpireAt,
+    dailySpins: currentRule?.dailySpins || 0,
+    withdrawMinAmount: currentRule?.withdrawMinAmount || "100",
+    withdrawSpeed: currentRule?.withdrawSpeed || "T+3",
+    winMultiplier: currentRule?.winMultiplier || "1.0",
+  };
 }

@@ -292,6 +292,35 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/rank/status", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const status = await referralService.getRankStatus(req.userId!);
+      res.json(status);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/rank/buy", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { rank } = req.body;
+      const result = await referralService.buyRank(req.userId!, rank);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/rank/confirm", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { orderId } = req.body;
+      const result = await referralService.confirmRankPurchase(req.userId!, orderId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ============ AGENT ============
   app.get("/api/agent/status", authMiddleware, async (req: AuthRequest, res) => {
     try {

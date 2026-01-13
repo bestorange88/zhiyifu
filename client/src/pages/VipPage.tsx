@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Crown, ArrowLeft, Check, Zap, Gift, Clock, Shield, Star, Sparkles, ChevronRight } from "lucide-react";
+import { Crown, ArrowLeft, Check, Zap, Gift, Clock, Shield, Star, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -9,55 +9,37 @@ import { cn } from "@/lib/utils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
-interface VipPlan {
+interface RankRule {
   id: number;
+  rank: number;
+  name: string;
+  openingFee: string;
+  directRequired: number;
+  team3genRequired: number;
+  directCommissionRate: string;
+  indirectCommissionRate: string;
+  cashBonus: string;
+  dailySpins: number;
+  withdrawMinAmount: string;
+  withdrawSpeed: string;
+  winMultiplier: string;
+  hasVipService: boolean;
+  hasUnlimitedAI: boolean;
+  hasPromoBonus: boolean;
+  hasPriorityWelfare: boolean;
+}
+
+interface RankStatus {
   level: number;
   name: string;
-  price: string;
-  dailyExtraSpins: number;
+  expireAt: string | null;
+  dailySpins: number;
   withdrawMinAmount: string;
   withdrawSpeed: string;
   winMultiplier: string;
 }
 
-interface VipStatus {
-  level: number;
-  name: string;
-  expireAt: string | null;
-  dailyExtraSpins: number;
-  withdrawMinAmount: string;
-  withdrawSpeed: string;
-}
-
-const planFeatures: Record<number, string[]> = {
-  1: [
-    "每日额外2次抽奖机会",
-    "提现最低50元起",
-    "T+1到账速度",
-    "中奖倍率1.2倍",
-    "专属VIP客服",
-  ],
-  2: [
-    "每日额外5次抽奖机会",
-    "提现最低30元起",
-    "T+0即时到账",
-    "中奖倍率1.5倍",
-    "专属VIP客服",
-    "AI工具无限使用",
-  ],
-  3: [
-    "每日额外10次抽奖机会",
-    "提现最低20元起",
-    "T+0即时到账",
-    "中奖倍率2.0倍",
-    "专属VIP客服",
-    "AI工具无限使用",
-    "专属推广佣金加成",
-    "优先参与新功能测试",
-  ],
-};
-
-const planColors: Record<number, { bg: string; border: string; badge: string; icon: string }> = {
+const rankColors: Record<number, { bg: string; border: string; badge: string; icon: string }> = {
   1: { 
     bg: "from-slate-100 to-slate-200", 
     border: "border-slate-300",
@@ -71,10 +53,22 @@ const planColors: Record<number, { bg: string; border: string; badge: string; ic
     icon: "text-amber-600"
   },
   3: { 
+    bg: "from-teal-100 to-emerald-200", 
+    border: "border-teal-400",
+    badge: "bg-gradient-to-r from-teal-500 to-emerald-500",
+    icon: "text-teal-600"
+  },
+  4: { 
     bg: "from-purple-100 via-pink-100 to-rose-100", 
     border: "border-purple-400",
     badge: "bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500",
     icon: "text-purple-600"
+  },
+  5: { 
+    bg: "from-rose-100 via-orange-100 to-amber-100", 
+    border: "border-rose-400",
+    badge: "bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500",
+    icon: "text-rose-600"
   },
 };
 
@@ -82,36 +76,38 @@ export default function VipPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const [selectedPlan, setSelectedPlan] = useState<VipPlan | null>(null);
+  const [selectedRank, setSelectedRank] = useState<RankRule | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
-  const { data: plans, isLoading } = useQuery<VipPlan[]>({
-    queryKey: ["/api/vip/plans"],
+  const { data: ranks, isLoading } = useQuery<RankRule[]>({
+    queryKey: ["/api/referral/ranks"],
   });
 
-  const { data: vipStatus } = useQuery<VipStatus>({
-    queryKey: ["/api/vip/status"],
+  const { data: rankStatus } = useQuery<RankStatus>({
+    queryKey: ["/api/rank/status"],
     enabled: !!user,
   });
 
   const buyMutation = useMutation({
-    mutationFn: async (level: number) => {
-      const buyRes = await apiRequest("POST", "/api/vip/buy", { level });
+    mutationFn: async (rank: number) => {
+      const buyRes = await apiRequest("POST", "/api/rank/buy", { rank });
       const buyData = await buyRes.json();
       
-      const confirmRes = await apiRequest("POST", "/api/vip/confirm", { orderId: buyData.orderId });
+      const confirmRes = await apiRequest("POST", "/api/rank/confirm", { orderId: buyData.orderId });
       return confirmRes.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/rank/status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vip/status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/wallet"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/referral/summary"] });
       toast({
         title: "开通成功",
-        description: `恭喜您成为${selectedPlan?.name}会员！`,
+        description: `恭喜您成为${selectedRank?.name}会员！${data.cashBonus && parseFloat(data.cashBonus) > 0 ? `获得¥${data.cashBonus}现金奖励` : ''}`,
       });
       setShowConfirmDialog(false);
-      setSelectedPlan(null);
+      setSelectedRank(null);
     },
     onError: (error: any) => {
       toast({
@@ -122,7 +118,7 @@ export default function VipPage() {
     },
   });
 
-  const handleSelectPlan = (plan: VipPlan) => {
+  const handleSelectRank = (rank: RankRule) => {
     if (!user) {
       toast({
         title: "请先登录",
@@ -131,14 +127,27 @@ export default function VipPage() {
       });
       return;
     }
-    setSelectedPlan(plan);
+    setSelectedRank(rank);
     setShowConfirmDialog(true);
   };
 
   const handleConfirmPurchase = () => {
-    if (selectedPlan) {
-      buyMutation.mutate(selectedPlan.level);
+    if (selectedRank) {
+      buyMutation.mutate(selectedRank.rank);
     }
+  };
+
+  const getFeatures = (rank: RankRule) => {
+    const features = [];
+    features.push(`${rank.dailySpins}次/日抽奖机会`);
+    features.push(`提现最低${rank.withdrawMinAmount}元起`);
+    features.push(`${rank.withdrawSpeed}到账速度`);
+    features.push(`中奖倍率${rank.winMultiplier}x`);
+    if (rank.hasVipService) features.push("专属VIP客服");
+    if (rank.hasUnlimitedAI) features.push("AI工具无限使用");
+    if (rank.hasPromoBonus) features.push("推广加成");
+    if (rank.hasPriorityWelfare) features.push("优先福利");
+    return features;
   };
 
   return (
@@ -165,14 +174,14 @@ export default function VipPage() {
           <h2 className="text-2xl font-bold mb-2 text-shadow-sm">尊享VIP特权</h2>
           <p className="text-white/80 text-sm">开通会员 · 享受更多专属权益</p>
           
-          {user && vipStatus && vipStatus.level > 0 && (
+          {user && rankStatus && rankStatus.level > 0 && (
             <div className="mt-4 bg-white/20 rounded-2xl px-6 py-3 inline-block backdrop-blur-sm">
               <p className="text-sm">
-                当前等级：<span className="font-bold">{vipStatus.name}</span>
+                当前等级：<span className="font-bold">{rankStatus.name}</span>
               </p>
-              {vipStatus.expireAt && (
+              {rankStatus.expireAt && (
                 <p className="text-xs text-white/70 mt-1">
-                  到期时间：{new Date(vipStatus.expireAt).toLocaleDateString()}
+                  到期时间：{new Date(rankStatus.expireAt).toLocaleDateString()}
                 </p>
               )}
             </div>
@@ -181,42 +190,50 @@ export default function VipPage() {
       </div>
 
       <div className="px-4 -mt-12 relative z-20 pb-8">
-        <div className="bg-white rounded-2xl shadow-xl p-4 mb-6">
-          <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-500" />
-            会员权益对比
-          </h3>
-          <div className="grid grid-cols-4 gap-2 text-center text-xs">
-            <div className="font-medium text-gray-500">权益</div>
-            <div className="font-bold text-slate-600">VIP1</div>
-            <div className="font-bold text-amber-600">VIP2</div>
-            <div className="font-bold text-purple-600">VIP3</div>
-            
-            <div className="text-gray-500 py-2 border-t">抽奖次数</div>
-            <div className="py-2 border-t">+2/天</div>
-            <div className="py-2 border-t">+5/天</div>
-            <div className="py-2 border-t">+10/天</div>
-            
-            <div className="text-gray-500 py-2 border-t">提现门槛</div>
-            <div className="py-2 border-t">50元</div>
-            <div className="py-2 border-t">30元</div>
-            <div className="py-2 border-t">20元</div>
-            
-            <div className="text-gray-500 py-2 border-t">到账速度</div>
-            <div className="py-2 border-t">T+1</div>
-            <div className="py-2 border-t">T+0</div>
-            <div className="py-2 border-t">T+0</div>
-            
-            <div className="text-gray-500 py-2 border-t">中奖倍率</div>
-            <div className="py-2 border-t">1.2x</div>
-            <div className="py-2 border-t">1.5x</div>
-            <div className="py-2 border-t">2.0x</div>
+        {ranks && ranks.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-xl p-4 mb-6">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-500" />
+              会员权益对比
+            </h3>
+            <div className="overflow-x-auto">
+              <div className={`grid gap-1 text-center text-xs min-w-[400px]`} style={{ gridTemplateColumns: `repeat(${ranks.length + 1}, minmax(0, 1fr))` }}>
+                <div className="font-medium text-gray-500">权益</div>
+                {ranks.map((r) => (
+                  <div key={`name-${r.rank}`} className={`font-bold ${rankColors[r.rank]?.icon || 'text-gray-600'}`}>
+                    {r.name}
+                  </div>
+                ))}
+                
+                <div className="text-gray-500 py-2 border-t">开通费</div>
+                {ranks.map((r) => (
+                  <div key={`fee-${r.rank}`} className="py-2 border-t">¥{r.openingFee}</div>
+                ))}
+                
+                <div className="text-gray-500 py-2 border-t">抽奖/日</div>
+                {ranks.map((r) => (
+                  <div key={`spin-${r.rank}`} className="py-2 border-t">{r.dailySpins}次</div>
+                ))}
+                
+                <div className="text-gray-500 py-2 border-t">中奖倍率</div>
+                {ranks.map((r) => (
+                  <div key={`mult-${r.rank}`} className="py-2 border-t">{r.winMultiplier}x</div>
+                ))}
+                
+                <div className="text-gray-500 py-2 border-t">现金奖励</div>
+                {ranks.map((r) => (
+                  <div key={`bonus-${r.rank}`} className={`py-2 border-t ${parseFloat(r.cashBonus || "0") > 0 ? "text-orange-500 font-bold" : ""}`}>
+                    {parseFloat(r.cashBonus || "0") > 0 ? `¥${r.cashBonus}` : "-"}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {isLoading ? (
           <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
+            {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="bg-white rounded-2xl p-6 animate-pulse">
                 <div className="h-6 bg-gray-200 rounded w-1/3 mb-4" />
                 <div className="h-10 bg-gray-200 rounded w-1/2 mb-4" />
@@ -229,46 +246,84 @@ export default function VipPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {plans?.map((plan) => {
-              const colors = planColors[plan.level] || planColors[1];
-              const features = planFeatures[plan.level] || [];
-              const isCurrentPlan = vipStatus?.level === plan.level;
+            {ranks?.map((rank) => {
+              const colors = rankColors[rank.rank] || rankColors[1];
+              const features = getFeatures(rank);
+              const isCurrentRank = rankStatus?.level === rank.rank;
+              const cashBonus = parseFloat(rank.cashBonus || "0");
               
               return (
                 <div
-                  key={plan.id}
+                  key={rank.id}
                   className={cn(
                     "bg-gradient-to-br rounded-2xl p-5 shadow-lg border-2 relative overflow-hidden",
                     colors.bg,
                     colors.border,
-                    isCurrentPlan && "ring-2 ring-primary ring-offset-2"
+                    isCurrentRank && "ring-2 ring-primary ring-offset-2"
                   )}
                 >
-                  {plan.level === 3 && (
+                  {rank.rank === 5 && (
                     <div className="absolute top-3 right-3">
-                      <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">
+                      <span className="bg-gradient-to-r from-rose-500 to-orange-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">
+                        最高等级
+                      </span>
+                    </div>
+                  )}
+                  {rank.rank === 3 && (
+                    <div className="absolute top-3 right-3">
+                      <span className="bg-gradient-to-r from-teal-500 to-emerald-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">
                         最受欢迎
                       </span>
                     </div>
                   )}
                   
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", colors.badge)}>
-                      <Crown className="w-6 h-6 text-white" />
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", colors.badge)}>
+                        <Star className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-800 text-lg">{rank.name}</h3>
+                        <p className="text-xs text-orange-600 font-medium">开通费: ¥{rank.openingFee}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-bold text-gray-800 text-lg">{plan.name}</h3>
-                      <p className="text-xs text-gray-500">30天有效期</p>
-                    </div>
+                    {cashBonus > 0 && (
+                      <span className="text-orange-500 font-bold text-sm">
+                        奖励¥{rank.cashBonus}
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-baseline gap-1 mb-4">
-                    <span className="text-3xl font-bold text-gray-800">¥{plan.price}</span>
-                    <span className="text-gray-400 text-sm">/月</span>
+                  <div className="text-xs text-gray-600 mb-3">
+                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded mr-2">
+                      直推{rank.directRequired}人
+                    </span>
+                    {rank.team3genRequired > 0 && (
+                      <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                        三代内{rank.team3genRequired}人
+                      </span>
+                    )}
                   </div>
 
-                  <div className="space-y-2 mb-5">
-                    {features.map((feature, idx) => (
+                  <div className="flex flex-wrap gap-1 mb-4">
+                    <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded">
+                      直推{(parseFloat(rank.directCommissionRate) * 100).toFixed(0)}%
+                    </span>
+                    {parseFloat(rank.indirectCommissionRate) > 0 && (
+                      <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded">
+                        间推{(parseFloat(rank.indirectCommissionRate) * 100).toFixed(0)}%
+                      </span>
+                    )}
+                    <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded">
+                      {rank.dailySpins}次/日抽奖
+                    </span>
+                    <span className="bg-teal-100 text-teal-700 text-xs px-2 py-0.5 rounded">
+                      {rank.winMultiplier}x倍率
+                    </span>
+                  </div>
+
+                  <div className="space-y-1.5 mb-5">
+                    {features.slice(0, 5).map((feature, idx) => (
                       <div key={idx} className="flex items-center gap-2 text-sm text-gray-600">
                         <Check className={cn("w-4 h-4 flex-shrink-0", colors.icon)} />
                         <span>{feature}</span>
@@ -277,21 +332,25 @@ export default function VipPage() {
                   </div>
 
                   <Button
-                    onClick={() => handleSelectPlan(plan)}
-                    disabled={isCurrentPlan}
+                    onClick={() => handleSelectRank(rank)}
+                    disabled={isCurrentRank || (rankStatus?.level || 0) >= rank.rank}
                     className={cn(
                       "w-full",
-                      isCurrentPlan
+                      isCurrentRank || (rankStatus?.level || 0) >= rank.rank
                         ? "bg-gray-200 text-gray-500"
-                        : plan.level === 3
+                        : rank.rank === 5
+                        ? "bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 hover:from-rose-600 hover:via-orange-600 hover:to-amber-600"
+                        : rank.rank === 4
                         ? "bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 hover:from-purple-600 hover:via-pink-600 hover:to-rose-600"
-                        : plan.level === 2
+                        : rank.rank === 3
+                        ? "bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600"
+                        : rank.rank === 2
                         ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600"
                         : "bg-slate-600 hover:bg-slate-700"
                     )}
-                    data-testid={`button-select-vip-${plan.level}`}
+                    data-testid={`button-select-rank-${rank.rank}`}
                   >
-                    {isCurrentPlan ? "当前套餐" : "立即开通"}
+                    {isCurrentRank ? "当前等级" : (rankStatus?.level || 0) >= rank.rank ? "已开通" : "立即开通"}
                   </Button>
                 </div>
               );
@@ -319,8 +378,8 @@ export default function VipPage() {
                 <Gift className="w-5 h-5 text-green-500" />
               </div>
               <div>
-                <p className="font-medium text-gray-800 text-sm">专属福利</p>
-                <p className="text-xs text-gray-400">更多优惠活动</p>
+                <p className="font-medium text-gray-800 text-sm">现金奖励</p>
+                <p className="text-xs text-gray-400">高级VIP享奖励</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -337,8 +396,8 @@ export default function VipPage() {
                 <Star className="w-5 h-5 text-purple-500" />
               </div>
               <div>
-                <p className="font-medium text-gray-800 text-sm">无忧续费</p>
-                <p className="text-xs text-gray-400">到期提醒</p>
+                <p className="font-medium text-gray-800 text-sm">推广分成</p>
+                <p className="text-xs text-gray-400">邀请好友赚佣金</p>
               </div>
             </div>
           </div>
@@ -355,36 +414,45 @@ export default function VipPage() {
         <DialogContent className="max-w-sm mx-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-center flex items-center justify-center gap-2">
-              <Crown className="w-5 h-5 text-amber-500" />
+              <Star className="w-5 h-5 text-amber-500" />
               确认开通
             </DialogTitle>
           </DialogHeader>
 
-          {selectedPlan && (
+          {selectedRank && (
             <div className="py-4">
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-5 text-center mb-4">
                 <div className="w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-                  <Crown className="w-8 h-8 text-white" />
+                  <Star className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="font-bold text-gray-800 text-lg">{selectedPlan.name}</h3>
+                <h3 className="font-bold text-gray-800 text-lg">{selectedRank.name}</h3>
                 <p className="text-sm text-gray-500 mt-1">30天会员权益</p>
                 <div className="mt-4 text-3xl font-bold text-orange-500">
-                  ¥{selectedPlan.price}
+                  ¥{selectedRank.openingFee}
                 </div>
+                {parseFloat(selectedRank.cashBonus || "0") > 0 && (
+                  <p className="text-sm text-green-600 mt-2">
+                    开通即送 ¥{selectedRank.cashBonus} 现金奖励
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2 text-sm text-gray-600 mb-6">
                 <p className="flex items-center justify-between">
-                  <span>每日额外抽奖</span>
-                  <span className="font-medium">+{selectedPlan.dailyExtraSpins}次</span>
+                  <span>每日抽奖次数</span>
+                  <span className="font-medium">{selectedRank.dailySpins}次</span>
                 </p>
                 <p className="flex items-center justify-between">
                   <span>提现门槛</span>
-                  <span className="font-medium">{selectedPlan.withdrawMinAmount}元起</span>
+                  <span className="font-medium">{selectedRank.withdrawMinAmount}元起</span>
                 </p>
                 <p className="flex items-center justify-between">
                   <span>到账速度</span>
-                  <span className="font-medium">{selectedPlan.withdrawSpeed}</span>
+                  <span className="font-medium">{selectedRank.withdrawSpeed}</span>
+                </p>
+                <p className="flex items-center justify-between">
+                  <span>中奖倍率</span>
+                  <span className="font-medium">{selectedRank.winMultiplier}x</span>
                 </p>
               </div>
 
@@ -392,7 +460,7 @@ export default function VipPage() {
                 onClick={handleConfirmPurchase}
                 disabled={buyMutation.isPending}
                 className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
-                data-testid="button-confirm-vip"
+                data-testid="button-confirm-rank"
               >
                 {buyMutation.isPending ? "处理中..." : "确认支付"}
               </Button>
