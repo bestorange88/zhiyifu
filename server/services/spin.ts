@@ -2,6 +2,7 @@ import { db } from "../db";
 import { wheelSpins, wheelPrizes, lotteryTimesLedger, lotteryDraws, lotteryCommissionRates, userVipStatus, commissionLogs, users, vipLevels } from "@shared/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { addCashAvailable, addPoints } from "./wallet";
+import { getBusinessDate } from "../utils/timezone";
 
 interface Prize {
   id: number;
@@ -21,10 +22,6 @@ const DEFAULT_PRIZES: Omit<Prize, 'id'>[] = [
   { name: "祝你下次好运", type: "none", amount: "0", probability: "0.10" },
 ];
 
-function getTodayDate(): string {
-  return new Date().toISOString().split("T")[0];
-}
-
 export async function getSpinBalance(userId: number) {
   await initializeDailyLotteryTimes(userId);
   
@@ -38,7 +35,7 @@ export async function getSpinBalance(userId: number) {
 }
 
 async function initializeDailyLotteryTimes(userId: number) {
-  const today = getTodayDate();
+  const today = getBusinessDate();
 
   const [existingBase] = await db.select()
     .from(lotteryTimesLedger)
@@ -123,7 +120,7 @@ export async function performSpin(userId: number, requestId: string) {
     throw new Error("抽奖次数不足");
   }
 
-  const today = getTodayDate();
+  const today = getBusinessDate();
   await db.insert(lotteryTimesLedger).values({
     userId,
     bizDate: today,
@@ -258,7 +255,7 @@ export async function getSpinHistory(userId: number, limit = 50) {
 }
 
 export async function addSpins(userId: number, amount: number, reason: string = "bonus", refId?: string) {
-  const today = getTodayDate();
+  const today = getBusinessDate();
   await db.insert(lotteryTimesLedger).values({
     userId,
     bizDate: today,
@@ -269,7 +266,7 @@ export async function addSpins(userId: number, amount: number, reason: string = 
 }
 
 export async function getLotteryTimesBreakdown(userId: number) {
-  const today = getTodayDate();
+  const today = getBusinessDate();
   
   const entries = await db.select()
     .from(lotteryTimesLedger)

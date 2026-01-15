@@ -62,7 +62,9 @@ export function registerApiRoutes(app: Express): void {
   app.post("/api/auth/register", async (req, res) => {
     try {
       const data = registerWithSmsSchema.parse(req.body);
-      const result = await authService.registerWithSms(data.phone, data.code, data.password, data.inviteCode);
+      const deviceFingerprint = req.body.deviceFingerprint || req.headers["x-device-fingerprint"] as string;
+      const ip = req.ip || req.headers["x-forwarded-for"] as string || req.socket.remoteAddress;
+      const result = await authService.registerWithSms(data.phone, data.code, data.password, data.inviteCode, deviceFingerprint, ip);
       res.status(201).json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -72,7 +74,9 @@ export function registerApiRoutes(app: Express): void {
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { phone, password } = loginSchema.parse(req.body);
-      const result = await authService.loginUser(phone, password);
+      const deviceFingerprint = req.body.deviceFingerprint || req.headers["x-device-fingerprint"] as string;
+      const ip = req.ip || req.headers["x-forwarded-for"] as string || req.socket.remoteAddress;
+      const result = await authService.loginUser(phone, password, deviceFingerprint, ip);
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });

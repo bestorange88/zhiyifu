@@ -2,6 +2,7 @@ import { db } from "../db";
 import { checkins, signInLogs, lotteryTimesLedger, userVipStatus, vipLevels } from "@shared/schema";
 import { eq, sql, and, desc } from "drizzle-orm";
 import { addPoints, addCashAvailable } from "./wallet";
+import { getBusinessDate, getBusinessYesterday } from "../utils/timezone";
 
 const STREAK_REWARDS: Record<number, number> = {
   3: 1,
@@ -12,18 +13,8 @@ const MONTH_CASH_REWARD_CENTS = 5800;
 const BREAK_PENALTY = 3;
 const STREAK_CYCLE = 15;
 
-function getTodayDate(): string {
-  return new Date().toISOString().split("T")[0];
-}
-
-function getYesterdayDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().split("T")[0];
-}
-
 export async function getCheckinStatus(userId: number) {
-  const today = getTodayDate();
+  const today = getBusinessDate();
   
   const [todayCheckin] = await db.select()
     .from(checkins)
@@ -69,8 +60,8 @@ export async function getCheckinStatus(userId: number) {
 }
 
 export async function performCheckin(userId: number) {
-  const today = getTodayDate();
-  const yesterday = getYesterdayDate();
+  const today = getBusinessDate();
+  const yesterday = getBusinessYesterday();
 
   const [existingCheckin] = await db.select()
     .from(checkins)

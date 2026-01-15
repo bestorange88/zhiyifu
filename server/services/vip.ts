@@ -4,7 +4,7 @@ import {
   userVipStatus, vipUpgradeTxs, commissionLogs,
   users, orders, wallets, vipPlans 
 } from "@shared/schema";
-import { eq, sql, and, desc, like } from "drizzle-orm";
+import { eq, sql, and, desc, like, gte } from "drizzle-orm";
 import { deductCashAvailable, addCashAvailable, addCashFrozen, getWallet } from "./wallet";
 import { addSpins } from "./spin";
 
@@ -281,13 +281,19 @@ export async function recalcQualification(userId: number) {
   const isQualified = directCount >= requirement.directRequired && team3Count >= requirement.team3Required;
   const wasQualified = status.qualified;
 
+  const updateData: Record<string, any> = {
+    directCount,
+    team3Count,
+    qualified: isQualified,
+    lastQualCheckAt: new Date(),
+  };
+
+  if (isQualified && !wasQualified) {
+    updateData.qualifiedAt = new Date();
+  }
+
   await db.update(userVipStatus)
-    .set({
-      directCount,
-      team3Count,
-      qualified: isQualified,
-      lastQualCheckAt: new Date(),
-    })
+    .set(updateData)
     .where(eq(userVipStatus.userId, userId));
 
   if (isQualified && !wasQualified) {
@@ -304,10 +310,16 @@ export async function recalcQualification(userId: number) {
 }
 
 async function unlockFrozenCommissions(userId: number) {
+  const [status] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, userId)).limit(1);
+  if (!status || !status.qualifiedAt) return;
+
+  const qualifiedAt = status.qualifiedAt;
+
   const frozenCommissions = await db.select().from(commissionLogs)
     .where(and(
       eq(commissionLogs.toUserId, userId),
-      eq(commissionLogs.status, "frozen")
+      eq(commissionLogs.status, "frozen"),
+      gte(commissionLogs.createdAt, qualifiedAt)
     ));
 
   for (const comm of frozenCommissions) {

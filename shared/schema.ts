@@ -64,13 +64,16 @@ export const checkinRules = pgTable("checkin_rules", {
 });
 
 // 签到记录表(新版 - 支持断签惩罚)
+// 唯一约束: (user_id, sign_date) 防止重复签到
 export const signInLogs = pgTable("sign_in_logs", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id),
   signDate: date("sign_date").notNull(),  // 签到日期
   continuousDays: integer("continuous_days").default(1).notNull(),  // 连续签到天数
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  userDateUnique: { unique: true, columns: [table.userId, table.signDate] },
+}));
 
 // 签到连续奖励规则
 export const signInRewardRules = pgTable("sign_in_reward_rules", {
@@ -112,15 +115,18 @@ export const wheelSpins = pgTable("wheel_spins", {
 });
 
 // 抽奖次数账本(账本式记录)
+// 唯一约束: (user_id, biz_date, refId) 防止重复记录
 export const lotteryTimesLedger = pgTable("lottery_times_ledger", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id),
   bizDate: date("biz_date").notNull(),  // 业务日期
   delta: integer("delta").notNull(),  // +增加 / -消耗
   reason: varchar("reason", { length: 50 }).notNull(),  // base|signin|signin_bonus|vip_daily|draw_consume|admin_adjust
-  refId: varchar("ref_id", { length: 50 }),  // 关联记录
+  refId: varchar("ref_id", { length: 50 }).notNull(),  // 关联记录
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  ledgerEntryUnique: { unique: true, columns: [table.userId, table.bizDate, table.refId] },
+}));
 
 // 抽奖开奖记录
 export const lotteryDraws = pgTable("lottery_draws", {
@@ -171,6 +177,7 @@ export const userVipStatus = pgTable("user_vip_status", {
   vipLevel: integer("vip_level").default(0).notNull(),  // 0=普通用户
   upgradedAt: timestamp("upgraded_at"),
   qualified: boolean("qualified").default(false).notNull(),  // 是否达标
+  qualifiedAt: timestamp("qualified_at"),  // 达标时间(用于分佣追溯判断)
   directCount: integer("direct_count").default(0).notNull(),
   team3Count: integer("team3_count").default(0).notNull(),
   lastQualCheckAt: timestamp("last_qual_check_at"),
@@ -391,6 +398,7 @@ export const commissionRecords = pgTable("commission_records", {
 });
 
 // 分佣记录(新版-支持VIP升级和抽奖分佣)
+// 唯一约束: (biz_type, to_user_id, ref_id, relation_level) 防止重复分佣
 export const commissionLogs = pgTable("commission_logs", {
   id: serial("id").primaryKey(),
   toUserId: integer("to_user_id").notNull().references(() => users.id),  // 得佣人(上级)
@@ -403,7 +411,9 @@ export const commissionLogs = pgTable("commission_logs", {
   refId: varchar("ref_id", { length: 50 }).notNull(),  // 关联ID
   status: varchar("status", { length: 20 }).default("pending").notNull(),  // pending|credited|frozen
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => ({
+  commissionUnique: { unique: true, columns: [table.bizType, table.toUserId, table.refId, table.relationLevel] },
+}));
 
 // ============ CUSTOMER SERVICE CHAT ============
 export const serviceChatSessions = pgTable("service_chat_sessions", {
