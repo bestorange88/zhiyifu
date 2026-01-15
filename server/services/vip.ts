@@ -1,26 +1,354 @@
 import { db } from "../db";
-import { vipPlans, users, orders, wallets } from "@shared/schema";
+import { 
+  vipLevels, vipRequirements, vipCommissionRates, lotteryCommissionRates,
+  userVipStatus, vipUpgradeTxs, commissionLogs,
+  users, orders, wallets, vipPlans 
+} from "@shared/schema";
 import { eq, sql, and, desc, like } from "drizzle-orm";
-import { deductCashAvailable, addCashAvailable } from "./wallet";
+import { deductCashAvailable, addCashAvailable, addCashFrozen, getWallet } from "./wallet";
 import { addSpins } from "./spin";
-import { distributeReferralCommission } from "./referral";
 
-const DEFAULT_VIP_PLANS = [
-  { level: 1, name: "VIP1", price: "98", dailyExtraSpins: 2, withdrawMinAmount: "50", withdrawSpeed: "T+1", winMultiplier: "1.2" },
-  { level: 2, name: "VIP2", price: "298", dailyExtraSpins: 5, withdrawMinAmount: "30", withdrawSpeed: "T+0", winMultiplier: "1.5" },
-  { level: 3, name: "VIP3", price: "598", dailyExtraSpins: 10, withdrawMinAmount: "20", withdrawSpeed: "T+0", winMultiplier: "2.0" },
-];
+export async function getVipLevels() {
+  return db.select().from(vipLevels).orderBy(vipLevels.level);
+}
+
+export async function getVipLevelWithDetails(level: number) {
+  const [vipLevel] = await db.select().from(vipLevels).where(eq(vipLevels.level, level)).limit(1);
+  if (!vipLevel) return null;
+
+  const [requirement] = await db.select().from(vipRequirements).where(eq(vipRequirements.level, level)).limit(1);
+  const [commRate] = await db.select().from(vipCommissionRates).where(eq(vipCommissionRates.level, level)).limit(1);
+
+  return {
+    ...vipLevel,
+    requirement,
+    commissionRate: commRate,
+  };
+}
+
+export async function getAllVipLevelsWithDetails() {
+  const levels = await db.select().from(vipLevels).orderBy(vipLevels.level);
+  const requirements = await db.select().from(vipRequirements);
+  const commRates = await db.select().from(vipCommissionRates);
+  const lotteryRates = await db.select().from(lotteryCommissionRates);
+
+  return levels.map(level => ({
+    ...level,
+    priceYuan: (level.priceCents / 100).toFixed(2),
+    upgradeRewardYuan: (level.upgradeRewardCents / 100).toFixed(2),
+    withdrawThresholdYuan: (level.withdrawThresholdCents / 100).toFixed(2),
+    requirement: requirements.find(r => r.level === level.level),
+    commissionRate: commRates.find(r => r.level === level.level),
+    lotteryCommissionRate: lotteryRates.find(r => r.level === level.level),
+  }));
+}
+
+export async function getUserVipStatus(userId: number) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw new Error("用户不存在");
+
+  let [status] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, userId)).limit(1);
+  
+  if (!status) {
+    await db.insert(userVipStatus).values({
+      userId,
+      vipLevel: user.vipLevel || 0,
+      qualified: false,
+      directCount: 0,
+      team3Count: 0,
+    });
+    [status] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, userId)).limit(1);
+  }
+
+  const levels = await getAllVipLevelsWithDetails();
+  const currentLevel = levels.find(l => l.level === status.vipLevel);
+  const nextLevel = levels.find(l => l.level === status.vipLevel + 1);
+
+  let qualificationProgress = null;
+  if (currentLevel?.requirement) {
+    qualificationProgress = {
+      directCount: status.directCount,
+      directRequired: currentLevel.requirement.directRequired,
+      team3Count: status.team3Count,
+      team3Required: currentLevel.requirement.team3Required,
+      isQualified: status.qualified,
+    };
+  }
+
+  return {
+    vipLevel: status.vipLevel,
+    vipName: currentLevel?.name || "普通用户",
+    qualified: status.qualified,
+    upgradedAt: status.upgradedAt,
+    directCount: status.directCount,
+    team3Count: status.team3Count,
+    currentLevelDetails: currentLevel,
+    nextLevelDetails: nextLevel,
+    qualificationProgress,
+    canUpgrade: !!nextLevel,
+  };
+}
+
+export async function createVipUpgradeOrder(userId: number, targetLevel: number) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) throw new Error("用户不存在");
+
+  let [status] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, userId)).limit(1);
+  const currentLevel = status?.vipLevel || user.vipLevel || 0;
+
+  if (targetLevel !== currentLevel + 1) {
+    throw new Error(`只能按顺序升级，当前为V${currentLevel}，只能升级到V${currentLevel + 1}`);
+  }
+
+  const [targetVipLevel] = await db.select().from(vipLevels).where(eq(vipLevels.level, targetLevel)).limit(1);
+  if (!targetVipLevel) throw new Error("VIP等级不存在");
+
+  const wallet = await getWallet(userId);
+  const availableBalance = Math.floor(parseFloat(wallet.balanceCashAvailable) * 100);
+  
+  if (availableBalance < targetVipLevel.priceCents) {
+    throw new Error(`余额不足，需要¥${(targetVipLevel.priceCents / 100).toFixed(2)}，当前可用余额¥${(availableBalance / 100).toFixed(2)}`);
+  }
+
+  const pendingOrders = await db.select().from(vipUpgradeTxs)
+    .where(and(
+      eq(vipUpgradeTxs.userId, userId),
+      eq(vipUpgradeTxs.status, "pending")
+    ));
+
+  if (pendingOrders.length > 0) {
+    const existingOrder = pendingOrders.find(o => o.toLevel === targetLevel);
+    if (existingOrder) {
+      return {
+        orderId: existingOrder.id,
+        amount: (existingOrder.payAmountCents / 100).toFixed(2),
+        levelName: targetVipLevel.name,
+        fromLevel: currentLevel,
+        toLevel: targetLevel,
+      };
+    }
+    throw new Error("您有未完成的VIP升级订单，请先完成或联系客服");
+  }
+
+  const [order] = await db.insert(vipUpgradeTxs).values({
+    userId,
+    fromLevel: currentLevel,
+    toLevel: targetLevel,
+    payAmountCents: targetVipLevel.priceCents,
+    status: "pending",
+  }).returning();
+
+  return {
+    orderId: order.id,
+    amount: (targetVipLevel.priceCents / 100).toFixed(2),
+    levelName: targetVipLevel.name,
+    fromLevel: currentLevel,
+    toLevel: targetLevel,
+  };
+}
+
+export async function confirmVipUpgrade(userId: number, orderId: number) {
+  const [order] = await db.select().from(vipUpgradeTxs).where(eq(vipUpgradeTxs.id, orderId)).limit(1);
+  
+  if (!order || order.userId !== userId) throw new Error("订单不存在");
+  if (order.status !== "pending") throw new Error("订单状态异常");
+
+  const [targetLevel] = await db.select().from(vipLevels).where(eq(vipLevels.level, order.toLevel)).limit(1);
+  if (!targetLevel) throw new Error("VIP等级不存在");
+
+  const amountYuan = order.payAmountCents / 100;
+  await deductCashAvailable(userId, amountYuan, "vip_upgrade", orderId, `升级到${targetLevel.name}`);
+
+  await db.update(vipUpgradeTxs)
+    .set({ status: "paid", paidAt: new Date() })
+    .where(eq(vipUpgradeTxs.id, orderId));
+
+  let [status] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, userId)).limit(1);
+  
+  if (!status) {
+    await db.insert(userVipStatus).values({
+      userId,
+      vipLevel: order.toLevel,
+      upgradedAt: new Date(),
+      qualified: false,
+      directCount: 0,
+      team3Count: 0,
+    });
+  } else {
+    await db.update(userVipStatus)
+      .set({ 
+        vipLevel: order.toLevel,
+        upgradedAt: new Date(),
+      })
+      .where(eq(userVipStatus.userId, userId));
+  }
+
+  await db.update(users)
+    .set({ vipLevel: order.toLevel })
+    .where(eq(users.id, userId));
+
+  if (targetLevel.dailyLottery > 0) {
+    await addSpins(userId, targetLevel.dailyLottery);
+  }
+
+  await distributeVipUpgradeCommission(userId, order.payAmountCents, orderId);
+
+  return {
+    success: true,
+    vipLevel: order.toLevel,
+    vipName: targetLevel.name,
+    dailyLottery: targetLevel.dailyLottery,
+    upgradeRewardCents: targetLevel.upgradeRewardCents,
+    qualified: false,
+    message: targetLevel.upgradeRewardCents > 0 
+      ? `升级成功！达标后可领取¥${(targetLevel.upgradeRewardCents / 100).toFixed(2)}奖励` 
+      : "升级成功！",
+  };
+}
+
+async function distributeVipUpgradeCommission(fromUserId: number, payAmountCents: number, txId: number) {
+  const [fromUser] = await db.select().from(users).where(eq(users.id, fromUserId)).limit(1);
+  if (!fromUser?.inviterId) return;
+
+  const uplineChain = await getUplineChain(fromUserId, 3);
+
+  for (let i = 0; i < uplineChain.length; i++) {
+    const uplineUserId = uplineChain[i];
+    const relationLevel = i + 1;
+
+    const [uplineStatus] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, uplineUserId)).limit(1);
+    const uplineVipLevel = uplineStatus?.vipLevel || 0;
+
+    if (uplineVipLevel < 1) continue;
+
+    const [commRate] = await db.select().from(vipCommissionRates).where(eq(vipCommissionRates.level, uplineVipLevel)).limit(1);
+    if (!commRate) continue;
+
+    const rate = relationLevel === 1 
+      ? parseFloat(commRate.directRate) 
+      : parseFloat(commRate.indirectRate);
+
+    if (rate <= 0) continue;
+
+    const commissionCents = Math.floor(payAmountCents * rate);
+    if (commissionCents <= 0) continue;
+
+    const isQualified = uplineStatus?.qualified || false;
+
+    await db.insert(commissionLogs).values({
+      toUserId: uplineUserId,
+      fromUserId,
+      bizType: "vip_upgrade",
+      relationLevel,
+      baseCents: payAmountCents,
+      rate: rate.toString(),
+      amountCents: commissionCents,
+      refId: `upgrade_${txId}`,
+      status: isQualified ? "credited" : "frozen",
+    });
+
+    if (isQualified) {
+      const commissionYuan = commissionCents / 100;
+      await addCashAvailable(uplineUserId, commissionYuan, "vip_commission", txId, `下级升级VIP分佣`);
+    }
+  }
+}
+
+async function getUplineChain(userId: number, maxLevels: number): Promise<number[]> {
+  const chain: number[] = [];
+  let currentUserId = userId;
+
+  for (let i = 0; i < maxLevels; i++) {
+    const [user] = await db.select({ inviterId: users.inviterId }).from(users).where(eq(users.id, currentUserId)).limit(1);
+    if (!user?.inviterId) break;
+    chain.push(user.inviterId);
+    currentUserId = user.inviterId;
+  }
+
+  return chain;
+}
+
+export async function recalcQualification(userId: number) {
+  const [status] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, userId)).limit(1);
+  if (!status || status.vipLevel < 1) return { qualified: false, changed: false };
+
+  const [requirement] = await db.select().from(vipRequirements).where(eq(vipRequirements.level, status.vipLevel)).limit(1);
+  if (!requirement) return { qualified: false, changed: false };
+
+  const directCount = await getDirectReferralCount(userId);
+  const team3Count = await get3GenTeamCount(userId);
+
+  const isQualified = directCount >= requirement.directRequired && team3Count >= requirement.team3Required;
+  const wasQualified = status.qualified;
+
+  await db.update(userVipStatus)
+    .set({
+      directCount,
+      team3Count,
+      qualified: isQualified,
+      lastQualCheckAt: new Date(),
+    })
+    .where(eq(userVipStatus.userId, userId));
+
+  if (isQualified && !wasQualified) {
+    await unlockFrozenCommissions(userId);
+
+    const [vipLevel] = await db.select().from(vipLevels).where(eq(vipLevels.level, status.vipLevel)).limit(1);
+    if (vipLevel && vipLevel.upgradeRewardCents > 0) {
+      const rewardYuan = vipLevel.upgradeRewardCents / 100;
+      await addCashAvailable(userId, rewardYuan, "upgrade_reward", undefined, `${vipLevel.name}达标升级奖励`);
+    }
+  }
+
+  return { qualified: isQualified, changed: isQualified !== wasQualified };
+}
+
+async function unlockFrozenCommissions(userId: number) {
+  const frozenCommissions = await db.select().from(commissionLogs)
+    .where(and(
+      eq(commissionLogs.toUserId, userId),
+      eq(commissionLogs.status, "frozen")
+    ));
+
+  for (const comm of frozenCommissions) {
+    await db.update(commissionLogs)
+      .set({ status: "credited" })
+      .where(eq(commissionLogs.id, comm.id));
+
+    const amountYuan = comm.amountCents / 100;
+    const description = comm.bizType === "vip_upgrade" ? "下级升级VIP分佣(达标解冻)" : "下级抽奖分佣(达标解冻)";
+    await addCashAvailable(userId, amountYuan, "commission_unfreeze", comm.id, description);
+  }
+}
+
+async function getDirectReferralCount(userId: number): Promise<number> {
+  const result = await db.select({ count: sql<number>`count(*)::int` })
+    .from(users)
+    .where(eq(users.inviterId, userId));
+  return result[0]?.count || 0;
+}
+
+async function get3GenTeamCount(userId: number): Promise<number> {
+  let total = 0;
+  
+  const level1 = await db.select({ id: users.id }).from(users).where(eq(users.inviterId, userId));
+  total += level1.length;
+  
+  for (const l1 of level1) {
+    const level2 = await db.select({ id: users.id }).from(users).where(eq(users.inviterId, l1.id));
+    total += level2.length;
+    
+    for (const l2 of level2) {
+      const level3 = await db.select({ id: users.id }).from(users).where(eq(users.inviterId, l2.id));
+      total += level3.length;
+    }
+  }
+  
+  return total;
+}
 
 export async function getVipPlans() {
   let plans = await db.select().from(vipPlans).orderBy(vipPlans.level);
-  
-  if (plans.length === 0) {
-    for (const plan of DEFAULT_VIP_PLANS) {
-      await db.insert(vipPlans).values(plan);
-    }
-    plans = await db.select().from(vipPlans).orderBy(vipPlans.level);
-  }
-  
   return plans;
 }
 
@@ -28,142 +356,38 @@ export async function getVipStatus(userId: number) {
   const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!user) throw new Error("用户不存在");
 
-  const plans = await getVipPlans();
-  const currentPlan = plans.find(p => p.level === user.vipLevel);
-
+  const status = await getUserVipStatus(userId);
   return {
-    level: user.vipLevel,
-    name: currentPlan?.name || "普通用户",
-    expireAt: user.vipExpireAt,
-    dailyExtraSpins: currentPlan?.dailyExtraSpins || 0,
-    withdrawMinAmount: currentPlan?.withdrawMinAmount || "100",
-    withdrawSpeed: currentPlan?.withdrawSpeed || "T+3",
+    level: status.vipLevel,
+    name: status.vipName,
+    expireAt: null,
+    dailyExtraSpins: status.currentLevelDetails?.dailyLottery || 0,
+    withdrawMinAmount: status.currentLevelDetails?.withdrawThresholdYuan || "100",
+    withdrawSpeed: status.currentLevelDetails?.settleType || "T+1",
+    qualified: status.qualified,
+    qualificationProgress: status.qualificationProgress,
   };
 }
 
 export async function buyVip(userId: number, level: number) {
-  const plans = await getVipPlans();
-  const plan = plans.find(p => p.level === level);
-  
-  if (!plan) throw new Error("VIP套餐不存在");
-
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  if (!user) throw new Error("用户不存在");
-
-  if (user.vipLevel >= level && user.vipExpireAt && new Date(user.vipExpireAt) > new Date()) {
-    throw new Error("您已开通该等级或更高等级VIP，无需重复购买");
-  }
-
-  const [wallet] = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
-  const availableBalance = parseFloat(wallet?.balanceCashAvailable || "0");
-  const planPrice = parseFloat(plan.price);
-  
-  if (availableBalance < planPrice) {
-    throw new Error(`余额不足，需要¥${plan.price}，当前可用余额¥${availableBalance.toFixed(2)}`);
-  }
-
-  const pendingOrders = await db.select().from(orders)
-    .where(and(
-      eq(orders.userId, userId),
-      eq(orders.status, "pending"),
-      sql`${orders.type} LIKE 'vip%'`
-    ));
-  
-  for (const pendingOrder of pendingOrders) {
-    if (parseFloat(pendingOrder.amount) === parseFloat(plan.price)) {
-      return {
-        orderId: pendingOrder.id,
-        amount: plan.price,
-        planName: plan.name,
-      };
-    }
-  }
-
-  if (pendingOrders.length > 0) {
-    throw new Error("您有未完成的VIP订单，请先完成或联系客服处理");
-  }
-
-  const [order] = await db.insert(orders).values({
-    userId,
-    type: "vip",
-    amount: plan.price,
-    status: "pending",
-  }).returning();
-
-  return {
-    orderId: order.id,
-    amount: plan.price,
-    planName: plan.name,
-  };
+  return createVipUpgradeOrder(userId, level);
 }
 
 export async function confirmVipPurchase(userId: number, orderId: number) {
-  const [order] = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
-  
-  if (!order || order.userId !== userId) throw new Error("订单不存在");
-  if (order.status !== "pending") throw new Error("订单状态异常");
-  const orderType = (order.type || "").toLowerCase();
-  const isVipOrder = !orderType || orderType.includes("vip");
-  if (!isVipOrder) {
-    throw new Error("订单类型异常");
-  }
-  
-  const plans = await getVipPlans();
-  
-  let plan = plans.find(p => parseFloat(p.price) === parseFloat(order.amount));
-  if (!plan) {
-    const levelMatch = order.type.match(/vip_(\d+)/);
-    if (levelMatch) {
-      plan = plans.find(p => p.level === parseInt(levelMatch[1]));
-    }
-  }
-  
-  if (!plan) throw new Error("套餐不存在");
-
-  const amount = parseFloat(order.amount);
-  await deductCashAvailable(userId, amount, "vip_purchase", orderId, `开通${plan.name}`);
-
-  await db.update(orders)
-    .set({ status: "paid" })
-    .where(eq(orders.id, orderId));
-
-  const expireAt = new Date();
-  expireAt.setDate(expireAt.getDate() + 30);
-
-  await db.update(users)
-    .set({ 
-      vipLevel: plan.level,
-      vipExpireAt: expireAt,
-    })
-    .where(eq(users.id, userId));
-
-  if (plan.dailyExtraSpins && plan.dailyExtraSpins > 0) {
-    await addSpins(userId, plan.dailyExtraSpins);
-  }
-
-  await distributeReferralCommission(userId, amount);
-
-  return {
-    success: true,
-    vipLevel: plan.level,
-    expireAt,
-    dailyExtraSpins: plan.dailyExtraSpins || 0,
-  };
+  return confirmVipUpgrade(userId, orderId);
 }
 
 export async function grantDailyVipSpins() {
-  const plans = await getVipPlans();
+  const levels = await getVipLevels();
   
-  for (const plan of plans) {
-    if (plan.dailyExtraSpins && plan.dailyExtraSpins > 0) {
+  for (const level of levels) {
+    if (level.dailyLottery > 0) {
       const vipUsers = await db.select()
-        .from(users)
-        .where(eq(users.vipLevel, plan.level));
+        .from(userVipStatus)
+        .where(eq(userVipStatus.vipLevel, level.level));
       
-      for (const user of vipUsers) {
-        if (user.vipExpireAt && new Date(user.vipExpireAt) > new Date()) {
-          await addSpins(user.id, plan.dailyExtraSpins);
-        }
+      for (const status of vipUsers) {
+        await addSpins(status.userId, level.dailyLottery);
       }
     }
   }

@@ -1,0 +1,131 @@
+2) Replit 可理解的二开 Prompt（按任务分模块）
+
+下面这些你可以直接复制到 Replit 的 AI 或者你的开发说明里，每个任务都明确：改哪里、加什么表、写什么接口、验收点。
+
+Task A：VIP 等级体系 + 升级（顺序升级）
+
+目标：实现 V1–V5 配置化、顺序升级、生成升级交易、支付成功后更新等级。
+
+实现要点
+
+后端校验：只能 to_level = current_level + 1
+
+写 vip_upgrade_txs：pending→paid
+
+paid 后更新 user_vip_status.vip_level 与 upgraded_at
+
+是否立刻发放升级奖励？（按客户规则：达标推广人数是领取奖励前提 → 所以 upgrade_reward 先“冻结”，等达标再发）
+
+接口
+
+GET /api/vip/levels：返回 vip_levels 配置
+
+GET /api/vip/status：返回用户当前等级、达标状态、差多少人
+
+POST /api/vip/upgrade：创建升级订单（pending）
+
+POST /api/vip/upgrade/confirm：支付回调/模拟确认（paid）
+
+验收
+
+普通→V1成功；V1不能直接到V3
+
+升级后 vip_level 变化，但 upgrade_reward 不立刻入账（未达标）
+
+Task B：推广关系 + 三代人数统计（达标判定）
+
+目标：实现直推、二代、三代的统计，并写一个统一函数：recalcQualification(userId)。
+
+实现要点
+
+referrals(user_id, referrer_id) 建立邀请链
+
+直推人数 = count(referrals where referrer_id = userId)
+
+三代内人数 = 一代 + 二代 + 三代（不含自己）
+
+每次用户注册绑定邀请码时写入 referrals
+
+每日或事件触发更新：当有人绑定/升级时，向上链路刷新统计
+
+关键逻辑
+
+达标条件：direct_count >= requirement.direct_required AND team3_count >= requirement.team3_required
+
+达标后：qualified=true 并触发“结算解锁”（Task C/D会用）
+
+验收
+
+构造 A→B→C→D 链：A 的三代内人数=3（B/C/D）
+
+达标前不能提现升级奖励/分佣；达标后解锁
+
+Task C：签到系统（含断签惩罚、15天清零、30天现金）
+
+目标：实现每天1次签到：发放抽奖次数；连续奖励；断签-3天；满15天清零；满30天发 58 元现金。
+
+实现要点
+
+sign_in_logs 防重复（同一天只能一条）
+
+计算连续天数：
+
+取昨天是否签到；若有则 days = yesterday_days + 1
+
+若断签：days = max(0, last_days - 3)（按客户规则“断签扣3天”）
+
+达到 3/7/15 天时：额外一次性发 signin_bonus 抽奖次数并记录
+
+达到 15：清零（即本次签到后发放5次，然后把连续天数重置为0 或下一天从1开始，你可以用“签到后立即置0”更符合客户“清零”表述）
+
+连续30天：发 58 元（建议记到 wallet_ledger 之类的账本；若你现在没钱包账本，可以先记一条 commission_logs 的 biz_type=signin_cash，或单独建 wallet_ledger）
+
+接口
+
+POST /api/signin
+
+GET /api/signin/status
+
+验收
+
+同一天重复签到被拒绝
+
+连续 3 天额外 +1 抽奖；7天+2；15天+5并清零
+
+断签后连续天数-3
+
+Task D：抽奖系统（次数=基础+签到+VIP；每日重置；开奖记录；分佣）
+
+目标：每日自动给所有用户基础1次 + VIP每日次数；签到/连续奖励追加；抽奖消耗次数；中奖后触发上级抽奖分佣。
+
+实现要点
+
+使用 lottery_times_ledger 做“当日次数账本”
+
+每日初始化（两种方式二选一）：
+
+惰性初始化（推荐）：用户打开抽奖页/抽奖前，检测当天是否有 base 和 vip_daily 账本记录，没有则补齐
+
+定时任务：每天0点给全体用户写入（人数多时不推荐）
+
+抽奖前先算 sum(delta) 得到剩余次数，>0 才允许抽
+
+抽奖消耗：插入 draw_consume -1
+
+抽奖结果：插入 lottery_draws，中奖金额 reward_cents
+
+若中奖 reward_cents>0：对上级（1代/2代/3代）按 lottery_commission_rates 结算分佣（但前提：上级必须 qualified=true，否则不结算）
+
+接口
+
+GET /api/lottery/times：返回剩余次数与来源拆分
+
+POST /api/lottery/draw：执行抽奖
+
+验收
+
+每日次数不累计
+
+剩余为0时不允许抽
+
+中奖后，如果上级达标，生成分佣记录；不达标不生成

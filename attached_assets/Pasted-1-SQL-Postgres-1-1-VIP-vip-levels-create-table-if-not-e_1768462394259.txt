@@ -1,0 +1,161 @@
+1) SQL 表结构 + 示例数据（推荐 Postgres）
+1.1 VIP 等级配置表 vip_levels
+create table if not exists vip_levels (
+  level smallint primary key,                 -- 1..5
+  name text not null,                          -- V1..V5
+  price_cents integer not null,                -- 开通费(分)
+  upgrade_reward_cents integer not null,       -- 升级奖励(分)
+  daily_lottery integer not null,              -- VIP每日赠送抽奖次数
+  income_multiplier numeric(6,2) not null,     -- 收益倍率 1.10..1.50
+  withdraw_threshold_cents integer not null,   -- 提现门槛(分)
+  settle_type text not null                    -- 'T0'|'T1'
+);
+
+-- 推广达标要求
+create table if not exists vip_requirements (
+  level smallint primary key references vip_levels(level),
+  direct_required integer not null,
+  team3_required integer not null              -- 三代内人数
+);
+
+-- 推广分佣比例（针对“下级升级费用”）
+create table if not exists vip_commission_rates (
+  level smallint primary key references vip_levels(level),
+  direct_rate numeric(6,4) not null,           -- 0.10 = 10%
+  indirect_rate numeric(6,4) not null          -- 0.05 = 5%
+);
+
+-- 抽奖分佣比例（针对“下级抽奖中奖金额”）
+create table if not exists lottery_commission_rates (
+  level smallint primary key references vip_levels(level),
+  direct_rate numeric(6,4) not null,
+  indirect_rate numeric(6,4) not null
+);
+
+1.2 用户 VIP 状态表 user_vip_status
+create table if not exists user_vip_status (
+  user_id uuid primary key,
+  vip_level smallint not null default 0,     -- 0=普通用户
+  upgraded_at timestamptz,
+  qualified boolean not null default false,  -- 是否达标(达标后才结算升级奖励&分佣)
+  direct_count integer not null default 0,
+  team3_count integer not null default 0,
+  last_qual_check_at timestamptz
+);
+
+1.3 推广关系表 referrals
+create table if not exists referrals (
+  user_id uuid primary key,
+  referrer_id uuid,                          -- 上级(直推)
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_referrals_referrer on referrals(referrer_id);
+
+1.4 签到表 sign_in_logs
+create table if not exists sign_in_logs (
+  user_id uuid not null,
+  sign_date date not null,                  -- 本地业务日期(建议按Asia/Phnom_Penh或你业务时区)
+  continuous_days integer not null,          -- 签到后计算出的连续天数
+  created_at timestamptz not null default now(),
+  primary key (user_id, sign_date)
+);
+
+1.5 抽奖次数账本 lottery_times_ledger（强烈建议“账本式”，别只存一个余额）
+create table if not exists lottery_times_ledger (
+  id bigserial primary key,
+  user_id uuid not null,
+  biz_date date not null,
+  delta integer not null,                    -- +增加 / -消耗
+  reason text not null,                      -- base|signin|signin_bonus|vip_daily|draw_consume|admin_adjust
+  ref_id text,                               -- 关联记录，如draw_id/sign_date
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_ltl_user_date on lottery_times_ledger(user_id, biz_date);
+
+1.6 抽奖记录 lottery_draws
+create table if not exists lottery_draws (
+  id bigserial primary key,
+  user_id uuid not null,
+  biz_date date not null,
+  prize_code text not null,                 -- 奖项标识
+  reward_cents integer not null default 0,   -- 中奖金额(分)，无则0
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_draws_user_date on lottery_draws(user_id, biz_date);
+
+1.7 分佣记录 commission_logs
+create table if not exists commission_logs (
+  id bigserial primary key,
+  to_user_id uuid not null,                 -- 得佣人(上级)
+  from_user_id uuid not null,               -- 贡献人(下级)
+  biz_type text not null,                   -- 'vip_upgrade' | 'lottery_reward'
+  relation_level smallint not null,         -- 1=直推 2/3=间推(三代内有效)
+  base_cents integer not null,              -- 计算基数(分)：升级费 or 中奖金额
+  rate numeric(6,4) not null,
+  amount_cents integer not null,            -- 分佣金额(分)
+  ref_id text not null,                     -- 关联 upgrade_tx_id 或 draw_id
+  created_at timestamptz not null default now(),
+  unique (biz_type, to_user_id, ref_id, relation_level) -- 防重复发放
+);
+
+create index if not exists idx_comm_to_user on commission_logs(to_user_id, created_at);
+
+1.8 VIP 升级交易表 vip_upgrade_txs
+create table if not exists vip_upgrade_txs (
+  id bigserial primary key,
+  user_id uuid not null,
+  from_level smallint not null,
+  to_level smallint not null,
+  pay_amount_cents integer not null,
+  status text not null,                     -- 'pending'|'paid'|'failed'|'refunded'
+  created_at timestamptz not null default now(),
+  paid_at timestamptz
+);
+
+create index if not exists idx_vip_tx_user on vip_upgrade_txs(user_id, created_at);
+
+1.9 示例数据（把客户表格写进去）
+-- vip_levels
+insert into vip_levels(level, name, price_cents, upgrade_reward_cents, daily_lottery, income_multiplier, withdraw_threshold_cents, settle_type)
+values
+(1,'V1',19800,0,2,1.10,10000,'T1'),
+(2,'V2',29800,58800,3,1.20,5000,'T0'),
+(3,'V3',39800,128800,4,1.30,4000,'T0'),
+(4,'V4',49800,288800,5,1.40,3000,'T0'),
+(5,'V5',59800,888800,6,1.50,3000,'T0')
+on conflict (level) do update set
+name=excluded.name, price_cents=excluded.price_cents, upgrade_reward_cents=excluded.upgrade_reward_cents,
+daily_lottery=excluded.daily_lottery, income_multiplier=excluded.income_multiplier,
+withdraw_threshold_cents=excluded.withdraw_threshold_cents, settle_type=excluded.settle_type;
+
+-- vip_requirements
+insert into vip_requirements(level, direct_required, team3_required)
+values
+(1,3,10),(2,10,50),(3,30,200),(4,60,400),(5,100,1000)
+on conflict (level) do update set direct_required=excluded.direct_required, team3_required=excluded.team3_required;
+
+-- vip_commission_rates
+insert into vip_commission_rates(level, direct_rate, indirect_rate)
+values
+(1,0.10,0.00),
+(2,0.10,0.05),
+(3,0.11,0.06),
+(4,0.12,0.07),
+(5,0.14,0.08)
+on conflict (level) do update set direct_rate=excluded.direct_rate, indirect_rate=excluded.indirect_rate;
+
+-- lottery_commission_rates（按客户描述：直推10%起、间推5%，这里先按固定值）
+insert into lottery_commission_rates(level, direct_rate, indirect_rate)
+values
+(1,0.10,0.05),
+(2,0.10,0.05),
+(3,0.10,0.05),
+(4,0.10,0.05),
+(5,0.10,0.05)
+on conflict (level) do update set direct_rate=excluded.direct_rate, indirect_rate=excluded.indirect_rate;
+
+
+备注：客户原文“抽奖直推10%起”可能未来要做阶梯，你现在先固定 10%/5% 最稳。

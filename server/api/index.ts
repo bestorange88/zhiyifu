@@ -178,7 +178,46 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
-  // ============ VIP ============
+  app.get("/api/lottery/times", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const times = await spinService.getLotteryTimesBreakdown(req.userId!);
+      res.json(times);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/lottery/draws", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 30;
+      const draws = await spinService.getLotteryDrawHistory(req.userId!, limit);
+      res.json(draws);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/signin/calendar", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+      const month = parseInt(req.query.month as string) || new Date().getMonth() + 1;
+      const calendar = await checkinService.getSignInCalendar(req.userId!, year, month);
+      res.json(calendar);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/signin/lottery-times", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const times = await spinService.getLotteryTimesBreakdown(req.userId!);
+      res.json(times);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ VIP (Enhanced) ============
   app.get("/api/vip/plans", async (req, res) => {
     try {
       const plans = await vipService.getVipPlans();
@@ -188,10 +227,48 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/vip/levels", async (req, res) => {
+    try {
+      const levels = await vipService.getAllVipLevelsWithDetails();
+      res.json(levels);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.get("/api/vip/status", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const status = await vipService.getVipStatus(req.userId!);
+      const status = await vipService.getUserVipStatus(req.userId!);
       res.json(status);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/vip/upgrade", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { level } = req.body;
+      const result = await vipService.createVipUpgradeOrder(req.userId!, level);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/vip/upgrade/confirm", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { orderId } = req.body;
+      const result = await vipService.confirmVipUpgrade(req.userId!, orderId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/vip/check-qualification", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const result = await vipService.recalcQualification(req.userId!);
+      res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

@@ -1,8 +1,7 @@
 import { db } from "../db";
-import { spinBalance, wheelSpins, wheelPrizes } from "@shared/schema";
-import { eq, sql, desc } from "drizzle-orm";
+import { wheelSpins, wheelPrizes, lotteryTimesLedger, lotteryDraws, lotteryCommissionRates, userVipStatus, commissionLogs, users, vipLevels } from "@shared/schema";
+import { eq, desc, and } from "drizzle-orm";
 import { addCashAvailable, addPoints } from "./wallet";
-import { distributeSpinCommission } from "./referral";
 
 interface Prize {
   id: number;
@@ -22,20 +21,68 @@ const DEFAULT_PRIZES: Omit<Prize, 'id'>[] = [
   { name: "祝你下次好运", type: "none", amount: "0", probability: "0.10" },
 ];
 
+function getTodayDate(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
 export async function getSpinBalance(userId: number) {
-  const [balance] = await db.select()
-    .from(spinBalance)
-    .where(eq(spinBalance.userId, userId));
+  await initializeDailyLotteryTimes(userId);
   
-  if (!balance) {
-    const [newBalance] = await db.insert(spinBalance).values({
+  const times = await getLotteryTimesBreakdown(userId);
+  
+  return {
+    userId,
+    availableSpins: times.available,
+    updatedAt: new Date(),
+  };
+}
+
+async function initializeDailyLotteryTimes(userId: number) {
+  const today = getTodayDate();
+
+  const [existingBase] = await db.select()
+    .from(lotteryTimesLedger)
+    .where(and(
+      eq(lotteryTimesLedger.userId, userId),
+      eq(lotteryTimesLedger.bizDate, today),
+      eq(lotteryTimesLedger.reason, "base")
+    ))
+    .limit(1);
+
+  if (!existingBase) {
+    await db.insert(lotteryTimesLedger).values({
       userId,
-      availableSpins: 0,
-    }).returning();
-    return newBalance;
+      bizDate: today,
+      delta: 1,
+      reason: "base",
+      refId: `base_${today}`,
+    });
   }
-  
-  return balance;
+
+  const [vipStatus] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, userId)).limit(1);
+  if (vipStatus && vipStatus.vipLevel > 0) {
+    const [existingVip] = await db.select()
+      .from(lotteryTimesLedger)
+      .where(and(
+        eq(lotteryTimesLedger.userId, userId),
+        eq(lotteryTimesLedger.bizDate, today),
+        eq(lotteryTimesLedger.reason, "vip_daily")
+      ))
+      .limit(1);
+
+    if (!existingVip) {
+      const [level] = await db.select().from(vipLevels).where(eq(vipLevels.level, vipStatus.vipLevel)).limit(1);
+      if (level && level.dailyLottery > 0) {
+        await db.insert(lotteryTimesLedger).values({
+          userId,
+          bizDate: today,
+          delta: level.dailyLottery,
+          reason: "vip_daily",
+          refId: `vip_${today}_${level.level}`,
+        });
+      }
+    }
+  }
 }
 
 export async function getWheelConfig() {
@@ -70,17 +117,20 @@ export async function performSpin(userId: number, requestId: string) {
     };
   }
 
-  const balance = await getSpinBalance(userId);
-  if (balance.availableSpins <= 0) {
+  await initializeDailyLotteryTimes(userId);
+  const times = await getLotteryTimesBreakdown(userId);
+  if (times.available <= 0) {
     throw new Error("抽奖次数不足");
   }
 
-  await db.update(spinBalance)
-    .set({ 
-      availableSpins: sql`${spinBalance.availableSpins} - 1`,
-      updatedAt: new Date(),
-    })
-    .where(eq(spinBalance.userId, userId));
+  const today = getTodayDate();
+  await db.insert(lotteryTimesLedger).values({
+    userId,
+    bizDate: today,
+    delta: -1,
+    reason: "draw_consume",
+    refId: requestId,
+  });
 
   const prizes = await getWheelConfig();
   const selectedPrize = selectPrizeByProbability(prizes);
@@ -93,13 +143,24 @@ export async function performSpin(userId: number, requestId: string) {
     status: "success",
   }).returning();
 
+  const rewardCents = selectedPrize.type === "cash" && selectedPrize.amount 
+    ? Math.floor(parseFloat(selectedPrize.amount) * 100) 
+    : 0;
+
+  await db.insert(lotteryDraws).values({
+    userId,
+    bizDate: today,
+    prizeCode: selectedPrize.name,
+    rewardCents,
+  });
+
   if (selectedPrize.type === "cash" && selectedPrize.amount) {
     const fullAmount = parseFloat(selectedPrize.amount);
     const userShare = fullAmount * 0.85;
     
     await addCashAvailable(userId, userShare, "spin_win", spin.id, `转盘中奖: ${selectedPrize.name} (实得85%)`);
     
-    await distributeSpinCommission(userId, spin.id, fullAmount);
+    await distributeLotteryCommission(userId, spin.id, fullAmount);
   } else if (selectedPrize.type === "points" && selectedPrize.amount) {
     await addPoints(userId, parseInt(selectedPrize.amount), "spin_win", spin.id, `转盘中奖: ${selectedPrize.name}`);
   }
@@ -112,6 +173,66 @@ export async function performSpin(userId: number, requestId: string) {
     amount: selectedPrize.amount,
     alreadyProcessed: false,
   };
+}
+
+async function distributeLotteryCommission(fromUserId: number, spinId: number, winAmount: number) {
+  const uplineChain = await getUplineChain(fromUserId, 3);
+  const winAmountCents = Math.floor(winAmount * 100);
+
+  for (let i = 0; i < uplineChain.length; i++) {
+    const uplineUserId = uplineChain[i];
+    const relationLevel = i + 1;
+
+    const [uplineStatus] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, uplineUserId)).limit(1);
+    const uplineVipLevel = uplineStatus?.vipLevel || 0;
+
+    if (uplineVipLevel < 1) continue;
+
+    const [commRate] = await db.select().from(lotteryCommissionRates).where(eq(lotteryCommissionRates.level, uplineVipLevel)).limit(1);
+    if (!commRate) continue;
+
+    const rate = relationLevel === 1 
+      ? parseFloat(commRate.directRate) 
+      : parseFloat(commRate.indirectRate);
+
+    if (rate <= 0) continue;
+
+    const commissionCents = Math.floor(winAmountCents * rate);
+    if (commissionCents <= 0) continue;
+
+    const isQualified = uplineStatus?.qualified || false;
+
+    await db.insert(commissionLogs).values({
+      toUserId: uplineUserId,
+      fromUserId,
+      bizType: "lottery_reward",
+      relationLevel,
+      baseCents: winAmountCents,
+      rate: rate.toString(),
+      amountCents: commissionCents,
+      refId: `lottery_${spinId}`,
+      status: isQualified ? "credited" : "frozen",
+    });
+
+    if (isQualified) {
+      const commissionYuan = commissionCents / 100;
+      await addCashAvailable(uplineUserId, commissionYuan, "lottery_commission", spinId, `下级抽奖中奖分佣`);
+    }
+  }
+}
+
+async function getUplineChain(userId: number, maxLevels: number): Promise<number[]> {
+  const chain: number[] = [];
+  let currentUserId = userId;
+
+  for (let i = 0; i < maxLevels; i++) {
+    const [user] = await db.select({ inviterId: users.inviterId }).from(users).where(eq(users.id, currentUserId)).limit(1);
+    if (!user?.inviterId) break;
+    chain.push(user.inviterId);
+    currentUserId = user.inviterId;
+  }
+
+  return chain;
 }
 
 function selectPrizeByProbability(prizes: Prize[]): Prize {
@@ -136,11 +257,47 @@ export async function getSpinHistory(userId: number, limit = 50) {
     .limit(limit);
 }
 
-export async function addSpins(userId: number, amount: number) {
-  await db.update(spinBalance)
-    .set({ 
-      availableSpins: sql`${spinBalance.availableSpins} + ${amount}`,
-      updatedAt: new Date(),
-    })
-    .where(eq(spinBalance.userId, userId));
+export async function addSpins(userId: number, amount: number, reason: string = "bonus", refId?: string) {
+  const today = getTodayDate();
+  await db.insert(lotteryTimesLedger).values({
+    userId,
+    bizDate: today,
+    delta: amount,
+    reason,
+    refId: refId || `${reason}_${Date.now()}`,
+  });
+}
+
+export async function getLotteryTimesBreakdown(userId: number) {
+  const today = getTodayDate();
+  
+  const entries = await db.select()
+    .from(lotteryTimesLedger)
+    .where(and(
+      eq(lotteryTimesLedger.userId, userId),
+      eq(lotteryTimesLedger.bizDate, today)
+    ))
+    .orderBy(lotteryTimesLedger.createdAt);
+
+  const breakdown: Record<string, number> = {};
+  let total = 0;
+
+  for (const entry of entries) {
+    breakdown[entry.reason] = (breakdown[entry.reason] || 0) + entry.delta;
+    total += entry.delta;
+  }
+
+  return {
+    available: Math.max(0, total),
+    breakdown,
+    date: today,
+  };
+}
+
+export async function getLotteryDrawHistory(userId: number, limit = 30) {
+  return db.select()
+    .from(lotteryDraws)
+    .where(eq(lotteryDraws.userId, userId))
+    .orderBy(desc(lotteryDraws.createdAt))
+    .limit(limit);
 }
