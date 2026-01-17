@@ -297,7 +297,7 @@ export default function VipPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {levels?.filter(level => level.level === activeTab).map((level) => {
+            {levels?.map((level) => {
               const colors = rankColors[level.level] || rankColors[1];
               const features = getFeatures(level);
               const currentLevel = vipStatus?.vipLevel || 0;
