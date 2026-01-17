@@ -149,13 +149,17 @@ export default function VipPage() {
 
   const getFeatures = (level: VipLevel) => {
     const features = [];
-    features.push(`${level.dailyLottery}次/日抽奖机会`);
-    features.push(`提现最低${level.withdrawMinYuan}元起`);
-    features.push(`${level.withdrawSpeed}到账速度`);
+    features.push(`每日${level.dailyLottery}次抽奖机会`);
+    features.push(`提现${level.withdrawMinYuan}元起`);
+    features.push(`${level.withdrawSpeed}到账`);
     features.push(`中奖倍率${level.winMultiplier}x`);
-    features.push(`直推${(level.upgradeCommission.directRate * 100).toFixed(0)}%分佣`);
-    if (level.upgradeCommission.indirectRate > 0) {
-      features.push(`间推${(level.upgradeCommission.indirectRate * 100).toFixed(0)}%分佣`);
+    features.push("专属VIP客服");
+    if (level.level >= 2) {
+      features.push("AI工具无限使用");
+    }
+    if (level.level >= 3) {
+      features.push("专属推广加成");
+      features.push("优先参与新福利");
     }
     return features;
   };
