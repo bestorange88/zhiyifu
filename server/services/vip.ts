@@ -435,3 +435,85 @@ export async function grantDailyVipSpins() {
     }
   }
 }
+
+// 初始化VIP等级数据（应用启动时调用）
+export async function initializeVipLevels() {
+  const existingLevels = await db.select().from(vipLevels);
+  
+  if (existingLevels.length >= 5) {
+    console.log("[VIP] VIP levels already initialized");
+    return;
+  }
+
+  console.log("[VIP] Initializing VIP levels...");
+
+  const defaultLevels = [
+    { level: 1, name: "V1", priceCents: 19800, upgradeRewardCents: 0, dailyLottery: 2, incomeMultiplier: "1.20", withdrawThresholdCents: 10000, settleType: "T1" },
+    { level: 2, name: "V2", priceCents: 29800, upgradeRewardCents: 58800, dailyLottery: 3, incomeMultiplier: "1.30", withdrawThresholdCents: 5000, settleType: "T0" },
+    { level: 3, name: "V3", priceCents: 29800, upgradeRewardCents: 128800, dailyLottery: 4, incomeMultiplier: "1.40", withdrawThresholdCents: 4000, settleType: "T0" },
+    { level: 4, name: "V4", priceCents: 49800, upgradeRewardCents: 288800, dailyLottery: 5, incomeMultiplier: "1.50", withdrawThresholdCents: 3000, settleType: "T0" },
+    { level: 5, name: "V5", priceCents: 59800, upgradeRewardCents: 888800, dailyLottery: 5, incomeMultiplier: "1.60", withdrawThresholdCents: 3000, settleType: "T0" },
+  ];
+
+  const defaultRequirements = [
+    { level: 1, directRequired: 3, team3Required: 0 },
+    { level: 2, directRequired: 10, team3Required: 60 },
+    { level: 3, directRequired: 30, team3Required: 200 },
+    { level: 4, directRequired: 50, team3Required: 300 },
+    { level: 5, directRequired: 200, team3Required: 2000 },
+  ];
+
+  const defaultCommRates = [
+    { level: 1, directRate: "0.10", indirectRate: "0.00" },
+    { level: 2, directRate: "0.10", indirectRate: "0.05" },
+    { level: 3, directRate: "0.10", indirectRate: "0.05" },
+    { level: 4, directRate: "0.10", indirectRate: "0.05" },
+    { level: 5, directRate: "0.10", indirectRate: "0.05" },
+  ];
+
+  const defaultLotteryRates = [
+    { level: 1, directRate: "0.10", indirectRate: "0.05" },
+    { level: 2, directRate: "0.10", indirectRate: "0.05" },
+    { level: 3, directRate: "0.10", indirectRate: "0.05" },
+    { level: 4, directRate: "0.10", indirectRate: "0.05" },
+    { level: 5, directRate: "0.10", indirectRate: "0.05" },
+  ];
+
+  for (const lvl of defaultLevels) {
+    const [existing] = await db.select().from(vipLevels).where(eq(vipLevels.level, lvl.level)).limit(1);
+    if (!existing) {
+      await db.insert(vipLevels).values(lvl);
+    } else {
+      await db.update(vipLevels).set(lvl).where(eq(vipLevels.level, lvl.level));
+    }
+  }
+
+  for (const req of defaultRequirements) {
+    const [existing] = await db.select().from(vipRequirements).where(eq(vipRequirements.level, req.level)).limit(1);
+    if (!existing) {
+      await db.insert(vipRequirements).values(req);
+    } else {
+      await db.update(vipRequirements).set(req).where(eq(vipRequirements.level, req.level));
+    }
+  }
+
+  for (const rate of defaultCommRates) {
+    const [existing] = await db.select().from(vipCommissionRates).where(eq(vipCommissionRates.level, rate.level)).limit(1);
+    if (!existing) {
+      await db.insert(vipCommissionRates).values(rate);
+    } else {
+      await db.update(vipCommissionRates).set(rate).where(eq(vipCommissionRates.level, rate.level));
+    }
+  }
+
+  for (const rate of defaultLotteryRates) {
+    const [existing] = await db.select().from(lotteryCommissionRates).where(eq(lotteryCommissionRates.level, rate.level)).limit(1);
+    if (!existing) {
+      await db.insert(lotteryCommissionRates).values(rate);
+    } else {
+      await db.update(lotteryCommissionRates).set(rate).where(eq(lotteryCommissionRates.level, rate.level));
+    }
+  }
+
+  console.log("[VIP] VIP levels initialized successfully");
+}

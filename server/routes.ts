@@ -5,6 +5,7 @@ import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
 import { registerApiRoutes } from "./api";
 import { initDefaultAdmin } from "./services/admin";
+import { initializeVipLevels } from "./services/vip";
 import { api } from "@shared/routes";
 
 export async function registerRoutes(
@@ -13,6 +14,9 @@ export async function registerRoutes(
 ): Promise<Server> {
   // Initialize default admin
   await initDefaultAdmin();
+  
+  // Initialize VIP levels (ensures data exists in production)
+  await initializeVipLevels();
   
   // Register new API routes
   registerApiRoutes(app);
