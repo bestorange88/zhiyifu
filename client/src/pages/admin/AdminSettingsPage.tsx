@@ -8,7 +8,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Settings, Image, Globe, Key, Upload, X } from "lucide-react";
+import { Save, Settings, Image, Globe, Key, Upload, X, CreditCard } from "lucide-react";
 
 interface SystemSetting {
   id: number;
@@ -31,8 +31,11 @@ export default function AdminSettingsPage() {
   const { toast } = useToast();
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [paymentQrPreview, setPaymentQrPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadingQr, setUploadingQr] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const qrFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: settings, isLoading } = useQuery<SystemSetting[]>({
     queryKey: ["/api/admin/settings"],
@@ -45,6 +48,10 @@ export default function AdminSettingsPage() {
       const logoSetting = data.find((s: SystemSetting) => s.key === "logo_url");
       if (logoSetting?.value) {
         setLogoPreview(logoSetting.value);
+      }
+      const qrSetting = data.find((s: SystemSetting) => s.key === "payment_qr_url");
+      if (qrSetting?.value) {
+        setPaymentQrPreview(qrSetting.value);
       }
       return data;
     },
@@ -132,6 +139,51 @@ export default function AdminSettingsPage() {
     saveMutation.mutate({ key: "logo_url", value: "" });
   };
 
+  const handleQrFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "请选择图片文件", variant: "destructive" });
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "图片大小不能超过2MB", variant: "destructive" });
+      return;
+    }
+
+    setUploadingQr(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error("Upload failed");
+
+      const { url } = await res.json();
+      setPaymentQrPreview(url);
+      saveMutation.mutate({ key: "payment_qr_url", value: url });
+    } catch (error) {
+      toast({ title: "上传失败", variant: "destructive" });
+    } finally {
+      setUploadingQr(false);
+      if (qrFileInputRef.current) {
+        qrFileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleRemoveQr = () => {
+    setPaymentQrPreview(null);
+    saveMutation.mutate({ key: "payment_qr_url", value: "" });
+  };
+
   return (
     <AdminLayout title="系统设置">
       <div className="space-y-6">
@@ -199,6 +251,81 @@ export default function AdminSettingsPage() {
                       onClick={() => handleSave("logo_url")}
                       disabled={saveMutation.isPending}
                       data-testid="button-save-logo-url"
+                    >
+                      <Save className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5" />
+              收款二维码设置
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-start gap-6">
+              <div className="w-48 h-48 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden relative">
+                {paymentQrPreview ? (
+                  <>
+                    <img src={paymentQrPreview} alt="收款码" className="w-full h-full object-contain" />
+                    <button
+                      onClick={handleRemoveQr}
+                      className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center"
+                      data-testid="button-remove-qr"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center text-gray-400">
+                    <CreditCard className="w-12 h-12 mx-auto mb-2" />
+                    <span className="text-sm">暂无收款码</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 space-y-4">
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">上传支付宝收款二维码，用户充值时将显示此二维码</p>
+                  <p className="text-xs text-gray-400 mb-3">支持 JPG、PNG 格式，建议尺寸 300x300 像素，大小不超过 2MB</p>
+                  <input
+                    ref={qrFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleQrFileSelect}
+                    className="hidden"
+                    data-testid="input-qr-file"
+                  />
+                  <Button
+                    onClick={() => qrFileInputRef.current?.click()}
+                    disabled={uploadingQr}
+                    data-testid="button-upload-qr"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {uploadingQr ? "上传中..." : "上传收款码"}
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Label>或输入收款码图片地址</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={formValues["payment_qr_url"] || paymentQrPreview || ""}
+                      onChange={(e) => {
+                        handleChange("payment_qr_url", e.target.value);
+                        setPaymentQrPreview(e.target.value);
+                      }}
+                      placeholder="https://example.com/qrcode.png"
+                      data-testid="input-qr-url"
+                    />
+                    <Button
+                      onClick={() => handleSave("payment_qr_url")}
+                      disabled={saveMutation.isPending}
+                      data-testid="button-save-qr-url"
                     >
                       <Save className="w-4 h-4" />
                     </Button>

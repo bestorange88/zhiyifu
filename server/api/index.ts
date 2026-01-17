@@ -123,6 +123,32 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  // ============ DEPOSIT ============
+  app.post("/api/deposit", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { amount, proofImage } = req.body;
+      if (!amount || parseFloat(amount) <= 0) {
+        return res.status(400).json({ error: "请输入有效金额" });
+      }
+      const deposit = await adminService.createDeposit(req.userId!, amount, proofImage);
+      res.status(201).json(deposit);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/upload/proof", authMiddleware, upload.single("file"), async (req: AuthRequest, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "请选择文件" });
+      }
+      const url = `/uploads/${req.file.filename}`;
+      res.json({ url, filename: req.file.filename });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ============ WALLET ============
   app.get("/api/wallet", authMiddleware, async (req: AuthRequest, res) => {
     try {
@@ -721,6 +747,16 @@ export function registerApiRoutes(app: Express): void {
       const { content } = req.body;
       const message = await adminService.sendUserServiceMessage(req.userId!, content);
       res.status(201).json(message);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ PUBLIC SETTINGS ============
+  app.get("/api/settings/payment-qr", async (req, res) => {
+    try {
+      const setting = await adminService.getSystemSettingByKey("payment_qr_url");
+      res.json({ url: setting?.value || null });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

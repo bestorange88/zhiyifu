@@ -328,7 +328,11 @@ export default function MinePage() {
           <p className="stat-value">{wallet?.balancePoints || 0}</p>
           <p className="stat-label">我的积分</p>
         </div>
-        <div className="stat-card">
+        <button
+          onClick={() => setLocation('/deposit')}
+          className="stat-card hover:shadow-md transition-all"
+          data-testid="button-deposit"
+        >
           <div className="w-9 h-9 gradient-success rounded-xl flex items-center justify-center mb-3">
             <Wallet className="w-4 h-4 text-white" />
           </div>
@@ -336,8 +340,8 @@ export default function MinePage() {
             {parseFloat(wallet?.balanceCashAvailable || '0').toFixed(2)} 
             <span className="text-sm font-normal text-gray-400 ml-1">¥</span>
           </p>
-          <p className="stat-label">账户余额</p>
-        </div>
+          <p className="stat-label">账户余额 <span className="text-primary text-[10px]">充值</span></p>
+        </button>
       </div>
 
       <div className="px-4 mt-3 grid grid-cols-2 gap-3">

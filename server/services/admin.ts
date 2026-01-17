@@ -369,6 +369,11 @@ export async function getSystemSettings() {
   return settings;
 }
 
+export async function getSystemSettingByKey(key: string) {
+  const [setting] = await db.select().from(systemSettings).where(eq(systemSettings.key, key)).limit(1);
+  return setting || null;
+}
+
 export async function setSystemSetting(key: string, value: string) {
   const [existing] = await db.select().from(systemSettings).where(eq(systemSettings.key, key)).limit(1);
   
@@ -384,6 +389,17 @@ export async function setSystemSetting(key: string, value: string) {
 }
 
 // ============ DEPOSITS ============
+export async function createDeposit(userId: number, amount: string, proofImage?: string) {
+  const [deposit] = await db.insert(deposits).values({
+    userId,
+    amount,
+    proofImage: proofImage || null,
+    method: "alipay",
+    status: "pending",
+  }).returning();
+  return deposit;
+}
+
 export async function getDepositList(page = 1, limit = 50) {
   const offset = (page - 1) * limit;
   const list = await db.select().from(deposits).orderBy(desc(deposits.createdAt)).limit(limit).offset(offset);
