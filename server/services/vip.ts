@@ -32,15 +32,31 @@ export async function getAllVipLevelsWithDetails() {
   const commRates = await db.select().from(vipCommissionRates);
   const lotteryRates = await db.select().from(lotteryCommissionRates);
 
-  return levels.map(level => ({
-    ...level,
-    priceYuan: (level.priceCents / 100).toFixed(2),
-    upgradeRewardYuan: (level.upgradeRewardCents / 100).toFixed(2),
-    withdrawThresholdYuan: (level.withdrawThresholdCents / 100).toFixed(2),
-    requirement: requirements.find(r => r.level === level.level),
-    commissionRate: commRates.find(r => r.level === level.level),
-    lotteryCommissionRate: lotteryRates.find(r => r.level === level.level),
-  }));
+  return levels.map(level => {
+    const req = requirements.find(r => r.level === level.level);
+    const commRate = commRates.find(r => r.level === level.level);
+    const lotteryRate = lotteryRates.find(r => r.level === level.level);
+    
+    return {
+      ...level,
+      priceYuan: (level.priceCents / 100).toFixed(2),
+      upgradeRewardYuan: (level.upgradeRewardCents / 100).toFixed(2),
+      withdrawThresholdYuan: (level.withdrawThresholdCents / 100).toFixed(2),
+      directRequired: req?.directRequired ?? 0,
+      team3GenRequired: req?.team3Required ?? 0,
+      requirement: req,
+      commissionRate: commRate,
+      lotteryCommissionRate: lotteryRate,
+      upgradeCommission: {
+        directRate: commRate?.directRate ?? 0,
+        indirectRate: commRate?.indirectRate ?? 0,
+      },
+      lotteryCommission: {
+        directRate: lotteryRate?.directRate ?? 0,
+        indirectRate: lotteryRate?.indirectRate ?? 0,
+      },
+    };
+  });
 }
 
 export async function getUserVipStatus(userId: number) {
@@ -65,15 +81,25 @@ export async function getUserVipStatus(userId: number) {
   const nextLevel = levels.find(l => l.level === status.vipLevel + 1);
 
   let qualificationProgress = null;
+  const directRequired = currentLevel?.requirement?.directRequired ?? 0;
+  const team3GenRequired = currentLevel?.requirement?.team3Required ?? 0;
+  
   if (currentLevel?.requirement) {
     qualificationProgress = {
       directCount: status.directCount,
-      directRequired: currentLevel.requirement.directRequired,
+      directRequired: directRequired,
       team3Count: status.team3Count,
-      team3Required: currentLevel.requirement.team3Required,
+      team3Required: team3GenRequired,
       isQualified: status.qualified,
     };
   }
+
+  const requirements = {
+    directRequired: directRequired,
+    team3GenRequired: team3GenRequired,
+    directMet: status.directCount >= directRequired,
+    team3GenMet: status.team3Count >= team3GenRequired,
+  };
 
   return {
     vipLevel: status.vipLevel,
@@ -81,7 +107,9 @@ export async function getUserVipStatus(userId: number) {
     qualified: status.qualified,
     upgradedAt: status.upgradedAt,
     directCount: status.directCount,
-    team3Count: status.team3Count,
+    team3GenCount: status.team3Count,
+    frozenCommission: 0,
+    requirements,
     currentLevelDetails: currentLevel,
     nextLevelDetails: nextLevel,
     qualificationProgress,
