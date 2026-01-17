@@ -309,7 +309,7 @@ export default function MinePage() {
                 <Crown className="w-5 h-5 text-white" />
               </div>
               <div>
-                <span className="text-amber-800 font-bold block">VIP医疗守护金</span>
+                <span className="text-amber-800 font-bold block">会员中心</span>
                 <span className="text-[10px] text-amber-600 font-medium bg-amber-200/50 px-2 py-0.5 rounded-full">新年特惠</span>
               </div>
             </div>
