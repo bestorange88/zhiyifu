@@ -88,6 +88,7 @@ export default function VipPage() {
   const { user } = useAuth();
   const [selectedLevel, setSelectedLevel] = useState<VipLevel | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [activeTab, setActiveTab] = useState<number>(1);
 
   const { data: levels, isLoading } = useQuery<VipLevel[]>({
     queryKey: ["/api/vip/levels"],
@@ -215,6 +216,31 @@ export default function VipPage() {
       </div>
 
       <div className="px-4 -mt-12 relative z-20 pb-8">
+        {/* V1-V5 Level Tabs */}
+        {levels && levels.length > 0 && (
+          <div className="flex justify-center mb-4 bg-white rounded-2xl p-2 shadow-lg">
+            {levels.map((level) => {
+              const colors = rankColors[level.level] || rankColors[1];
+              const isActive = activeTab === level.level;
+              return (
+                <button
+                  key={level.level}
+                  onClick={() => setActiveTab(level.level)}
+                  className={cn(
+                    "flex-1 py-2 px-1 rounded-xl text-center transition-all text-sm font-medium",
+                    isActive 
+                      ? `bg-gradient-to-br ${colors.bg} ${colors.border} border shadow-sm` 
+                      : "text-gray-500 hover:text-gray-800"
+                  )}
+                  data-testid={`tab-v${level.level}`}
+                >
+                  <span className={cn(isActive && colors.icon)}>V{level.level}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {levels && levels.length > 0 && (
           <div className="bg-white rounded-2xl shadow-xl p-4 mb-6">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -271,7 +297,7 @@ export default function VipPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {levels?.map((level) => {
+            {levels?.filter(level => level.level === activeTab).map((level) => {
               const colors = rankColors[level.level] || rankColors[1];
               const features = getFeatures(level);
               const currentLevel = vipStatus?.vipLevel || 0;
