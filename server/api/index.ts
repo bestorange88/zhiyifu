@@ -797,6 +797,66 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  // ============ PAYMENT QR CODES ============
+  app.get("/api/admin/payment-qr", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const qrCodes = await adminService.getPaymentQrCodes();
+      res.json(qrCodes);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/payment-qr", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const { url, name } = req.body;
+      if (!url) {
+        return res.status(400).json({ error: "请提供二维码URL" });
+      }
+      const qrCode = await adminService.addPaymentQrCode(url, name);
+      res.json(qrCode);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/admin/payment-qr/:id", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "无效的ID参数" });
+      }
+      const { name, url, isActive, sortOrder } = req.body;
+      await adminService.updatePaymentQrCode(id, { name, url, isActive, sortOrder });
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/admin/payment-qr/:id", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "无效的ID参数" });
+      }
+      await adminService.deletePaymentQrCode(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Public API to get random QR code for frontend display
+  app.get("/api/payment-qr/random", async (req, res) => {
+    try {
+      const qrCode = await adminService.getRandomPaymentQrCode();
+      res.json(qrCode);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ============ ADMIN RANK RULES ============
   app.get("/api/admin/ranks", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {

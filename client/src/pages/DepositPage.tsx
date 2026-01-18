@@ -10,6 +10,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface PaymentQrResponse {
+  id?: number;
+  name?: string | null;
   url: string | null;
 }
 
@@ -24,7 +26,9 @@ export default function DepositPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: paymentQr, isLoading: qrLoading } = useQuery<PaymentQrResponse>({
-    queryKey: ["/api/settings/payment-qr"],
+    queryKey: ["/api/payment-qr/random"],
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const submitMutation = useMutation({

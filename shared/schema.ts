@@ -348,6 +348,23 @@ export const systemSettings = pgTable("system_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// ============ PAYMENT QR CODES ============
+export const paymentQrCodes = pgTable("payment_qr_codes", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }),
+  url: text("url").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPaymentQrCodeSchema = createInsertSchema(paymentQrCodes).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertPaymentQrCode = z.infer<typeof insertPaymentQrCodeSchema>;
+export type PaymentQrCode = typeof paymentQrCodes.$inferSelect;
+
 // ============ FEATURE FLAGS ============
 export const featureFlags = pgTable("feature_flags", {
   id: serial("id").primaryKey(),

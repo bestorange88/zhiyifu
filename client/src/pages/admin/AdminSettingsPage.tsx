@@ -4,17 +4,27 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Save, Settings, Image, Globe, Key, Upload, X, CreditCard } from "lucide-react";
+import { Save, Settings, Image, Globe, Key, Upload, X, CreditCard, Trash2, Plus } from "lucide-react";
 
 interface SystemSetting {
   id: number;
   key: string;
   value: string | null;
   description: string | null;
+}
+
+interface PaymentQrCode {
+  id: number;
+  name: string | null;
+  url: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
 }
 
 const defaultSettings = [
@@ -31,7 +41,6 @@ export default function AdminSettingsPage() {
   const { toast } = useToast();
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [paymentQrPreview, setPaymentQrPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadingQr, setUploadingQr] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -49,11 +58,19 @@ export default function AdminSettingsPage() {
       if (logoSetting?.value) {
         setLogoPreview(logoSetting.value);
       }
-      const qrSetting = data.find((s: SystemSetting) => s.key === "payment_qr_url");
-      if (qrSetting?.value) {
-        setPaymentQrPreview(qrSetting.value);
-      }
       return data;
+    },
+    enabled: !!token,
+  });
+
+  const { data: qrCodes = [], isLoading: loadingQr } = useQuery<PaymentQrCode[]>({
+    queryKey: ["/api/admin/payment-qr"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/payment-qr", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      return res.json();
     },
     enabled: !!token,
   });
@@ -77,6 +94,68 @@ export default function AdminSettingsPage() {
     },
     onError: () => {
       toast({ title: "保存失败", variant: "destructive" });
+    },
+  });
+
+  const addQrMutation = useMutation({
+    mutationFn: async (data: { url: string; name?: string }) => {
+      const res = await fetch("/api/admin/payment-qr", {
+        method: "POST",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to add QR code");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-qr"] });
+      toast({ title: "添加成功" });
+    },
+    onError: () => {
+      toast({ title: "添加失败", variant: "destructive" });
+    },
+  });
+
+  const updateQrMutation = useMutation({
+    mutationFn: async ({ id, ...data }: { id: number; isActive?: boolean; name?: string }) => {
+      const res = await fetch(`/api/admin/payment-qr/${id}`, {
+        method: "PUT",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update QR code");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-qr"] });
+      toast({ title: "更新成功" });
+    },
+    onError: () => {
+      toast({ title: "更新失败", variant: "destructive" });
+    },
+  });
+
+  const deleteQrMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/admin/payment-qr/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to delete QR code");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-qr"] });
+      toast({ title: "删除成功" });
+    },
+    onError: () => {
+      toast({ title: "删除失败", variant: "destructive" });
     },
   });
 
@@ -167,8 +246,7 @@ export default function AdminSettingsPage() {
       if (!res.ok) throw new Error("Upload failed");
 
       const { url } = await res.json();
-      setPaymentQrPreview(url);
-      saveMutation.mutate({ key: "payment_qr_url", value: url });
+      addQrMutation.mutate({ url });
     } catch (error) {
       toast({ title: "上传失败", variant: "destructive" });
     } finally {
@@ -179,9 +257,14 @@ export default function AdminSettingsPage() {
     }
   };
 
-  const handleRemoveQr = () => {
-    setPaymentQrPreview(null);
-    saveMutation.mutate({ key: "payment_qr_url", value: "" });
+  const handleDeleteQr = (id: number) => {
+    if (confirm("确定要删除这个收款码吗？")) {
+      deleteQrMutation.mutate(id);
+    }
+  };
+
+  const handleToggleQrActive = (id: number, isActive: boolean) => {
+    updateQrMutation.mutate({ id, isActive });
   };
 
   return (
@@ -263,75 +346,91 @@ export default function AdminSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="w-5 h-5" />
-              收款二维码设置
+            <CardTitle className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-5 h-5" />
+                收款二维码设置
+              </div>
+              <span className="text-sm font-normal text-gray-500">
+                可上传多个二维码，前端将随机显示
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-start gap-6">
-              <div className="w-48 h-48 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden relative">
-                {paymentQrPreview ? (
-                  <>
-                    <img src={paymentQrPreview} alt="收款码" className="w-full h-full object-contain" />
-                    <button
-                      onClick={handleRemoveQr}
-                      className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center"
-                      data-testid="button-remove-qr"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </>
-                ) : (
-                  <div className="text-center text-gray-400">
-                    <CreditCard className="w-12 h-12 mx-auto mb-2" />
-                    <span className="text-sm">暂无收款码</span>
-                  </div>
-                )}
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <input
+                  ref={qrFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleQrFileSelect}
+                  className="hidden"
+                  data-testid="input-qr-file"
+                />
+                <Button
+                  onClick={() => qrFileInputRef.current?.click()}
+                  disabled={uploadingQr || addQrMutation.isPending}
+                  data-testid="button-upload-qr"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  {uploadingQr ? "上传中..." : "添加收款码"}
+                </Button>
+                <p className="text-sm text-gray-500">
+                  支持 JPG、PNG 格式，建议尺寸 300x300 像素
+                </p>
               </div>
-              <div className="flex-1 space-y-4">
-                <div>
-                  <p className="text-sm text-gray-600 mb-2">上传支付宝收款二维码，用户充值时将显示此二维码</p>
-                  <p className="text-xs text-gray-400 mb-3">支持 JPG、PNG 格式，建议尺寸 300x300 像素，大小不超过 2MB</p>
-                  <input
-                    ref={qrFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleQrFileSelect}
-                    className="hidden"
-                    data-testid="input-qr-file"
-                  />
-                  <Button
-                    onClick={() => qrFileInputRef.current?.click()}
-                    disabled={uploadingQr}
-                    data-testid="button-upload-qr"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    {uploadingQr ? "上传中..." : "上传收款码"}
-                  </Button>
+
+              {loadingQr ? (
+                <div className="text-center py-8 text-gray-500">加载中...</div>
+              ) : qrCodes.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 border-2 border-dashed rounded-lg">
+                  <CreditCard className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p>暂无收款码，点击上方按钮添加</p>
                 </div>
-                <div className="space-y-2">
-                  <Label>或输入收款码图片地址</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={formValues["payment_qr_url"] || paymentQrPreview || ""}
-                      onChange={(e) => {
-                        handleChange("payment_qr_url", e.target.value);
-                        setPaymentQrPreview(e.target.value);
-                      }}
-                      placeholder="https://example.com/qrcode.png"
-                      data-testid="input-qr-url"
-                    />
-                    <Button
-                      onClick={() => handleSave("payment_qr_url")}
-                      disabled={saveMutation.isPending}
-                      data-testid="button-save-qr-url"
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {qrCodes.map((qr) => (
+                    <div
+                      key={qr.id}
+                      className={`relative border rounded-lg p-2 ${
+                        qr.isActive ? "border-green-300 bg-green-50" : "border-gray-200 bg-gray-50 opacity-60"
+                      }`}
+                      data-testid={`qr-card-${qr.id}`}
                     >
-                      <Save className="w-4 h-4" />
-                    </Button>
-                  </div>
+                      <div className="aspect-square overflow-hidden rounded-md bg-white mb-2">
+                        <img
+                          src={qr.url}
+                          alt={qr.name || "收款码"}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <div className="text-center text-sm text-gray-600 truncate mb-2">
+                        {qr.name || `收款码${qr.id}`}
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1">
+                          <Switch
+                            checked={qr.isActive}
+                            onCheckedChange={(checked) => handleToggleQrActive(qr.id, checked)}
+                            data-testid={`switch-qr-active-${qr.id}`}
+                          />
+                          <span className="text-xs text-gray-500">
+                            {qr.isActive ? "启用" : "禁用"}
+                          </span>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => handleDeleteQr(qr.id)}
+                          data-testid={`button-delete-qr-${qr.id}`}
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>

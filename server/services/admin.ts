@@ -2,7 +2,8 @@ import { db } from "../db";
 import { 
   admins, users, wallets, withdraws, orders, agentApplications, userRanks,
   systemSettings, featureFlags, deposits, adminActions, commissionRecords,
-  serviceChatSessions, serviceChatMessages, wheelPrizes, wheelSpins, vipPlans, ledger
+  serviceChatSessions, serviceChatMessages, wheelPrizes, wheelSpins, vipPlans, ledger,
+  paymentQrCodes
 } from "@shared/schema";
 import { eq, desc, sql, count, and, gt, gte, sum } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -417,6 +418,61 @@ export async function setSystemSetting(key: string, value: string) {
   }
   
   return { success: true, key, value };
+}
+
+// ============ PAYMENT QR CODES ============
+export async function getPaymentQrCodes() {
+  const qrCodes = await db.select().from(paymentQrCodes).orderBy(paymentQrCodes.sortOrder);
+  return qrCodes;
+}
+
+export async function getActivePaymentQrCodes() {
+  const qrCodes = await db.select().from(paymentQrCodes)
+    .where(eq(paymentQrCodes.isActive, true))
+    .orderBy(paymentQrCodes.sortOrder);
+  return qrCodes;
+}
+
+export async function getRandomPaymentQrCode() {
+  const activeQrCodes = await getActivePaymentQrCodes();
+  if (activeQrCodes.length === 0) {
+    // Fall back to system setting for backward compatibility
+    const setting = await getSystemSettingByKey("payment_qr_url");
+    if (setting?.value) {
+      return { url: setting.value, name: "收款码" };
+    }
+    return null;
+  }
+  const randomIndex = Math.floor(Math.random() * activeQrCodes.length);
+  return activeQrCodes[randomIndex];
+}
+
+export async function addPaymentQrCode(url: string, name?: string) {
+  const [maxSort] = await db.select({ max: paymentQrCodes.sortOrder })
+    .from(paymentQrCodes)
+    .orderBy(desc(paymentQrCodes.sortOrder))
+    .limit(1);
+  const nextSort = (maxSort?.max || 0) + 1;
+  
+  const [qrCode] = await db.insert(paymentQrCodes).values({
+    url,
+    name: name || `收款码${nextSort}`,
+    sortOrder: nextSort,
+    isActive: true,
+  }).returning();
+  return qrCode;
+}
+
+export async function updatePaymentQrCode(id: number, data: { name?: string; url?: string; isActive?: boolean; sortOrder?: number }) {
+  await db.update(paymentQrCodes)
+    .set(data)
+    .where(eq(paymentQrCodes.id, id));
+  return { success: true };
+}
+
+export async function deletePaymentQrCode(id: number) {
+  await db.delete(paymentQrCodes).where(eq(paymentQrCodes.id, id));
+  return { success: true };
 }
 
 // ============ DEPOSITS ============
