@@ -9,13 +9,17 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, Save, Crown, Gift, Zap, Headphones, Sparkles, Star, RefreshCw } from "lucide-react";
+import { Loader2, Save, Crown, Gift, Zap, Headphones, Sparkles, Star, RefreshCw, Users, Percent } from "lucide-react";
 
 interface VipLevel {
   id: number;
   rank: number;
   name: string;
   openingFee: string | null;
+  directRequired: number | null;
+  team3genRequired: number | null;
+  directCommissionRate: string | null;
+  indirectCommissionRate: string | null;
   dailySpins: number | null;
   withdrawMinAmount: string | null;
   withdrawSpeed: string | null;
@@ -88,7 +92,7 @@ export default function AdminVipRanksPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-800">VIP等级规则配置</h2>
-            <p className="text-sm text-gray-500">配置各VIP等级的购买价格、抽奖次数、提现门槛和特权</p>
+            <p className="text-sm text-gray-500">配置VIP等级的升级条件（直推/团队人数）、佣金比例、权益和特权</p>
           </div>
           <Button
             variant="outline"
@@ -175,6 +179,57 @@ export default function AdminVipRanksPage() {
                       </div>
                     </div>
 
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-gray-700 flex items-center gap-2">
+                        <Users className="w-4 h-4" /> 升级条件
+                      </h4>
+                      <div className="space-y-3">
+                        <div>
+                          <Label>直推人数要求</Label>
+                          <Input
+                            type="number"
+                            value={formData.directRequired || 0}
+                            onChange={(e) => updateField("directRequired", parseInt(e.target.value) || 0)}
+                            data-testid={`input-directRequired-${rank.rank}`}
+                          />
+                        </div>
+                        <div>
+                          <Label>三代团队人数要求</Label>
+                          <Input
+                            type="number"
+                            value={formData.team3genRequired || 0}
+                            onChange={(e) => updateField("team3genRequired", parseInt(e.target.value) || 0)}
+                            data-testid={`input-team3genRequired-${rank.rank}`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-gray-700 flex items-center gap-2">
+                        <Percent className="w-4 h-4" /> 佣金设置
+                      </h4>
+                      <div className="space-y-3">
+                        <div>
+                          <Label>直推佣金比例</Label>
+                          <Input
+                            value={formData.directCommissionRate || ""}
+                            onChange={(e) => updateField("directCommissionRate", e.target.value)}
+                            placeholder="0.10 = 10%"
+                            data-testid={`input-directCommissionRate-${rank.rank}`}
+                          />
+                        </div>
+                        <div>
+                          <Label>间推佣金比例</Label>
+                          <Input
+                            value={formData.indirectCommissionRate || ""}
+                            onChange={(e) => updateField("indirectCommissionRate", e.target.value)}
+                            placeholder="0.05 = 5%"
+                            data-testid={`input-indirectCommissionRate-${rank.rank}`}
+                          />
+                        </div>
+                      </div>
+                    </div>
 
                     <div className="space-y-4">
                       <h4 className="font-medium text-gray-700 flex items-center gap-2">
@@ -265,6 +320,34 @@ export default function AdminVipRanksPage() {
                       <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 dark:bg-orange-900/20">
                         购买价格: ¥{rank.openingFee || "0"}
                       </Badge>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800">
+                      <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mb-2 flex items-center gap-1">
+                        <Users className="w-3 h-3" /> 升级条件
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        <span className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                          直推{rank.directRequired || 0}人
+                        </span>
+                        <span className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                          三代内{rank.team3genRequired || 0}人
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800">
+                      <p className="text-xs font-medium text-green-600 dark:text-green-400 mb-2 flex items-center gap-1">
+                        <Percent className="w-3 h-3" /> 佣金比例
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="secondary" className="bg-white dark:bg-gray-800">
+                          直推{(parseFloat(rank.directCommissionRate || "0") * 100).toFixed(0)}%
+                        </Badge>
+                        <Badge variant="secondary" className="bg-white dark:bg-gray-800">
+                          间推{(parseFloat(rank.indirectCommissionRate || "0") * 100).toFixed(0)}%
+                        </Badge>
+                      </div>
                     </div>
 
                     <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800">
