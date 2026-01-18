@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { ShoppingBag, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { ShoppingBag, ChevronLeft, ChevronRight, Eye, Search, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { useQuery } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import AdminLayout from "./AdminLayout";
 import {
   Dialog,
@@ -15,13 +17,15 @@ export default function AdminOrdersPage() {
   const { token } = useAdminAuth();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["/api/admin/orders", page, statusFilter],
+    queryKey: ["/api/admin/orders", page, statusFilter, searchQuery],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: "20" });
       if (statusFilter) params.set("status", statusFilter);
+      if (searchQuery) params.set("search", searchQuery);
       const res = await fetch(`/api/admin/orders?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -53,31 +57,71 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const getOrderName = (order: any) => {
+    if (order.productType === "vip") {
+      return `升级VIP${order.productId}`;
+    } else if (order.productType === "deposit") {
+      return "账户充值";
+    } else if (order.productType === "lottery") {
+      return "抽奖购买";
+    }
+    return order.productType || "未知";
+  };
+
   return (
     <AdminLayout title="订单管理">
       <div className="bg-white rounded-xl shadow-sm">
-        <div className="p-4 border-b flex items-center gap-4 flex-wrap">
-          <span className="text-sm text-gray-500">状态筛选：</span>
-          <div className="flex gap-2 flex-wrap">
-            {[
-              { value: "", label: "全部" },
-              { value: "pending", label: "待支付" },
-              { value: "paid", label: "已支付" },
-              { value: "completed", label: "已完成" },
-              { value: "cancelled", label: "已取消" },
-            ].map((opt) => (
-              <Button
-                key={opt.value}
-                size="sm"
-                variant={statusFilter === opt.value ? "default" : "outline"}
-                onClick={() => {
-                  setStatusFilter(opt.value);
+        <div className="p-4 border-b space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="搜索订单号或手机号..."
+                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
                   setPage(1);
                 }}
+                data-testid="input-search-orders"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">共 {data?.total || 0} 条订单</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/admin/orders"] })}
+                data-testid="button-refresh-orders"
               >
-                {opt.label}
+                <RefreshCw className="w-4 h-4" />
               </Button>
-            ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-4 flex-wrap">
+            <span className="text-sm text-gray-500">状态筛选：</span>
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { value: "", label: "全部" },
+                { value: "pending", label: "待支付" },
+                { value: "paid", label: "已支付" },
+                { value: "completed", label: "已完成" },
+                { value: "cancelled", label: "已取消" },
+              ].map((opt) => (
+                <Button
+                  key={opt.value}
+                  size="sm"
+                  variant={statusFilter === opt.value ? "default" : "outline"}
+                  onClick={() => {
+                    setStatusFilter(opt.value);
+                    setPage(1);
+                  }}
+                  data-testid={`button-filter-${opt.value || "all"}`}
+                >
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -109,11 +153,9 @@ export default function AdminOrdersPage() {
                     <td className="px-4 py-3 text-sm font-mono">{order.orderNo}</td>
                     <td className="px-4 py-3 text-sm">{order.userPhone}</td>
                     <td className="px-4 py-3 text-sm">
-                      {order.productType === "vip" ? (
-                        <span className="text-amber-600">VIP{order.productId}会员</span>
-                      ) : (
-                        order.productType
-                      )}
+                      <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                        {getOrderName(order)}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-sm font-bold text-green-600">¥{order.amount}</td>
                     <td className="px-4 py-3">
@@ -188,13 +230,9 @@ export default function AdminOrdersPage() {
                   <p className="text-gray-500">金额</p>
                   <p className="font-bold text-green-600">¥{selectedOrder.amount}</p>
                 </div>
-                <div>
-                  <p className="text-gray-500">商品类型</p>
-                  <p>{selectedOrder.productType}</p>
-                </div>
-                <div>
-                  <p className="text-gray-500">商品ID</p>
-                  <p>{selectedOrder.productId}</p>
+                <div className="col-span-2">
+                  <p className="text-gray-500">订单名目</p>
+                  <p className="font-medium text-purple-600">{getOrderName(selectedOrder)}</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-gray-500">创建时间</p>

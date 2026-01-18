@@ -293,30 +293,45 @@ export async function updateUserStatus(userId: number, status: string) {
   return { success: true };
 }
 
-export async function getOrderList(status?: string, page = 1, limit = 20) {
+export async function getOrderList(status?: string, page = 1, limit = 20, search?: string) {
   const offset = (page - 1) * limit;
   
-  let query = db.select().from(orders);
-  let countQuery = db.select({ count: count() }).from(orders);
-  
-  if (status) {
-    query = query.where(eq(orders.status, status)) as any;
-    countQuery = countQuery.where(eq(orders.status, status)) as any;
-  }
-  
-  const list = await query.orderBy(desc(orders.createdAt)).limit(limit).offset(offset);
-  const [total] = await countQuery;
+  let list = await db.select().from(orders).orderBy(desc(orders.createdAt));
   
   const listWithUser = await Promise.all(
     list.map(async (o) => {
       const [user] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, o.userId)).limit(1);
-      return { ...o, userPhone: user?.phone || "未知" };
+      const orderNo = `ORD${o.createdAt.getTime().toString().slice(-10)}${o.id.toString().padStart(6, '0')}`;
+      const productType = o.type;
+      const productId = o.type.startsWith("vip_") ? parseInt(o.type.replace("vip_", "")) : null;
+      return { 
+        ...o, 
+        userPhone: user?.phone || "未知",
+        orderNo,
+        productType: productType.startsWith("vip_") ? "vip" : productType,
+        productId,
+      };
     })
   );
   
+  let filtered = listWithUser;
+  if (status) {
+    filtered = filtered.filter(o => o.status === status);
+  }
+  if (search) {
+    const searchLower = search.toLowerCase();
+    filtered = filtered.filter(o => 
+      o.orderNo.toLowerCase().includes(searchLower) || 
+      o.userPhone.toLowerCase().includes(searchLower)
+    );
+  }
+  
+  const total = filtered.length;
+  const paged = filtered.slice(offset, offset + limit);
+  
   return {
-    orders: listWithUser,
-    total: total?.count || 0,
+    orders: paged,
+    total,
     page,
     limit,
   };

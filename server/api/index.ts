@@ -573,7 +573,8 @@ export function registerApiRoutes(app: Express): void {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
       const status = req.query.status as string | undefined;
-      const result = await adminService.getOrderList(status, page, limit);
+      const search = req.query.search as string | undefined;
+      const result = await adminService.getOrderList(status, page, limit, search);
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
