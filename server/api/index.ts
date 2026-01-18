@@ -481,7 +481,9 @@ export function registerApiRoutes(app: Express): void {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
-      const result = await adminService.getUserList(page, limit);
+      const search = req.query.search as string | undefined;
+      const vipLevel = req.query.vipLevel as string | undefined;
+      const result = await adminService.getUserList(page, limit, search, vipLevel);
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });

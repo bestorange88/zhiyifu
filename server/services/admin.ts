@@ -148,10 +148,10 @@ export async function adminCreateUser(phone: string, password: string, vipLevel 
   return newUser;
 }
 
-export async function getUserList(page = 1, limit = 20) {
+export async function getUserList(page = 1, limit = 20, search?: string, vipLevel?: string) {
   const offset = (page - 1) * limit;
   
-  const usersList = await db.select({
+  let usersList = await db.select({
     id: users.id,
     phone: users.phone,
     inviteCode: users.inviteCode,
@@ -160,9 +160,7 @@ export async function getUserList(page = 1, limit = 20) {
     vipExpireAt: users.vipExpireAt,
     status: users.status,
     createdAt: users.createdAt,
-  }).from(users).orderBy(desc(users.createdAt)).limit(limit).offset(offset);
-  
-  const [total] = await db.select({ count: count() }).from(users);
+  }).from(users).orderBy(desc(users.createdAt));
   
   const usersWithWallet = await Promise.all(
     usersList.map(async (user) => {
@@ -176,9 +174,27 @@ export async function getUserList(page = 1, limit = 20) {
     })
   );
   
+  let filtered = usersWithWallet;
+  if (search) {
+    const searchLower = search.toLowerCase();
+    filtered = filtered.filter(u => 
+      u.phone.toLowerCase().includes(searchLower) || 
+      u.inviteCode.toLowerCase().includes(searchLower)
+    );
+  }
+  if (vipLevel !== undefined && vipLevel !== "") {
+    const level = parseInt(vipLevel);
+    if (!isNaN(level)) {
+      filtered = filtered.filter(u => u.vipLevel === level);
+    }
+  }
+  
+  const total = filtered.length;
+  const paged = filtered.slice(offset, offset + limit);
+  
   return {
-    users: usersWithWallet,
-    total: total?.count || 0,
+    users: paged,
+    total,
     page,
     limit,
   };

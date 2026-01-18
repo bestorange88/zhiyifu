@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "./AdminLayout";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface UserDetail {
   id: number;
@@ -35,6 +36,7 @@ export default function AdminUsersPage() {
   const { toast } = useToast();
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
+  const [vipFilter, setVipFilter] = useState<string>("all");
   const [balanceModalOpen, setBalanceModalOpen] = useState(false);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [relationshipModalOpen, setRelationshipModalOpen] = useState(false);
@@ -49,10 +51,11 @@ export default function AdminUsersPage() {
   const [newUserInviterCode, setNewUserInviterCode] = useState("");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["/api/admin/users", page, searchQuery],
+    queryKey: ["/api/admin/users", page, searchQuery, vipFilter],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: "20" });
       if (searchQuery) params.append("search", searchQuery);
+      if (vipFilter !== "all") params.append("vipLevel", vipFilter);
       const res = await fetch(`/api/admin/users?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -212,29 +215,42 @@ export default function AdminUsersPage() {
   return (
     <AdminLayout title="用户管理">
       <div className="bg-white rounded-xl shadow-sm">
-        <div className="p-4 border-b flex items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <Input 
-              placeholder="搜索手机号..." 
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              data-testid="input-search-users"
-            />
+        <div className="p-4 border-b space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input 
+                placeholder="搜索手机号..." 
+                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                data-testid="input-search-users"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">共 {data?.total || 0} 位用户</span>
+              <Button
+                size="sm"
+                onClick={() => setCreateUserModalOpen(true)}
+                data-testid="button-create-user"
+              >
+                <UserPlus className="w-4 h-4 mr-1" />
+                新建用户
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-500">共 {data?.total || 0} 位用户</span>
-            <Button
-              size="sm"
-              onClick={() => setCreateUserModalOpen(true)}
-              className="bg-green-600 hover:bg-green-700"
-              data-testid="button-create-user"
-            >
-              <UserPlus className="w-4 h-4 mr-1" />
-              新建用户
-            </Button>
-          </div>
+          
+          <Tabs value={vipFilter} onValueChange={(val) => { setVipFilter(val); setPage(1); }}>
+            <TabsList className="grid w-full grid-cols-7" data-testid="tabs-vip-filter">
+              <TabsTrigger value="all" data-testid="tab-vip-all">全部</TabsTrigger>
+              <TabsTrigger value="0" data-testid="tab-vip-0">普通</TabsTrigger>
+              <TabsTrigger value="1" data-testid="tab-vip-1">V1</TabsTrigger>
+              <TabsTrigger value="2" data-testid="tab-vip-2">V2</TabsTrigger>
+              <TabsTrigger value="3" data-testid="tab-vip-3">V3</TabsTrigger>
+              <TabsTrigger value="4" data-testid="tab-vip-4">V4</TabsTrigger>
+              <TabsTrigger value="5" data-testid="tab-vip-5">V5</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
         <div className="overflow-x-auto">
@@ -421,7 +437,7 @@ export default function AdminUsersPage() {
               <Button 
                 onClick={handleBalanceAdjust}
                 disabled={adjustBalanceMutation.isPending}
-                className={balanceType === "add" ? "bg-green-600" : "bg-red-600"}
+                variant={balanceType === "subtract" ? "destructive" : "default"}
                 data-testid="button-confirm-balance"
               >
                 {adjustBalanceMutation.isPending ? "处理中..." : "确认"}
@@ -649,7 +665,7 @@ export default function AdminUsersPage() {
             <Button
               onClick={handleCreateUser}
               disabled={createUserMutation.isPending}
-              className="w-full bg-green-600 hover:bg-green-700"
+              className="w-full"
               data-testid="button-submit-create-user"
             >
               {createUserMutation.isPending ? "创建中..." : "创建用户"}
