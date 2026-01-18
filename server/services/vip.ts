@@ -449,10 +449,10 @@ export async function initializeVipLevels() {
 
   const defaultLevels = [
     { level: 1, name: "V1", priceCents: 19800, upgradeRewardCents: 0, dailyLottery: 2, incomeMultiplier: "1.20", withdrawThresholdCents: 10000, settleType: "T1" },
-    { level: 2, name: "V2", priceCents: 29800, upgradeRewardCents: 58800, dailyLottery: 3, incomeMultiplier: "1.30", withdrawThresholdCents: 5000, settleType: "T0" },
-    { level: 3, name: "V3", priceCents: 29800, upgradeRewardCents: 128800, dailyLottery: 4, incomeMultiplier: "1.40", withdrawThresholdCents: 4000, settleType: "T0" },
-    { level: 4, name: "V4", priceCents: 49800, upgradeRewardCents: 288800, dailyLottery: 5, incomeMultiplier: "1.50", withdrawThresholdCents: 3000, settleType: "T0" },
-    { level: 5, name: "V5", priceCents: 59800, upgradeRewardCents: 888800, dailyLottery: 5, incomeMultiplier: "1.60", withdrawThresholdCents: 3000, settleType: "T0" },
+    { level: 2, name: "V2", priceCents: 29800, upgradeRewardCents: 0, dailyLottery: 3, incomeMultiplier: "1.30", withdrawThresholdCents: 5000, settleType: "T0" },
+    { level: 3, name: "V3", priceCents: 29800, upgradeRewardCents: 0, dailyLottery: 4, incomeMultiplier: "1.40", withdrawThresholdCents: 4000, settleType: "T0" },
+    { level: 4, name: "V4", priceCents: 49800, upgradeRewardCents: 0, dailyLottery: 5, incomeMultiplier: "1.50", withdrawThresholdCents: 3000, settleType: "T0" },
+    { level: 5, name: "V5", priceCents: 59800, upgradeRewardCents: 0, dailyLottery: 5, incomeMultiplier: "1.60", withdrawThresholdCents: 3000, settleType: "T0" },
   ];
 
   const defaultRequirements = [
