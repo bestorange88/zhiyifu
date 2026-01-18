@@ -1,6 +1,6 @@
 import { useState, ReactNode, useEffect } from "react";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Users, CreditCard, UserCheck, LogOut, Menu, X, ShoppingBag, BarChart3, MessageSquare, Wallet, Gift, Share2, Coins, Crown, Settings, FileText, Headphones, Medal } from "lucide-react";
+import { LayoutDashboard, Users, CreditCard, UserCheck, LogOut, Menu, X, ShoppingBag, BarChart3, MessageSquare, Wallet, Gift, Share2, Coins, Crown, Settings, FileText, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAdminAuth } from "@/lib/adminAuth";
 
@@ -32,8 +32,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
     { id: "lottery", label: "抽奖管理", icon: Gift, path: "/admin/lottery" },
     { id: "distribution", label: "分销管理", icon: Share2, path: "/admin/distribution" },
     { id: "commission", label: "佣金管理", icon: Coins, path: "/admin/commission" },
-    { id: "membership", label: "会员中心", icon: Crown, path: "/admin/membership" },
-    { id: "vipranks", label: "VIP等级", icon: Medal, path: "/admin/vipranks" },
+    { id: "vipranks", label: "VIP等级", icon: Crown, path: "/admin/vipranks" },
     { id: "content", label: "内容管理", icon: FileText, path: "/admin/content" },
     { id: "service", label: "客服中心", icon: Headphones, path: "/admin/service" },
     { id: "groups", label: "群组管理", icon: MessageSquare, path: "/admin/groups" },
@@ -48,13 +47,13 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-100 flex">
-      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 transform transition-transform lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="p-4 border-b border-slate-700">
+      <div className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 transform transition-transform lg:translate-x-0 flex flex-col ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="p-4 border-b border-slate-700 flex-shrink-0">
           <h1 className="text-xl font-bold text-white">云智医服</h1>
           <p className="text-xs text-slate-400">管理后台</p>
         </div>
         
-        <nav className="p-4 space-y-1">
+        <nav className="p-4 space-y-1 flex-1 overflow-y-auto">
           {menuItems.map((item) => (
             <button
               key={item.id}
@@ -67,6 +66,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
                   ? "bg-purple-600 text-white"
                   : "text-slate-300 hover:bg-slate-800"
               }`}
+              data-testid={`menu-${item.id}`}
             >
               <item.icon className="w-5 h-5" />
               {item.label}
@@ -74,7 +74,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
           ))}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-700">
+        <div className="flex-shrink-0 p-4 border-t border-slate-700">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
               <span className="text-white font-bold">{admin.username[0].toUpperCase()}</span>
