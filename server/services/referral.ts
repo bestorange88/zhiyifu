@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { users, userRanks, rankRules, referralRewards, orders, commissionRecords } from "@shared/schema";
+import { users, userRanks, rankRules, referralRewards, orders, commissionRecords, commissionLogs } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { addCashFrozen, addCashAvailable, deductCashAvailable, getWallet } from "./wallet";
 import { addSpins } from "./spin";
@@ -308,11 +308,51 @@ export async function distributeSpinCommission(fromUserId: number, spinId: numbe
 }
 
 export async function getCommissionRecords(userId: number, limit = 50) {
-  return db.select()
+  const oldRecords = await db.select()
     .from(commissionRecords)
     .where(eq(commissionRecords.userId, userId))
     .orderBy(desc(commissionRecords.createdAt))
     .limit(limit);
+
+  const newLogs = await db.select()
+    .from(commissionLogs)
+    .where(eq(commissionLogs.toUserId, userId))
+    .orderBy(desc(commissionLogs.createdAt))
+    .limit(limit);
+
+  const normalizedOld = oldRecords.map(r => ({
+    id: r.id,
+    userId: r.userId,
+    fromUserId: r.fromUserId,
+    orderId: r.orderId,
+    spinId: r.spinId,
+    sourceType: r.sourceType,
+    level: r.level,
+    rate: r.rate,
+    amount: r.amount,
+    status: r.status,
+    createdAt: r.createdAt,
+  }));
+
+  const normalizedNew = newLogs.map(l => ({
+    id: l.id + 1000000,
+    userId: l.toUserId,
+    fromUserId: l.fromUserId,
+    orderId: null,
+    spinId: null,
+    sourceType: l.bizType,
+    level: l.relationLevel,
+    rate: l.rate,
+    amount: (l.amountCents / 100).toFixed(2),
+    status: l.status,
+    createdAt: l.createdAt,
+  }));
+
+  const combined = [...normalizedOld, ...normalizedNew]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, limit);
+
+  return combined;
 }
 
 export async function buyRank(userId: number, rank: number) {

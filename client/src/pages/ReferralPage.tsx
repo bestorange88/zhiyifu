@@ -264,34 +264,39 @@ export default function ReferralPage() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-gray-800 flex items-center gap-2">
               <Star className="w-4 h-4 text-amber-500" />
-              抽奖佣金记录
+              分佣记录
             </h3>
           </div>
           
           {commissionRecords && commissionRecords.length > 0 ? (
             <div className="space-y-2 max-h-60 overflow-y-auto">
-              {commissionRecords.map((record) => (
-                <div key={record.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                  <div>
-                    <p className="font-medium text-gray-800">
-                      {record.level === 1 ? "直推分成" : "间推分成"}
-                      <span className="text-xs text-gray-400 ml-1">
-                        ({(parseFloat(record.rate) * 100).toFixed(0)}%)
-                      </span>
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      下级转盘中奖 · {new Date(record.createdAt).toLocaleDateString("zh-CN")}
-                    </p>
+              {commissionRecords.map((record) => {
+                const sourceLabel = record.sourceType === "vip_upgrade" ? "下级升级VIP" :
+                  record.sourceType === "lottery_reward" ? "下级抽奖中奖" :
+                  record.sourceType === "spin" ? "下级转盘中奖" : "下级活动";
+                return (
+                  <div key={record.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                    <div>
+                      <p className="font-medium text-gray-800">
+                        {record.level === 1 ? "直推分成" : "间推分成"}
+                        <span className="text-xs text-gray-400 ml-1">
+                          ({(parseFloat(record.rate) * 100).toFixed(0)}%)
+                        </span>
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {sourceLabel} · {new Date(record.createdAt).toLocaleDateString("zh-CN")}
+                      </p>
+                    </div>
+                    <span className="text-green-600 font-bold">+¥{parseFloat(record.amount).toFixed(2)}</span>
                   </div>
-                  <span className="text-green-600 font-bold">+¥{parseFloat(record.amount).toFixed(2)}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-8 text-gray-400">
               <Star className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>暂无抽奖佣金记录</p>
-              <p className="text-xs mt-1">下级中奖后您将获得分成</p>
+              <p>暂无分佣记录</p>
+              <p className="text-xs mt-1">下级购买VIP或中奖后您将获得分成</p>
             </div>
           )}
         </div>
