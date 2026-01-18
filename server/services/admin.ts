@@ -77,8 +77,9 @@ export async function getDashboardStats() {
   const [vip1Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 1));
   const [vip2Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 2));
   const [vip3Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 3));
+  const [vip4Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 4));
+  const [vip5Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 5));
   const [withdrawPending] = await db.select({ count: count() }).from(withdraws).where(eq(withdraws.status, "applied"));
-  const [agentPending] = await db.select({ count: count() }).from(agentApplications).where(eq(agentApplications.status, "pending"));
   const [orderCount] = await db.select({ count: count() }).from(orders);
   
   const todayStart = new Date();
@@ -100,8 +101,9 @@ export async function getDashboardStats() {
     vip1Count: vip1Count?.count || 0,
     vip2Count: vip2Count?.count || 0,
     vip3Count: vip3Count?.count || 0,
+    vip4Count: vip4Count?.count || 0,
+    vip5Count: vip5Count?.count || 0,
     pendingWithdraws: withdrawPending?.count || 0,
-    pendingAgentApps: agentPending?.count || 0,
     totalOrders: orderCount?.count || 0,
     totalRevenue: totalRevenueResult[0]?.total || 0,
     todayUsers: todayUsersCount?.count || 0,

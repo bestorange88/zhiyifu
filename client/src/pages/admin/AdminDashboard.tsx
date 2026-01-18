@@ -13,7 +13,6 @@ interface DashboardStats {
   totalUsers: number;
   vipUsers: number;
   pendingWithdraws: number;
-  pendingAgentApps: number;
   totalOrders: number;
   totalRevenue: number;
   todayUsers: number;
@@ -23,6 +22,8 @@ interface DashboardStats {
   vip1Count: number;
   vip2Count: number;
   vip3Count: number;
+  vip4Count: number;
+  vip5Count: number;
   recentUsers: any[];
   recentWithdraws: any[];
 }
@@ -144,7 +145,7 @@ export default function AdminDashboard() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
                 <div className="bg-white rounded-xl p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-gray-500 text-xs">总用户数</span>
@@ -179,13 +180,6 @@ export default function AdminDashboard() {
                     <CreditCard className="w-4 h-4 text-orange-500" />
                   </div>
                   <p className="text-2xl font-bold text-gray-800">{stats?.pendingWithdraws || 0}</p>
-                </div>
-                <div className="bg-white rounded-xl p-4 shadow-sm">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-gray-500 text-xs">待审核代理</span>
-                    <UserCheck className="w-4 h-4 text-pink-500" />
-                  </div>
-                  <p className="text-2xl font-bold text-gray-800">{stats?.pendingAgentApps || 0}</p>
                 </div>
               </div>
 
@@ -229,9 +223,17 @@ export default function AdminDashboard() {
                       <span className="text-gray-500">VIP2 会员</span>
                       <span className="font-bold">{stats?.vip2Count || 0} 人</span>
                     </div>
-                    <div className="flex justify-between items-center py-2">
+                    <div className="flex justify-between items-center py-2 border-b">
                       <span className="text-gray-500">VIP3 会员</span>
                       <span className="font-bold">{stats?.vip3Count || 0} 人</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b">
+                      <span className="text-gray-500">VIP4 会员</span>
+                      <span className="font-bold">{stats?.vip4Count || 0} 人</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-gray-500">VIP5 会员</span>
+                      <span className="font-bold">{stats?.vip5Count || 0} 人</span>
                     </div>
                   </div>
                 </Card>
