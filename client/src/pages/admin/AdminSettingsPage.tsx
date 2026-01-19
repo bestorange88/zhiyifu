@@ -10,6 +10,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Save, Settings, Image, Globe, Key, Upload, X, CreditCard, Trash2, Plus } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface SystemSetting {
   id: number;
@@ -21,6 +22,7 @@ interface SystemSetting {
 interface PaymentQrCode {
   id: number;
   name: string | null;
+  type: string;
   url: string;
   isActive: boolean;
   sortOrder: number;
@@ -37,14 +39,15 @@ const defaultSettings = [
 ];
 
 export default function AdminSettingsPage() {
-  const { token } = useAdminAuth();
-  const { toast } = useToast();
-  const [formValues, setFormValues] = useState<Record<string, string>>({});
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadingQr, setUploadingQr] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const qrFileInputRef = useRef<HTMLInputElement>(null);
+    const { token } = useAdminAuth();
+    const { toast } = useToast();
+    const [formValues, setFormValues] = useState<Record<string, string>>({});
+    const [logoPreview, setLogoPreview] = useState<string | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const [uploadingQr, setUploadingQr] = useState(false);
+    const [newQrType, setNewQrType] = useState<string>("alipay");
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const qrFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: settings, isLoading } = useQuery<SystemSetting[]>({
     queryKey: ["/api/admin/settings"],
@@ -97,49 +100,49 @@ export default function AdminSettingsPage() {
     },
   });
 
-  const addQrMutation = useMutation({
-    mutationFn: async (data: { url: string; name?: string }) => {
-      const res = await fetch("/api/admin/payment-qr", {
-        method: "POST",
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to add QR code");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-qr"] });
-      toast({ title: "添加成功" });
-    },
-    onError: () => {
-      toast({ title: "添加失败", variant: "destructive" });
-    },
-  });
+    const addQrMutation = useMutation({
+      mutationFn: async (data: { url: string; name?: string; type?: string }) => {
+        const res = await fetch("/api/admin/payment-qr", {
+          method: "POST",
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error("Failed to add QR code");
+        return res.json();
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-qr"] });
+        toast({ title: "添加成功" });
+      },
+      onError: () => {
+        toast({ title: "添加失败", variant: "destructive" });
+      },
+    });
 
-  const updateQrMutation = useMutation({
-    mutationFn: async ({ id, ...data }: { id: number; isActive?: boolean; name?: string }) => {
-      const res = await fetch(`/api/admin/payment-qr/${id}`, {
-        method: "PUT",
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) throw new Error("Failed to update QR code");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-qr"] });
-      toast({ title: "更新成功" });
-    },
-    onError: () => {
-      toast({ title: "更新失败", variant: "destructive" });
-    },
-  });
+    const updateQrMutation = useMutation({
+      mutationFn: async ({ id, ...data }: { id: number; isActive?: boolean; name?: string; type?: string }) => {
+        const res = await fetch(`/api/admin/payment-qr/${id}`, {
+          method: "PUT",
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error("Failed to update QR code");
+        return res.json();
+      },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/payment-qr"] });
+        toast({ title: "更新成功" });
+      },
+      onError: () => {
+        toast({ title: "更新失败", variant: "destructive" });
+      },
+    });
 
   const deleteQrMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -218,44 +221,48 @@ export default function AdminSettingsPage() {
     saveMutation.mutate({ key: "logo_url", value: "" });
   };
 
-  const handleQrFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const handleQrFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      toast({ title: "请选择图片文件", variant: "destructive" });
-      return;
-    }
-
-    if (file.size > 2 * 1024 * 1024) {
-      toast({ title: "图片大小不能超过2MB", variant: "destructive" });
-      return;
-    }
-
-    setUploadingQr(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/admin/upload", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      if (!res.ok) throw new Error("Upload failed");
-
-      const { url } = await res.json();
-      addQrMutation.mutate({ url });
-    } catch (error) {
-      toast({ title: "上传失败", variant: "destructive" });
-    } finally {
-      setUploadingQr(false);
-      if (qrFileInputRef.current) {
-        qrFileInputRef.current.value = "";
+      if (!file.type.startsWith("image/")) {
+        toast({ title: "请选择图片文件", variant: "destructive" });
+        return;
       }
-    }
-  };
+
+      if (file.size > 2 * 1024 * 1024) {
+        toast({ title: "图片大小不能超过2MB", variant: "destructive" });
+        return;
+      }
+
+      setUploadingQr(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch("/api/admin/upload", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+
+        if (!res.ok) throw new Error("Upload failed");
+
+        const { url } = await res.json();
+        addQrMutation.mutate({ url, type: newQrType });
+      } catch (error) {
+        toast({ title: "上传失败", variant: "destructive" });
+      } finally {
+        setUploadingQr(false);
+        if (qrFileInputRef.current) {
+          qrFileInputRef.current.value = "";
+        }
+      }
+    };
+
+    const handleUpdateQrType = (id: number, type: string) => {
+      updateQrMutation.mutate({ id, type });
+    };
 
   const handleDeleteQr = (id: number) => {
     if (confirm("确定要删除这个收款码吗？")) {
@@ -358,27 +365,36 @@ export default function AdminSettingsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center gap-4">
-                <input
-                  ref={qrFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleQrFileSelect}
-                  className="hidden"
-                  data-testid="input-qr-file"
-                />
-                <Button
-                  onClick={() => qrFileInputRef.current?.click()}
-                  disabled={uploadingQr || addQrMutation.isPending}
-                  data-testid="button-upload-qr"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  {uploadingQr ? "上传中..." : "添加收款码"}
-                </Button>
-                <p className="text-sm text-gray-500">
-                  支持 JPG、PNG 格式，建议尺寸 300x300 像素
-                </p>
-              </div>
+                            <div className="flex items-center gap-4 flex-wrap">
+                              <input
+                                ref={qrFileInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handleQrFileSelect}
+                                className="hidden"
+                                data-testid="input-qr-file"
+                              />
+                              <Select value={newQrType} onValueChange={setNewQrType}>
+                                <SelectTrigger className="w-32" data-testid="select-qr-type">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="alipay">支付宝</SelectItem>
+                                  <SelectItem value="wechat">微信</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                onClick={() => qrFileInputRef.current?.click()}
+                                disabled={uploadingQr || addQrMutation.isPending}
+                                data-testid="button-upload-qr"
+                              >
+                                <Plus className="w-4 h-4 mr-2" />
+                                {uploadingQr ? "上传中..." : "添加收款码"}
+                              </Button>
+                              <p className="text-sm text-gray-500">
+                                支持 JPG、PNG 格式，建议尺寸 300x300 像素
+                              </p>
+                            </div>
 
               {loadingQr ? (
                 <div className="text-center py-8 text-gray-500">加载中...</div>
@@ -397,36 +413,50 @@ export default function AdminSettingsPage() {
                       }`}
                       data-testid={`qr-card-${qr.id}`}
                     >
-                      <div className="aspect-square overflow-hidden rounded-md bg-white mb-2">
-                        <img
-                          src={qr.url}
-                          alt={qr.name || "收款码"}
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
-                      <div className="text-center text-sm text-gray-600 truncate mb-2">
-                        {qr.name || `收款码${qr.id}`}
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1">
-                          <Switch
-                            checked={qr.isActive}
-                            onCheckedChange={(checked) => handleToggleQrActive(qr.id, checked)}
-                            data-testid={`switch-qr-active-${qr.id}`}
-                          />
-                          <span className="text-xs text-gray-500">
-                            {qr.isActive ? "启用" : "禁用"}
-                          </span>
-                        </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleDeleteQr(qr.id)}
-                          data-testid={`button-delete-qr-${qr.id}`}
-                        >
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </Button>
-                      </div>
+                                            <div className="aspect-square overflow-hidden rounded-md bg-white mb-2">
+                                              <img
+                                                src={qr.url}
+                                                alt={qr.name || "收款码"}
+                                                className="w-full h-full object-contain"
+                                              />
+                                            </div>
+                                            <div className="text-center text-sm text-gray-600 truncate mb-1">
+                                              {qr.name || `收款码${qr.id}`}
+                                            </div>
+                                            <div className="mb-2">
+                                              <Select 
+                                                value={qr.type || "alipay"} 
+                                                onValueChange={(value) => handleUpdateQrType(qr.id, value)}
+                                              >
+                                                <SelectTrigger className="h-7 text-xs" data-testid={`select-qr-type-${qr.id}`}>
+                                                  <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  <SelectItem value="alipay">支付宝</SelectItem>
+                                                  <SelectItem value="wechat">微信</SelectItem>
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-2">
+                                              <div className="flex items-center gap-1">
+                                                <Switch
+                                                  checked={qr.isActive}
+                                                  onCheckedChange={(checked) => handleToggleQrActive(qr.id, checked)}
+                                                  data-testid={`switch-qr-active-${qr.id}`}
+                                                />
+                                                <span className="text-xs text-gray-500">
+                                                  {qr.isActive ? "启用" : "禁用"}
+                                                </span>
+                                              </div>
+                                              <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                onClick={() => handleDeleteQr(qr.id)}
+                                                data-testid={`button-delete-qr-${qr.id}`}
+                                              >
+                                                <Trash2 className="w-4 h-4 text-red-500" />
+                                              </Button>
+                                            </div>
                     </div>
                   ))}
                 </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Users, Gift, Crown, Copy, Check, Share2, TrendingUp, Star } from "lucide-react";
+import { ArrowLeft, Users, Gift, Crown, Copy, Check, Share2, TrendingUp, Star, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -299,6 +299,21 @@ export default function ReferralPage() {
               <p className="text-xs mt-1">下级购买VIP或中奖后您将获得分成</p>
             </div>
           )}
+        </div>
+
+        <div className="bg-amber-50 rounded-2xl p-5 border border-amber-200">
+          <h4 className="font-semibold text-amber-800 mb-3 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            分佣规则
+          </h4>
+          <ul className="text-xs text-amber-700 space-y-1.5">
+            <li>1. 分享邀请码给好友，好友注册后成为您的直推下级</li>
+            <li>2. 直推下级购买VIP时，您可获得对应比例的佣金</li>
+            <li>3. 直推下级抽奖中奖时，您可获得中奖金额的分成</li>
+            <li>4. 间推（下级的下级）产生收益时，您也可获得分成</li>
+            <li>5. VIP等级越高，分佣比例越高</li>
+            <li>6. 佣金达到提现门槛后可申请提现</li>
+          </ul>
         </div>
       </div>
     </div>

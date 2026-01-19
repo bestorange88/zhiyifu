@@ -1,4 +1,5 @@
-import { User, Eye, Clock } from "lucide-react";
+import { User, Eye } from "lucide-react";
+import { useLocation } from "wouter";
 
 interface Article {
   id: string;
@@ -9,10 +10,17 @@ interface Article {
 }
 
 export function ArticleCard({ article }: { article: Article }) {
+  const [, setLocation] = useLocation();
+
+  const handleClick = () => {
+    setLocation(`/article/${article.id}`);
+  };
+
   return (
     <div 
       className="card-elevated p-4 hover:shadow-md transition-all duration-200 cursor-pointer group"
       data-testid={`card-article-${article.id}`}
+      onClick={handleClick}
     >
       <h4 className="font-semibold text-gray-800 text-sm line-clamp-2 leading-relaxed group-hover:text-primary transition-colors">
         {article.title}

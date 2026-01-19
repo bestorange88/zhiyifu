@@ -19,6 +19,7 @@ import ReferralPage from "@/pages/ReferralPage";
 import InsurancePage from "@/pages/InsurancePage";
 import CheckInPage from "@/pages/CheckInPage";
 import DepositPage from "@/pages/DepositPage";
+import ArticleDetailPage from "@/pages/ArticleDetailPage";
 import NotFound from "@/pages/not-found";
 
 // Admin Pages
@@ -60,9 +61,10 @@ function UserRouter() {
         <Route path="/referral" component={ReferralPage} />
         <Route path="/chat" component={ChatPage} />
         <Route path="/service" component={ServicePage} />
-        <Route path="/deposit" component={DepositPage} />
-        <Route path="/mine" component={MinePage} />
-        <Route component={NotFound} />
+                <Route path="/deposit" component={DepositPage} />
+                <Route path="/article/:id" component={ArticleDetailPage} />
+                <Route path="/mine" component={MinePage} />
+                <Route component={NotFound} />
       </Switch>
       <BottomNav />
     </div>

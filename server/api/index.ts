@@ -809,11 +809,11 @@ export function registerApiRoutes(app: Express): void {
 
   app.post("/api/admin/payment-qr", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {
-      const { url, name } = req.body;
+      const { url, name, type } = req.body;
       if (!url) {
         return res.status(400).json({ error: "请提供二维码URL" });
       }
-      const qrCode = await adminService.addPaymentQrCode(url, name);
+      const qrCode = await adminService.addPaymentQrCode(url, name, type);
       res.json(qrCode);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -826,8 +826,8 @@ export function registerApiRoutes(app: Express): void {
       if (isNaN(id)) {
         return res.status(400).json({ error: "无效的ID参数" });
       }
-      const { name, url, isActive, sortOrder } = req.body;
-      await adminService.updatePaymentQrCode(id, { name, url, isActive, sortOrder });
+      const { name, url, isActive, sortOrder, type } = req.body;
+      await adminService.updatePaymentQrCode(id, { name, url, isActive, sortOrder, type });
       res.json({ success: true });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -851,6 +851,20 @@ export function registerApiRoutes(app: Express): void {
   app.get("/api/payment-qr/random", async (req, res) => {
     try {
       const qrCode = await adminService.getRandomPaymentQrCode();
+      res.json(qrCode);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Public API to get random QR code by type (alipay or wechat)
+  app.get("/api/payment-qr/:type", async (req, res) => {
+    try {
+      const type = req.params.type;
+      if (type !== "alipay" && type !== "wechat") {
+        return res.status(400).json({ error: "无效的支付类型" });
+      }
+      const qrCode = await adminService.getRandomPaymentQrCodeByType(type);
       res.json(qrCode);
     } catch (error: any) {
       res.status(400).json({ error: error.message });

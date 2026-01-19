@@ -352,6 +352,7 @@ export const systemSettings = pgTable("system_settings", {
 export const paymentQrCodes = pgTable("payment_qr_codes", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 100 }),
+  type: varchar("type", { length: 20 }).default("alipay").notNull(), // alipay | wechat
   url: text("url").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   sortOrder: integer("sort_order").default(0).notNull(),
