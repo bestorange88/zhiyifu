@@ -3,7 +3,7 @@ import { Home, Grid3X3, MessageCircle, Headphones, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
-  { id: 'home', label: '首页', icon: Home, path: '/' },
+  { id: 'home', label: '首页', icon: Home, path: '/home' },
   { id: 'tools', label: '工具', icon: Grid3X3, path: '/tools' },
   { id: 'chat', label: '会话', icon: MessageCircle, path: '/chat' },
   { id: 'service', label: '客服', icon: Headphones, path: '/service' },

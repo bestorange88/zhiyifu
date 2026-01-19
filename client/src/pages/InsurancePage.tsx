@@ -44,7 +44,7 @@ export default function InsurancePage() {
           <Button 
             variant="ghost" 
             size="icon"
-            onClick={() => setLocation("/")}
+            onClick={() => setLocation("/home")}
             data-testid="button-back"
           >
             <ArrowLeft className="w-5 h-5" />
