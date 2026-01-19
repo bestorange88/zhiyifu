@@ -3,6 +3,7 @@ import { Volume2, CreditCard, Stethoscope, FileText, Sparkles, ChevronRight, Zap
 import { FeatureCard } from "@/components/FeatureCard";
 import { ArticleCard } from "@/components/ArticleCard";
 import { Header } from "@/components/Header";
+import { AppDownloadBanner } from "@/components/AppDownloadBanner";
 import { tools } from "@/pages/ToolsPage";
 
 const articles = [
@@ -25,9 +26,10 @@ export default function HomePage() {
     setLocation(`/tools/${toolId}`);
   };
 
-  return (
-    <div className="page-container">
-      <Header />
+    return (
+      <div className="page-container">
+        <AppDownloadBanner />
+        <Header />
 
       <main className="px-4 space-y-5">
         <div className="mt-2 card-elevated rounded-full px-4 py-3 flex items-center gap-3" data-testid="banner-announcement">

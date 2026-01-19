@@ -11,7 +11,7 @@ const benefits = [
   { id: 'lottery', title: '转盘奖励', description: '资助贡献值', action: '去抽奖', icon: <Gift className="w-5 h-5 text-rose-500" />, gradient: 'from-rose-50 to-pink-50' },
   { id: 'agent', title: '分佣奖励', description: '申请代理', action: '去开通', icon: <Zap className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-orange-50' },
   { id: 'invite', title: '邀请好友', description: '无限福利', action: '去邀请', icon: <Share2 className="w-5 h-5 text-blue-500" />, gradient: 'from-blue-50 to-indigo-50' },
-  { id: 'vip', title: '月卡季卡', description: 'AI会员套餐', action: '立即开通', icon: <Crown className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-yellow-50' },
+  { id: 'vip', title: '会员中心', description: 'AI会员套餐', action: '立即开通', icon: <Crown className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-yellow-50' },
 ];
 
 export default function MinePage() {
@@ -309,7 +309,7 @@ export default function MinePage() {
                 <Crown className="w-5 h-5 text-white" />
               </div>
               <div>
-                <span className="text-amber-800 font-bold block">会员中心</span>
+                <span className="text-amber-800 font-bold block">VIP尊享权益</span>
                 <span className="text-[10px] text-amber-600 font-medium bg-amber-200/50 px-2 py-0.5 rounded-full">新年特惠</span>
               </div>
             </div>
