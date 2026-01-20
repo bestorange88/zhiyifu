@@ -165,11 +165,26 @@ export async function getDirectReferrals(userId: number) {
 }
 
 export async function getReferralRewards(userId: number, limit = 50) {
-  return db.select()
-    .from(referralRewards)
-    .where(eq(referralRewards.userId, userId))
-    .orderBy(desc(referralRewards.createdAt))
+  // 从commissionLogs表获取VIP升级佣金记录
+  const vipCommissions = await db.select()
+    .from(commissionLogs)
+    .where(and(
+      eq(commissionLogs.toUserId, userId),
+      eq(commissionLogs.bizType, "vip_upgrade")
+    ))
+    .orderBy(desc(commissionLogs.createdAt))
     .limit(limit);
+
+  // 转换为前端期望的格式
+  return vipCommissions.map(log => ({
+    id: log.id,
+    userId: log.toUserId,
+    fromUserId: log.fromUserId,
+    level: log.relationLevel,
+    amount: (log.amountCents / 100).toFixed(2),
+    status: log.status,
+    createdAt: log.createdAt,
+  }));
 }
 
 async function get3GenTeamCount(userId: number): Promise<number> {
@@ -335,15 +350,20 @@ export async function distributeSpinCommission(fromUserId: number, spinId: numbe
 }
 
 export async function getCommissionRecords(userId: number, limit = 50) {
+  // 旧的佣金记录（仅抽奖相关）
   const oldRecords = await db.select()
     .from(commissionRecords)
     .where(eq(commissionRecords.userId, userId))
     .orderBy(desc(commissionRecords.createdAt))
     .limit(limit);
 
+  // 新的佣金记录（仅抽奖相关，排除VIP升级佣金）
   const newLogs = await db.select()
     .from(commissionLogs)
-    .where(eq(commissionLogs.toUserId, userId))
+    .where(and(
+      eq(commissionLogs.toUserId, userId),
+      eq(commissionLogs.bizType, "lottery_reward")
+    ))
     .orderBy(desc(commissionLogs.createdAt))
     .limit(limit);
 
