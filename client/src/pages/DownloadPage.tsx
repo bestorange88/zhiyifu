@@ -157,33 +157,33 @@ export default function DownloadPage() {
                     <Smartphone className="w-6 h-6 text-green-600" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-800">Android 安装指南</h3>
+                    <h3 className="font-bold text-gray-800">Android 安装</h3>
                     <p className="text-sm text-gray-500">适用于安卓手机</p>
                   </div>
                 </div>
-                <div className="space-y-4 text-sm">
-                  <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-green-600 font-bold text-xs">1</span>
+                <a
+                  href="/downloads/yunzhiyifu-v1.0.apk"
+                  download
+                  className="block w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white py-4 text-lg font-bold rounded-xl text-center mb-4"
+                >
+                  <Download className="w-5 h-5 inline mr-2" />
+                  下载 APK 安装包
+                </a>
+                <p className="text-xs text-gray-500 text-center mb-4">版本 1.0 | 大小约 5.5MB</p>
+                <div className="border-t pt-4">
+                  <p className="text-sm text-gray-600 mb-2">或使用 PWA 方式安装：</p>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-start gap-3">
+                      <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-green-600 font-bold text-xs">1</span>
+                      </div>
+                      <p className="text-gray-700">点击浏览器右上角的菜单按钮</p>
                     </div>
-                    <div>
-                      <p className="text-gray-700">点击浏览器右上角的菜单按钮（三个点）</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-green-600 font-bold text-xs">2</span>
-                    </div>
-                    <div>
-                      <p className="text-gray-700">选择"添加到主屏幕"或"安装应用"</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-green-600 font-bold text-xs">3</span>
-                    </div>
-                    <div>
-                      <p className="text-gray-700">确认安装，即可在主屏幕找到应用</p>
+                    <div className="flex items-start gap-3">
+                      <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-green-600 font-bold text-xs">2</span>
+                      </div>
+                      <p className="text-gray-700">选择"添加到主屏幕"</p>
                     </div>
                   </div>
                 </div>
