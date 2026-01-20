@@ -5,7 +5,7 @@ import { eq, and, gt, desc } from "drizzle-orm";
 const SMSBAO_USERNAME = "18515151970";
 const SMSBAO_API_KEY = process.env.SMSBAO_API_KEY;
 const CODE_EXPIRE_MINUTES = 5;
-const RESEND_COOLDOWN_SECONDS = 60;
+const RESEND_COOLDOWN_SECONDS = 50;
 
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();

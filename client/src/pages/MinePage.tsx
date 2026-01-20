@@ -65,8 +65,10 @@ export default function MinePage() {
 
   const identitySubmitMutation = useMutation({
     mutationFn: async (formData: FormData) => {
+      const token = localStorage.getItem("token");
       const response = await fetch("/api/identity/submit", {
         method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
         credentials: "include",
       });
@@ -375,6 +377,9 @@ export default function MinePage() {
                   <span className="badge-sm bg-amber-400/90 text-amber-900">VIP{user.vipLevel}</span>
                 ) : (
                   <span className="badge-sm bg-white/20 text-white/90">普通用户</span>
+                )}
+                {identityStatus?.status === "approved" && (
+                  <span className="badge-sm bg-green-500/90 text-white">已实名</span>
                 )}
                 {referralSummary?.currentRank > 0 && (
                   <span className="badge-sm bg-white/20 text-white/90">{referralSummary.currentRankName}</span>
