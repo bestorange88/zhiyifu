@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { db } from "../db";
-import { users, wallets, spinBalance, userRanks } from "@shared/schema";
+import { users, wallets, spinBalance, userRanks, chatGroups, groupMembers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { updateUserRankStats } from "./referral";
 import { verifyCode } from "./sms";
@@ -99,6 +99,8 @@ export async function registerUser(phone: string, password: string, inviterCode:
 
   await recordUserDevice(newUser.id, deviceFingerprint, ip);
 
+  await joinSystemGroups(newUser.id);
+
   const token = jwt.sign({ userId: newUser.id }, getJwtSecret(), { expiresIn: "30d" });
 
   return {
@@ -166,6 +168,23 @@ export function verifyToken(token: string): { userId: number } | null {
 
 async function updateInviterStats(inviterId: number) {
   await updateUserRankStats(inviterId);
+}
+
+async function joinSystemGroups(userId: number) {
+  const systemGroups = await db.select().from(chatGroups).where(eq(chatGroups.isSystem, true));
+  for (const group of systemGroups) {
+    const existingMember = await db.select().from(groupMembers)
+      .where(eq(groupMembers.groupId, group.id))
+      .where(eq(groupMembers.userId, userId))
+      .limit(1);
+    if (existingMember.length === 0) {
+      await db.insert(groupMembers).values({
+        groupId: group.id,
+        userId: userId,
+        role: "member",
+      });
+    }
+  }
 }
 
 export async function registerWithSms(phone: string, code: string, password: string, inviterCode?: string, deviceFingerprint?: string, ip?: string) {
@@ -243,6 +262,8 @@ export async function registerWithSms(phone: string, code: string, password: str
   }
 
   await recordUserDevice(newUser.id, deviceFingerprint, ip);
+
+  await joinSystemGroups(newUser.id);
 
   const token = jwt.sign({ userId: newUser.id }, getJwtSecret(), { expiresIn: "30d" });
 

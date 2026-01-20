@@ -318,6 +318,7 @@ export const chatGroups = pgTable("chat_groups", {
   avatarUrl: text("avatar_url"),
   ownerId: integer("owner_id").references(() => users.id),
   isActive: boolean("is_active").default(true).notNull(),
+  isSystem: boolean("is_system").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

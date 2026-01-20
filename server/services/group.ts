@@ -21,6 +21,13 @@ export async function updateGroup(groupId: number, data: { name?: string; descri
 }
 
 export async function deleteGroup(groupId: number) {
+  const [group] = await db.select().from(chatGroups).where(eq(chatGroups.id, groupId));
+  if (!group) {
+    throw new Error("群组不存在");
+  }
+  if (group.isSystem) {
+    throw new Error("系统默认群组不可删除");
+  }
   await db.delete(groupMembers).where(eq(groupMembers.groupId, groupId));
   await db.delete(groupMessages).where(eq(groupMessages.groupId, groupId));
   await db.delete(chatGroups).where(eq(chatGroups.id, groupId));
