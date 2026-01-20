@@ -21,6 +21,7 @@ import CheckInPage from "@/pages/CheckInPage";
 import DepositPage from "@/pages/DepositPage";
 import ArticleDetailPage from "@/pages/ArticleDetailPage";
 import DownloadPage from "@/pages/DownloadPage";
+import InvitePage from "@/pages/InvitePage";
 import NotFound from "@/pages/not-found";
 
 // Admin Pages
@@ -65,6 +66,7 @@ function UserRouter() {
         <Route path="/deposit" component={DepositPage} />
         <Route path="/article/:id" component={ArticleDetailPage} />
         <Route path="/download" component={DownloadPage} />
+        <Route path="/invite" component={InvitePage} />
         <Route path="/mine" component={MinePage} />
         <Route component={NotFound} />
       </Switch>

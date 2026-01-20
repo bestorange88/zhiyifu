@@ -55,6 +55,23 @@ export default function MinePage() {
     }
   }, [countdown]);
 
+  useEffect(() => {
+    const pendingInviteCode = localStorage.getItem("pending_invite_code");
+    const urlParams = new URLSearchParams(window.location.search);
+    const shouldRegister = urlParams.get("register") === "true";
+    
+    if (pendingInviteCode || shouldRegister) {
+      if (pendingInviteCode) {
+        setInviteCodeInput(pendingInviteCode);
+        localStorage.removeItem("pending_invite_code");
+      }
+      if (!user) {
+        setIsRegisterMode(true);
+        setShowLoginDialog(true);
+      }
+    }
+  }, [user]);
+
   const handleSendCode = async () => {
     if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
       toast({ title: "请输入正确的手机号", variant: "destructive" });
