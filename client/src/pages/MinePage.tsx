@@ -65,8 +65,10 @@ export default function MinePage() {
 
   const identitySubmitMutation = useMutation({
     mutationFn: async (formData: FormData) => {
+      const token = localStorage.getItem("token");
       const response = await fetch("/api/identity/submit", {
         method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
         credentials: "include",
       });
