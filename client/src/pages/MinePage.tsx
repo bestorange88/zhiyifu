@@ -378,6 +378,9 @@ export default function MinePage() {
                 ) : (
                   <span className="badge-sm bg-white/20 text-white/90">普通用户</span>
                 )}
+                {identityStatus?.status === "approved" && (
+                  <span className="badge-sm bg-green-500/90 text-white">已实名</span>
+                )}
                 {referralSummary?.currentRank > 0 && (
                   <span className="badge-sm bg-white/20 text-white/90">{referralSummary.currentRankName}</span>
                 )}
