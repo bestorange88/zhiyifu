@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { verificationCodes, users } from "@shared/schema";
-import { eq, and, gt, desc } from "drizzle-orm";
+import { eq, and, gt, desc, sql } from "drizzle-orm";
 
 const SMSBAO_USERNAME = "18515151970";
 const SMSBAO_API_KEY = process.env.SMSBAO_API_KEY;
@@ -12,22 +12,32 @@ function generateCode(): string {
 }
 
 export async function sendVerificationCode(phone: string): Promise<{ success: boolean; message: string }> {
+  // Use SQL NOW() to ensure consistent timezone with database
   const recentCode = await db.select()
     .from(verificationCodes)
     .where(and(
       eq(verificationCodes.phone, phone),
-      gt(verificationCodes.createdAt, new Date(Date.now() - RESEND_COOLDOWN_SECONDS * 1000))
+      gt(verificationCodes.createdAt, sql`NOW() - INTERVAL '${sql.raw(String(RESEND_COOLDOWN_SECONDS))} seconds'`)
     ))
     .orderBy(desc(verificationCodes.createdAt))
     .limit(1);
 
   if (recentCode.length > 0) {
-    const secondsLeft = Math.ceil((new Date(recentCode[0].createdAt).getTime() + RESEND_COOLDOWN_SECONDS * 1000 - Date.now()) / 1000);
-    return { success: false, message: `请${secondsLeft}秒后再试` };
+    // Calculate seconds left based on database time
+    const createdAtTime = new Date(recentCode[0].createdAt).getTime();
+    const nowTime = Date.now();
+    // Adjust for timezone offset (server is UTC+8)
+    const timezoneOffset = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+    const adjustedCreatedAt = createdAtTime - timezoneOffset;
+    const secondsLeft = Math.ceil((adjustedCreatedAt + RESEND_COOLDOWN_SECONDS * 1000 - nowTime) / 1000);
+    if (secondsLeft > 0) {
+      return { success: false, message: `请${secondsLeft}秒后再试` };
+    }
   }
 
   const code = generateCode();
-  const expiresAt = new Date(Date.now() + CODE_EXPIRE_MINUTES * 60 * 1000);
+  // Use SQL NOW() + INTERVAL for consistent timezone
+  const expiresAt = sql`NOW() + INTERVAL '${sql.raw(String(CODE_EXPIRE_MINUTES))} minutes'`;
 
   await db.insert(verificationCodes).values({
     phone,
@@ -55,13 +65,14 @@ export async function sendVerificationCode(phone: string): Promise<{ success: bo
 }
 
 export async function verifyCode(phone: string, code: string): Promise<{ valid: boolean; message: string }> {
+  // Use SQL NOW() to ensure consistent timezone with database
   const [record] = await db.select()
     .from(verificationCodes)
     .where(and(
       eq(verificationCodes.phone, phone),
       eq(verificationCodes.code, code),
       eq(verificationCodes.used, false),
-      gt(verificationCodes.expiresAt, new Date())
+      gt(verificationCodes.expiresAt, sql`NOW()`)
     ))
     .orderBy(desc(verificationCodes.createdAt))
     .limit(1);
