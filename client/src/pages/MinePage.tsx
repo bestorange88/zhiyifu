@@ -46,7 +46,7 @@ export default function MinePage() {
   const checkinMutation = useCheckin();
 
   const inviteCode = user?.inviteCode || "ADMIN888";
-  const inviteLink = `https://365zhmz.com/invite?code=${inviteCode}`;
+  const inviteLink = `https://zhiyifu.net/invite?code=${inviteCode}`;
 
   useEffect(() => {
     if (countdown > 0) {

@@ -73,7 +73,7 @@ export default function ReferralPage() {
   });
 
   const inviteCode = user?.inviteCode || "XXXXXX";
-  const inviteLink = `https://365zhmz.com/invite?code=${inviteCode}`;
+  const inviteLink = `https://zhiyifu.net/invite?code=${inviteCode}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(inviteLink);
