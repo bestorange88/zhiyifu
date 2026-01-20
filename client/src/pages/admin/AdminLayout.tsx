@@ -1,6 +1,6 @@
 import { useState, ReactNode, useEffect } from "react";
 import { useLocation } from "wouter";
-import { LayoutDashboard, Users, CreditCard, UserCheck, LogOut, Menu, X, ShoppingBag, BarChart3, MessageSquare, Wallet, Gift, Share2, Coins, Crown, Settings, FileText, Headphones } from "lucide-react";
+import { LayoutDashboard, Users, CreditCard, UserCheck, LogOut, Menu, X, ShoppingBag, BarChart3, MessageSquare, Wallet, Gift, Share2, Coins, Crown, Settings, FileText, Headphones, IdCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAdminAuth } from "@/lib/adminAuth";
 
@@ -36,8 +36,9 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
     { id: "content", label: "内容管理", icon: FileText, path: "/admin/content" },
     { id: "service", label: "客服中心", icon: Headphones, path: "/admin/service" },
     { id: "groups", label: "群组管理", icon: MessageSquare, path: "/admin/groups" },
-    { id: "agents", label: "代理审核", icon: UserCheck, path: "/admin/agents" },
-    { id: "settings", label: "系统设置", icon: Settings, path: "/admin/settings" },
+        { id: "agents", label: "代理审核", icon: UserCheck, path: "/admin/agents" },
+        { id: "identity", label: "实名认证", icon: IdCard, path: "/admin/identity" },
+        { id: "settings", label: "系统设置", icon: Settings, path: "/admin/settings" },
   ];
 
   const handleLogout = () => {

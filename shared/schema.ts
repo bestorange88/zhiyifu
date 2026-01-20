@@ -484,6 +484,7 @@ export const insertSignInRewardRuleSchema = createInsertSchema(signInRewardRules
 export const insertLotteryTimesLedgerSchema = createInsertSchema(lotteryTimesLedger).omit({ id: true, createdAt: true });
 export const insertLotteryDrawSchema = createInsertSchema(lotteryDraws).omit({ id: true, createdAt: true });
 export const insertCommissionLogSchema = createInsertSchema(commissionLogs).omit({ id: true, createdAt: true });
+export const insertIdentityVerificationSchema = createInsertSchema(identityVerifications).omit({ id: true, createdAt: true });
 
 // ============ TYPES ============
 export type User = typeof users.$inferSelect;
@@ -545,6 +546,8 @@ export type LotteryDraw = typeof lotteryDraws.$inferSelect;
 export type InsertLotteryDraw = z.infer<typeof insertLotteryDrawSchema>;
 export type CommissionLog = typeof commissionLogs.$inferSelect;
 export type InsertCommissionLog = z.infer<typeof insertCommissionLogSchema>;
+export type IdentityVerification = typeof identityVerifications.$inferSelect;
+export type InsertIdentityVerification = z.infer<typeof insertIdentityVerificationSchema>;
 
 // ============ API SCHEMAS ============
 export const registerSchema = z.object({
@@ -639,6 +642,33 @@ export const adminBalanceAdjustSchema = z.object({
 
 export const adminDepositReviewSchema = z.object({
   approved: z.boolean(),
+});
+
+export const identityVerificationSubmitSchema = z.object({
+  realName: z.string().min(2, "请输入真实姓名"),
+  idNumber: z.string().regex(/^\d{17}[\dXx]$/, "请输入有效的身份证号码"),
+  idFrontImage: z.string().min(1, "请上传身份证正面照片"),
+  idBackImage: z.string().min(1, "请上传身份证背面照片"),
+});
+
+export const adminIdentityReviewSchema = z.object({
+  approved: z.boolean(),
+  reviewNote: z.string().optional(),
+});
+
+// ============ IDENTITY VERIFICATION ============
+export const identityVerifications = pgTable("identity_verifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  realName: varchar("real_name", { length: 50 }).notNull(),
+  idNumber: varchar("id_number", { length: 20 }).notNull(),
+  idFrontImage: text("id_front_image").notNull(),
+  idBackImage: text("id_back_image").notNull(),
+  status: varchar("status", { length: 20 }).default("pending").notNull(),  // pending|approved|rejected
+  reviewNote: text("review_note"),
+  reviewedBy: integer("reviewed_by").references(() => admins.id),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 // ============ SMS VERIFICATION ============

@@ -41,7 +41,8 @@ import * as adminService from "../services/admin";
 import * as agentService from "../services/agent";
 import * as groupService from "../services/group";
 import * as smsService from "../services/sms";
-import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema, adminRankUpdateSchema, requestCodeSchema, registerWithSmsSchema } from "@shared/schema";
+import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema, adminRankUpdateSchema, requestCodeSchema, registerWithSmsSchema, identityVerificationSubmitSchema, adminIdentityReviewSchema } from "@shared/schema";
+import * as identityService from "../services/identity";
 
 export function registerApiRoutes(app: Express): void {
   // ============ AUTH ============
@@ -422,6 +423,49 @@ export function registerApiRoutes(app: Express): void {
     try {
       const { orderId } = req.body;
       const result = await referralService.confirmRankPurchase(req.userId!, orderId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ IDENTITY VERIFICATION ============
+  app.get("/api/identity/status", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const status = await identityService.getIdentityVerificationStatus(req.userId!);
+      res.json(status);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/identity/submit", authMiddleware, upload.fields([
+    { name: "idFrontImage", maxCount: 1 },
+    { name: "idBackImage", maxCount: 1 }
+  ]), async (req: AuthRequest, res) => {
+    try {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      
+      if (!files.idFrontImage || !files.idBackImage) {
+        return res.status(400).json({ error: "请上传身份证正反面照片" });
+      }
+
+      const idFrontImage = `/uploads/${files.idFrontImage[0].filename}`;
+      const idBackImage = `/uploads/${files.idBackImage[0].filename}`;
+      
+      const { realName, idNumber } = identityVerificationSubmitSchema.parse({
+        ...req.body,
+        idFrontImage,
+        idBackImage,
+      });
+
+      const result = await identityService.submitIdentityVerification(
+        req.userId!,
+        realName,
+        idNumber,
+        idFrontImage,
+        idBackImage
+      );
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -889,6 +933,32 @@ export function registerApiRoutes(app: Express): void {
       }
       const updates = adminRankUpdateSchema.parse(req.body);
       const result = await referralService.updateRankRule(rankNum, updates);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN IDENTITY VERIFICATION ============
+  app.get("/api/admin/identity-verifications", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const verifications = await identityService.getAllIdentityVerifications();
+      res.json(verifications);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/identity-verifications/:id/review", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const verificationId = parseInt(req.params.id);
+      const { approved, reviewNote } = adminIdentityReviewSchema.parse(req.body);
+      const result = await identityService.reviewIdentityVerification(
+        verificationId,
+        req.adminId!,
+        approved,
+        reviewNote
+      );
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
