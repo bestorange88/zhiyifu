@@ -484,7 +484,6 @@ export const insertSignInRewardRuleSchema = createInsertSchema(signInRewardRules
 export const insertLotteryTimesLedgerSchema = createInsertSchema(lotteryTimesLedger).omit({ id: true, createdAt: true });
 export const insertLotteryDrawSchema = createInsertSchema(lotteryDraws).omit({ id: true, createdAt: true });
 export const insertCommissionLogSchema = createInsertSchema(commissionLogs).omit({ id: true, createdAt: true });
-export const insertIdentityVerificationSchema = createInsertSchema(identityVerifications).omit({ id: true, createdAt: true });
 
 // ============ TYPES ============
 export type User = typeof users.$inferSelect;
@@ -546,9 +545,6 @@ export type LotteryDraw = typeof lotteryDraws.$inferSelect;
 export type InsertLotteryDraw = z.infer<typeof insertLotteryDrawSchema>;
 export type CommissionLog = typeof commissionLogs.$inferSelect;
 export type InsertCommissionLog = z.infer<typeof insertCommissionLogSchema>;
-export type IdentityVerification = typeof identityVerifications.$inferSelect;
-export type InsertIdentityVerification = z.infer<typeof insertIdentityVerificationSchema>;
-
 // ============ API SCHEMAS ============
 export const registerSchema = z.object({
   phone: z.string().min(11).max(11),
@@ -670,6 +666,11 @@ export const identityVerifications = pgTable("identity_verifications", {
   reviewedAt: timestamp("reviewed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const insertIdentityVerificationSchema = createInsertSchema(identityVerifications).omit({ id: true, createdAt: true });
+
+export type IdentityVerification = typeof identityVerifications.$inferSelect;
+export type InsertIdentityVerification = z.infer<typeof insertIdentityVerificationSchema>;
 
 // ============ SMS VERIFICATION ============
 export const verificationCodes = pgTable("verification_codes", {
