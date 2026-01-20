@@ -1,11 +1,13 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { db } from "../db";
-import { users, wallets, spinBalance, userRanks, chatGroups, groupMembers } from "@shared/schema";
+import { users, wallets, spinBalance, userRanks, chatGroups, groupMembers, ledger } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { updateUserRankStats } from "./referral";
 import { verifyCode } from "./sms";
 import { checkRegisterRisk, recordUserDevice, checkCycleReferrals } from "./riskControl";
+
+const REGISTER_BONUS_POINTS = 50;
 
 function getJwtSecret(): string {
   const secret = process.env.SESSION_SECRET;
@@ -68,7 +70,15 @@ export async function registerUser(phone: string, password: string, inviterCode:
     userId: newUser.id,
     balanceCashAvailable: "0",
     balanceCashFrozen: "0",
-    balancePoints: 0,
+    balancePoints: REGISTER_BONUS_POINTS,
+  });
+
+  await db.insert(ledger).values({
+    userId: newUser.id,
+    type: "register_bonus",
+    currency: "points",
+    amount: String(REGISTER_BONUS_POINTS),
+    description: "注册赠送积分",
   });
 
   await db.insert(spinBalance).values({
@@ -232,7 +242,15 @@ export async function registerWithSms(phone: string, code: string, password: str
     userId: newUser.id,
     balanceCashAvailable: "0",
     balanceCashFrozen: "0",
-    balancePoints: 0,
+    balancePoints: REGISTER_BONUS_POINTS,
+  });
+
+  await db.insert(ledger).values({
+    userId: newUser.id,
+    type: "register_bonus",
+    currency: "points",
+    amount: String(REGISTER_BONUS_POINTS),
+    description: "注册赠送积分",
   });
 
   await db.insert(spinBalance).values({
