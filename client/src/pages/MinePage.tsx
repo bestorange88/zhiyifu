@@ -59,7 +59,10 @@ export default function MinePage() {
 
   const { data: identityStatus, refetch: refetchIdentityStatus } = useQuery({
     queryKey: ["/api/identity/status"],
-    queryFn: () => apiRequest("GET", "/api/identity/status"),
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/identity/status");
+      return res.json();
+    },
     enabled: !!user,
   });
 
