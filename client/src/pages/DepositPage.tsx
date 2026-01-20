@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, QrCode, Upload, CheckCircle, Copy, Check, AlertCircle } from "lucide-react";
+import { ArrowLeft, QrCode, Upload, Copy, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,8 +12,11 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 interface PaymentQrResponse {
   id?: number;
   name?: string | null;
+  type?: string;
   url: string | null;
 }
+
+type PaymentMethod = "alipay" | "wechat";
 
 export default function DepositPage() {
   const [, setLocation] = useLocation();
@@ -23,26 +26,39 @@ export default function DepositPage() {
   const [proofImage, setProofImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: paymentQr, isLoading: qrLoading } = useQuery<PaymentQrResponse>({
-    queryKey: ["/api/payment-qr/random"],
+    queryKey: ["/api/payment-qr", paymentMethod],
+    queryFn: async () => {
+      if (!paymentMethod) return { url: null };
+      const res = await fetch(`/api/payment-qr/${paymentMethod}`);
+      if (!res.ok) return { url: null };
+      return res.json();
+    },
+    enabled: !!paymentMethod,
     staleTime: 0,
     refetchOnMount: "always",
   });
+
+  const handleSelectPaymentMethod = (method: PaymentMethod) => {
+    setPaymentMethod(method);
+  };
 
   const submitMutation = useMutation({
     mutationFn: async (data: { amount: string; proofImage: string }) => {
       const res = await apiRequest("POST", "/api/deposit", data);
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/wallet"] });
-      toast({ title: "提交成功", description: "充值申请已提交，请等待审核" });
-      setAmount("");
-      setProofImage(null);
-      setLocation("/mine");
-    },
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ["/api/wallet"] });
+          toast({ title: "提交成功", description: "充值申请已提交，请等待审核" });
+          setAmount("");
+          setProofImage(null);
+          setPaymentMethod(null);
+          setLocation("/mine");
+        },
     onError: (error: any) => {
       toast({ title: "提交失败", description: error.message, variant: "destructive" });
     },
@@ -137,45 +153,97 @@ export default function DepositPage() {
           <h1 className="text-xl font-bold text-white">账户充值</h1>
         </div>
         
-        <p className="text-white/80 text-sm">
-          扫描下方二维码完成支付，上传凭证等待审核
-        </p>
-      </div>
+              <p className="text-white/80 text-sm">
+                选择支付方式，扫描二维码完成支付，上传凭证等待审核
+              </p>
+            </div>
 
-      <div className="px-4 -mt-2 relative z-20 space-y-4">
-        <div className="bg-white rounded-2xl p-5 shadow-lg">
-          <div className="flex items-center gap-2 mb-4">
-            <QrCode className="w-5 h-5 text-teal-500" />
-            <h3 className="font-bold text-gray-800">支付宝收款码</h3>
-          </div>
+            <div className="px-4 -mt-2 relative z-20 space-y-4">
+              <div className="bg-white rounded-2xl p-5 shadow-lg">
+                <div className="flex items-center gap-2 mb-4">
+                  <QrCode className="w-5 h-5 text-teal-500" />
+                  <h3 className="font-bold text-gray-800">选择支付方式</h3>
+                </div>
           
-          <div className="flex justify-center mb-4">
-            {qrLoading ? (
-              <div className="w-64 h-64 bg-gray-100 rounded-xl flex items-center justify-center animate-pulse">
-                <QrCode className="w-12 h-12 text-gray-300" />
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <button
+                    onClick={() => handleSelectPaymentMethod("alipay")}
+                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                      paymentMethod === "alipay" 
+                        ? "border-blue-500 bg-blue-50" 
+                        : "border-gray-200 hover:border-blue-300"
+                    }`}
+                    data-testid="button-select-alipay"
+                  >
+                    <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xl font-bold">支</span>
+                    </div>
+                    <span className={`font-medium ${paymentMethod === "alipay" ? "text-blue-600" : "text-gray-700"}`}>
+                      支付宝
+                    </span>
+                  </button>
+            
+                  <button
+                    onClick={() => handleSelectPaymentMethod("wechat")}
+                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${
+                      paymentMethod === "wechat" 
+                        ? "border-green-500 bg-green-50" 
+                        : "border-gray-200 hover:border-green-300"
+                    }`}
+                    data-testid="button-select-wechat"
+                  >
+                    <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-xl font-bold">微</span>
+                    </div>
+                    <span className={`font-medium ${paymentMethod === "wechat" ? "text-green-600" : "text-gray-700"}`}>
+                      微信支付
+                    </span>
+                  </button>
+                </div>
+
+                {paymentMethod && (
+                  <>
+                    <div className="border-t pt-4 mt-4">
+                      <div className="text-center mb-3">
+                        <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                          paymentMethod === "alipay" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                        }`}>
+                          {paymentMethod === "alipay" ? "支付宝收款码" : "微信收款码"}
+                        </span>
+                      </div>
+                
+                      <div className="flex justify-center mb-4">
+                        {qrLoading ? (
+                          <div className="w-64 h-64 bg-gray-100 rounded-xl flex items-center justify-center animate-pulse">
+                            <QrCode className="w-12 h-12 text-gray-300" />
+                          </div>
+                        ) : paymentQr?.url ? (
+                          <div className={`p-3 bg-white border-2 rounded-xl shadow-md ${
+                            paymentMethod === "alipay" ? "border-blue-200" : "border-green-200"
+                          }`}>
+                            <img 
+                              src={paymentQr.url} 
+                              alt={paymentMethod === "alipay" ? "支付宝收款码" : "微信收款码"}
+                              className="w-60 h-60 object-contain"
+                              data-testid="img-payment-qr"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-64 h-64 bg-gray-100 rounded-xl flex flex-col items-center justify-center text-gray-400">
+                            <AlertCircle className="w-12 h-12 mb-2" />
+                            <span className="text-sm">收款码未设置</span>
+                            <span className="text-xs mt-1">请联系客服</span>
+                          </div>
+                        )}
+                      </div>
+                
+                      <div className="text-center text-sm text-gray-500">
+                        <p>请使用{paymentMethod === "alipay" ? "支付宝" : "微信"}扫描上方二维码进行付款</p>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
-            ) : paymentQr?.url ? (
-              <div className="p-3 bg-white border-2 border-teal-200 rounded-xl shadow-md">
-                <img 
-                  src={paymentQr.url} 
-                  alt="支付宝收款码" 
-                  className="w-60 h-60 object-contain"
-                  data-testid="img-payment-qr"
-                />
-              </div>
-            ) : (
-              <div className="w-64 h-64 bg-gray-100 rounded-xl flex flex-col items-center justify-center text-gray-400">
-                <AlertCircle className="w-12 h-12 mb-2" />
-                <span className="text-sm">收款码未设置</span>
-                <span className="text-xs mt-1">请联系客服</span>
-              </div>
-            )}
-          </div>
-          
-          <div className="text-center text-sm text-gray-500 mb-4">
-            <p>请使用支付宝扫描上方二维码进行付款</p>
-          </div>
-        </div>
 
         <div className="bg-white rounded-2xl p-5 shadow-lg">
           <div className="space-y-4">
@@ -262,27 +330,28 @@ export default function DepositPage() {
           </div>
         </div>
 
-        <Button
-          onClick={handleSubmit}
-          disabled={submitMutation.isPending || !amount || !proofImage}
-          className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700"
-          data-testid="button-submit-deposit"
-        >
-          {submitMutation.isPending ? "提交中..." : "提交充值申请"}
-        </Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={submitMutation.isPending || !amount || !proofImage || !paymentMethod}
+                  className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700"
+                  data-testid="button-submit-deposit"
+                >
+                  {submitMutation.isPending ? "提交中..." : "提交充值申请"}
+                </Button>
 
-        <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
-          <h4 className="font-semibold text-amber-800 mb-2 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            温馨提示
-          </h4>
-          <ul className="text-xs text-amber-700 space-y-1">
-            <li>1. 请确保转账金额与填写金额一致</li>
-            <li>2. 转账完成后请上传支付成功截图</li>
-            <li>3. 充值审核通常在1-30分钟内完成</li>
-            <li>4. 如有问题请联系在线客服</li>
-          </ul>
-        </div>
+                <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+                  <h4 className="font-semibold text-amber-800 mb-2 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    充值规则
+                  </h4>
+                  <ul className="text-xs text-amber-700 space-y-1">
+                    <li>1. 请先选择支付方式（支付宝或微信）</li>
+                    <li>2. 请确保转账金额与填写金额一致</li>
+                    <li>3. 转账完成后请上传支付成功截图</li>
+                    <li>4. 充值审核通常在1-30分钟内完成</li>
+                    <li>5. 如有问题请联系在线客服</li>
+                  </ul>
+                </div>
       </div>
     </div>
   );

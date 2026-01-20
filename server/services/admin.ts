@@ -435,13 +435,20 @@ export async function getActivePaymentQrCodes() {
   return qrCodes;
 }
 
+export async function getActivePaymentQrCodesByType(type: string) {
+  const qrCodes = await db.select().from(paymentQrCodes)
+    .where(and(eq(paymentQrCodes.isActive, true), eq(paymentQrCodes.type, type)))
+    .orderBy(paymentQrCodes.sortOrder);
+  return qrCodes;
+}
+
 export async function getRandomPaymentQrCode() {
   const activeQrCodes = await getActivePaymentQrCodes();
   if (activeQrCodes.length === 0) {
     // Fall back to system setting for backward compatibility
     const setting = await getSystemSettingByKey("payment_qr_url");
     if (setting?.value) {
-      return { url: setting.value, name: "收款码" };
+      return { url: setting.value, name: "收款码", type: "alipay" };
     }
     return null;
   }
@@ -449,7 +456,16 @@ export async function getRandomPaymentQrCode() {
   return activeQrCodes[randomIndex];
 }
 
-export async function addPaymentQrCode(url: string, name?: string) {
+export async function getRandomPaymentQrCodeByType(type: string) {
+  const activeQrCodes = await getActivePaymentQrCodesByType(type);
+  if (activeQrCodes.length === 0) {
+    return null;
+  }
+  const randomIndex = Math.floor(Math.random() * activeQrCodes.length);
+  return activeQrCodes[randomIndex];
+}
+
+export async function addPaymentQrCode(url: string, name?: string, type?: string) {
   const [maxSort] = await db.select({ max: paymentQrCodes.sortOrder })
     .from(paymentQrCodes)
     .orderBy(desc(paymentQrCodes.sortOrder))
@@ -459,13 +475,14 @@ export async function addPaymentQrCode(url: string, name?: string) {
   const [qrCode] = await db.insert(paymentQrCodes).values({
     url,
     name: name || `收款码${nextSort}`,
+    type: type || "alipay",
     sortOrder: nextSort,
     isActive: true,
   }).returning();
   return qrCode;
 }
 
-export async function updatePaymentQrCode(id: number, data: { name?: string; url?: string; isActive?: boolean; sortOrder?: number }) {
+export async function updatePaymentQrCode(id: number, data: { name?: string; url?: string; isActive?: boolean; sortOrder?: number; type?: string }) {
   await db.update(paymentQrCodes)
     .set(data)
     .where(eq(paymentQrCodes.id, id));

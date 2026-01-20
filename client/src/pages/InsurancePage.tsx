@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { ArrowLeft, Shield, Heart, Clock, Users, CheckCircle, Phone, MessageCircle } from "lucide-react";
+import { ArrowLeft, Shield, Heart, Clock, Users, CheckCircle, Phone, MessageCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -149,7 +149,7 @@ export default function InsurancePage() {
           </div>
         </Card>
 
-        <div className="flex gap-3">
+        <div className="flex gap-3 mb-6">
           <Button 
             variant="outline" 
             className="flex-1"
@@ -167,6 +167,20 @@ export default function InsurancePage() {
             <Phone className="w-4 h-4 mr-2" />
             联系客服
           </Button>
+        </div>
+
+        <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+          <h4 className="font-semibold text-amber-800 mb-3 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            投保须知
+          </h4>
+          <ul className="text-xs text-amber-700 space-y-1.5">
+            <li>1. 投保前请仔细阅读保险条款和免责声明</li>
+            <li>2. 如实告知健康状况，避免影响理赔</li>
+            <li>3. 保险生效后有等待期，具体以条款为准</li>
+            <li>4. 理赔时需提供完整的就医资料和票据</li>
+            <li>5. 如有疑问请联系客服或AI咨询</li>
+          </ul>
         </div>
       </div>
     </div>

@@ -1,17 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles, Moon, Sun, Trash2, Info, Shield, MessageCircle, Phone } from "lucide-react";
+import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles, Moon, Sun, Trash2, Info, Shield, MessageCircle, Phone, CreditCard, Upload, Camera } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useWallet, useCheckinStatus, useCheckin, useSpinBalance, useReferralSummary } from "@/hooks/use-api";
 import LotteryWheel from "@/components/LotteryWheel";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 const benefits = [
   { id: 'lottery', title: '转盘奖励', description: '资助贡献值', action: '去抽奖', icon: <Gift className="w-5 h-5 text-rose-500" />, gradient: 'from-rose-50 to-pink-50' },
   { id: 'agent', title: '分佣奖励', description: '申请代理', action: '去开通', icon: <Zap className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-orange-50' },
   { id: 'invite', title: '邀请好友', description: '无限福利', action: '去邀请', icon: <Share2 className="w-5 h-5 text-blue-500" />, gradient: 'from-blue-50 to-indigo-50' },
-  { id: 'vip', title: '月卡季卡', description: 'AI会员套餐', action: '立即开通', icon: <Crown className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-yellow-50' },
+  { id: 'vip', title: '会员中心', description: 'AI会员套餐', action: '立即开通', icon: <Crown className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-yellow-50' },
 ];
 
 export default function MinePage() {
@@ -22,7 +24,17 @@ export default function MinePage() {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [showLotteryDialog, setShowLotteryDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [showIdentityDialog, setShowIdentityDialog] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [identityRealName, setIdentityRealName] = useState("");
+  const [identityIdNumber, setIdentityIdNumber] = useState("");
+  const [idFrontImage, setIdFrontImage] = useState<File | null>(null);
+  const [idBackImage, setIdBackImage] = useState<File | null>(null);
+  const [idFrontPreview, setIdFrontPreview] = useState<string>("");
+  const [idBackPreview, setIdBackPreview] = useState<string>("");
+  const idFrontInputRef = useRef<HTMLInputElement>(null);
+  const idBackInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       return document.documentElement.classList.contains('dark');
@@ -45,8 +57,86 @@ export default function MinePage() {
   const { data: referralSummary } = useReferralSummary();
   const checkinMutation = useCheckin();
 
+  const { data: identityStatus, refetch: refetchIdentityStatus } = useQuery({
+    queryKey: ["/api/identity/status"],
+    queryFn: () => apiRequest("GET", "/api/identity/status"),
+    enabled: !!user,
+  });
+
+  const identitySubmitMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      const response = await fetch("/api/identity/submit", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "提交失败");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "提交成功", description: "实名认证申请已提交，请等待审核" });
+      setShowIdentityDialog(false);
+      setIdentityRealName("");
+      setIdentityIdNumber("");
+      setIdFrontImage(null);
+      setIdBackImage(null);
+      setIdFrontPreview("");
+      setIdBackPreview("");
+      refetchIdentityStatus();
+    },
+    onError: (error: any) => {
+      toast({ title: "提交失败", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleIdFrontChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIdFrontImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setIdFrontPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleIdBackChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIdBackImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setIdBackPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleIdentitySubmit = async () => {
+    if (!identityRealName || identityRealName.length < 2) {
+      toast({ title: "请输入真实姓名", variant: "destructive" });
+      return;
+    }
+    if (!identityIdNumber || !/^\d{17}[\dXx]$/.test(identityIdNumber)) {
+      toast({ title: "请输入有效的身份证号码", variant: "destructive" });
+      return;
+    }
+    if (!idFrontImage || !idBackImage) {
+      toast({ title: "请上传身份证正反面照片", variant: "destructive" });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("realName", identityRealName);
+    formData.append("idNumber", identityIdNumber);
+    formData.append("idFrontImage", idFrontImage);
+    formData.append("idBackImage", idBackImage);
+
+    identitySubmitMutation.mutate(formData);
+  };
+
   const inviteCode = user?.inviteCode || "ADMIN888";
-  const inviteLink = `https://365zhmz.com/invite?code=${inviteCode}`;
+  const inviteLink = `https://zhiyifu.net/invite?code=${inviteCode}`;
 
   useEffect(() => {
     if (countdown > 0) {
@@ -54,6 +144,23 @@ export default function MinePage() {
       return () => clearTimeout(timer);
     }
   }, [countdown]);
+
+  useEffect(() => {
+    const pendingInviteCode = localStorage.getItem("pending_invite_code");
+    const urlParams = new URLSearchParams(window.location.search);
+    const shouldRegister = urlParams.get("register") === "true";
+    
+    if (pendingInviteCode || shouldRegister) {
+      if (pendingInviteCode) {
+        setInviteCodeInput(pendingInviteCode);
+        localStorage.removeItem("pending_invite_code");
+      }
+      if (!user) {
+        setIsRegisterMode(true);
+        setShowLoginDialog(true);
+      }
+    }
+  }, [user]);
 
   const handleSendCode = async () => {
     if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
@@ -309,7 +416,7 @@ export default function MinePage() {
                 <Crown className="w-5 h-5 text-white" />
               </div>
               <div>
-                <span className="text-amber-800 font-bold block">会员中心</span>
+                <span className="text-amber-800 font-bold block">VIP尊享权益</span>
                 <span className="text-[10px] text-amber-600 font-medium bg-amber-200/50 px-2 py-0.5 rounded-full">新年特惠</span>
               </div>
             </div>
@@ -602,6 +709,35 @@ export default function MinePage() {
 
             <button
               onClick={() => {
+                setShowSettingsDialog(false);
+                setShowIdentityDialog(true);
+              }}
+              className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              data-testid="button-identity-verification"
+            >
+              <div className="flex items-center gap-3">
+                <CreditCard className="w-5 h-5 text-blue-500" />
+                <span className="font-medium">实名认证</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {identityStatus?.status === "approved" && (
+                  <span className="text-xs text-green-500 bg-green-50 px-2 py-0.5 rounded">已认证</span>
+                )}
+                {identityStatus?.status === "pending" && (
+                  <span className="text-xs text-amber-500 bg-amber-50 px-2 py-0.5 rounded">审核中</span>
+                )}
+                {identityStatus?.status === "rejected" && (
+                  <span className="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded">未通过</span>
+                )}
+                {(!identityStatus || identityStatus?.status === "none") && (
+                  <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">未认证</span>
+                )}
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
                 localStorage.clear();
                 sessionStorage.clear();
                 toast({
@@ -631,6 +767,141 @@ export default function MinePage() {
                 <p className="text-xs text-gray-400">云端智能医疗服务平台</p>
               </div>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showIdentityDialog} onOpenChange={setShowIdentityDialog}>
+        <DialogContent className="max-w-sm mx-auto rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-center flex items-center justify-center gap-2 font-bold">
+              <CreditCard className="w-5 h-5 text-blue-500" />
+              实名认证
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            {identityStatus?.status === "approved" ? (
+              <div className="text-center space-y-4">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                  <Check className="w-8 h-8 text-green-500" />
+                </div>
+                <div>
+                  <p className="font-medium text-green-600">已完成实名认证</p>
+                  <p className="text-sm text-gray-500 mt-1">姓名：{identityStatus.realName}</p>
+                  <p className="text-sm text-gray-500">身份证：{identityStatus.idNumber}</p>
+                </div>
+              </div>
+            ) : identityStatus?.status === "pending" ? (
+              <div className="text-center space-y-4">
+                <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto">
+                  <Clock className="w-8 h-8 text-amber-500" />
+                </div>
+                <div>
+                  <p className="font-medium text-amber-600">审核中</p>
+                  <p className="text-sm text-gray-500 mt-1">您的实名认证申请正在审核中，请耐心等待</p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {identityStatus?.status === "rejected" && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-red-600">上次申请未通过：{identityStatus.reviewNote || "请重新提交"}</p>
+                  </div>
+                )}
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">真实姓名</label>
+                    <input
+                      type="text"
+                      value={identityRealName}
+                      onChange={(e) => setIdentityRealName(e.target.value)}
+                      placeholder="请输入身份证上的姓名"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      data-testid="input-identity-realname"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">身份证号码</label>
+                    <input
+                      type="text"
+                      value={identityIdNumber}
+                      onChange={(e) => setIdentityIdNumber(e.target.value.toUpperCase())}
+                      placeholder="请输入18位身份证号码"
+                      maxLength={18}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      data-testid="input-identity-idnumber"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">身份证正面（人像面）</label>
+                    <input
+                      type="file"
+                      ref={idFrontInputRef}
+                      onChange={handleIdFrontChange}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <div
+                      onClick={() => idFrontInputRef.current?.click()}
+                      className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-blue-500 transition-colors"
+                    >
+                      {idFrontPreview ? (
+                        <img src={idFrontPreview} alt="身份证正面" className="max-h-32 mx-auto rounded" />
+                      ) : (
+                        <div className="space-y-2">
+                          <Camera className="w-8 h-8 text-gray-400 mx-auto" />
+                          <p className="text-sm text-gray-500">点击上传身份证正面</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">身份证背面（国徽面）</label>
+                    <input
+                      type="file"
+                      ref={idBackInputRef}
+                      onChange={handleIdBackChange}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    <div
+                      onClick={() => idBackInputRef.current?.click()}
+                      className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:border-blue-500 transition-colors"
+                    >
+                      {idBackPreview ? (
+                        <img src={idBackPreview} alt="身份证背面" className="max-h-32 mx-auto rounded" />
+                      ) : (
+                        <div className="space-y-2">
+                          <Camera className="w-8 h-8 text-gray-400 mx-auto" />
+                          <p className="text-sm text-gray-500">点击上传身份证背面</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-4">
+                  <p className="text-xs text-amber-700">
+                    <Info className="w-3 h-3 inline mr-1" />
+                    请确保照片清晰完整，信息真实有效。您的信息将被严格保密，仅用于身份核验。
+                  </p>
+                </div>
+                
+                <button
+                  onClick={handleIdentitySubmit}
+                  disabled={identitySubmitMutation.isPending}
+                  className="w-full py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  data-testid="button-submit-identity"
+                >
+                  {identitySubmitMutation.isPending ? "提交中..." : "提交认证"}
+                </button>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>

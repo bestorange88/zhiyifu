@@ -464,14 +464,29 @@ export default function VipPage() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6 px-4">
-          开通VIP即表示同意《VIP服务协议》
-          <br />
-          如有问题请联系客服
-        </p>
-      </div>
+              <div className="mt-6 bg-amber-50 rounded-2xl p-5 border border-amber-200">
+                <h4 className="font-semibold text-amber-800 mb-3 flex items-center gap-2">
+                  <Shield className="w-4 h-4" />
+                  VIP会员规则
+                </h4>
+                <ul className="text-xs text-amber-700 space-y-1.5">
+                  <li>1. VIP会员有效期为30天，到期后需重新开通</li>
+                  <li>2. 开通VIP需满足对应等级的直推和三代人数要求才能解锁佣金</li>
+                  <li>3. 未达标期间获得的佣金将被冻结，达标后自动解冻</li>
+                  <li>4. VIP等级越高，每日抽奖次数和中奖倍率越高</li>
+                  <li>5. 高级VIP享有更低的提现门槛和更快的到账速度</li>
+                  <li>6. VIP权益不可转让，开通后不支持退款</li>
+                </ul>
+              </div>
 
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+              <p className="text-center text-xs text-gray-400 mt-6 px-4">
+                开通VIP即表示同意《VIP服务协议》
+                <br />
+                如有问题请联系客服
+              </p>
+            </div>
+
+            <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <DialogContent className="max-w-sm mx-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-center flex items-center justify-center gap-2">

@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { users, userRanks, rankRules, referralRewards, orders, commissionRecords, commissionLogs } from "@shared/schema";
+import { users, userRanks, rankRules, referralRewards, orders, commissionRecords, commissionLogs, vipCommissionRates } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { addCashFrozen, addCashAvailable, deductCashAvailable, getWallet } from "./wallet";
 import { addSpins } from "./spin";
@@ -77,6 +77,33 @@ export async function updateRankRule(rank: number, updates: {
     .set(updates)
     .where(eq(rankRules.rank, rank))
     .returning();
+  
+  // Sync commission rates to vipCommissionRates table for frontend display
+  if (updates.directCommissionRate !== undefined || updates.indirectCommissionRate !== undefined) {
+    const commissionUpdates: { directRate?: string; indirectRate?: string } = {};
+    if (updates.directCommissionRate !== undefined) {
+      commissionUpdates.directRate = updates.directCommissionRate;
+    }
+    if (updates.indirectCommissionRate !== undefined) {
+      commissionUpdates.indirectRate = updates.indirectCommissionRate;
+    }
+    
+    // Check if record exists in vipCommissionRates
+    const [existingCommRate] = await db.select().from(vipCommissionRates).where(eq(vipCommissionRates.level, rank)).limit(1);
+    
+    if (existingCommRate) {
+      await db.update(vipCommissionRates)
+        .set(commissionUpdates)
+        .where(eq(vipCommissionRates.level, rank));
+    } else {
+      // Insert new record if it doesn't exist
+      await db.insert(vipCommissionRates).values({
+        level: rank,
+        directRate: updates.directCommissionRate || "0.10",
+        indirectRate: updates.indirectCommissionRate || "0.05",
+      });
+    }
+  }
   
   return updated;
 }

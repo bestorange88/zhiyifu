@@ -19,6 +19,9 @@ import ReferralPage from "@/pages/ReferralPage";
 import InsurancePage from "@/pages/InsurancePage";
 import CheckInPage from "@/pages/CheckInPage";
 import DepositPage from "@/pages/DepositPage";
+import ArticleDetailPage from "@/pages/ArticleDetailPage";
+import DownloadPage from "@/pages/DownloadPage";
+import InvitePage from "@/pages/InvitePage";
 import NotFound from "@/pages/not-found";
 
 // Admin Pages
@@ -39,6 +42,7 @@ import AdminMembershipPage from "@/pages/admin/AdminMembershipPage";
 import AdminContentPage from "@/pages/admin/AdminContentPage";
 import AdminServicePage from "@/pages/admin/AdminServicePage";
 import AdminVipRanksPage from "@/pages/admin/AdminVipRanksPage";
+import AdminIdentityPage from "@/pages/admin/AdminIdentityPage";
 
 function UserRouter() {
   const [location] = useLocation();
@@ -61,6 +65,9 @@ function UserRouter() {
         <Route path="/chat" component={ChatPage} />
         <Route path="/service" component={ServicePage} />
         <Route path="/deposit" component={DepositPage} />
+        <Route path="/article/:id" component={ArticleDetailPage} />
+        <Route path="/download" component={DownloadPage} />
+        <Route path="/invite" component={InvitePage} />
         <Route path="/mine" component={MinePage} />
         <Route component={NotFound} />
       </Switch>
@@ -86,8 +93,9 @@ function AdminRouter() {
         <Route path="/admin/content" component={AdminContentPage} />
         <Route path="/admin/service" component={AdminServicePage} />
         <Route path="/admin/groups" component={AdminGroupsPage} />
-        <Route path="/admin/agents" component={AdminAgentsPage} />
-        <Route path="/admin/stats" component={AdminStatsPage} />
+                <Route path="/admin/agents" component={AdminAgentsPage} />
+                <Route path="/admin/identity" component={AdminIdentityPage} />
+                <Route path="/admin/stats" component={AdminStatsPage} />
         <Route path="/admin/settings" component={AdminSettingsPage} />
         <Route path="/admin/withdraws" component={AdminWithdrawsPage} />
       </Switch>

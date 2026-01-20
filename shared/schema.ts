@@ -318,6 +318,7 @@ export const chatGroups = pgTable("chat_groups", {
   avatarUrl: text("avatar_url"),
   ownerId: integer("owner_id").references(() => users.id),
   isActive: boolean("is_active").default(true).notNull(),
+  isSystem: boolean("is_system").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -352,6 +353,7 @@ export const systemSettings = pgTable("system_settings", {
 export const paymentQrCodes = pgTable("payment_qr_codes", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 100 }),
+  type: varchar("type", { length: 20 }).default("alipay").notNull(), // alipay | wechat
   url: text("url").notNull(),
   isActive: boolean("is_active").default(true).notNull(),
   sortOrder: integer("sort_order").default(0).notNull(),
@@ -544,7 +546,6 @@ export type LotteryDraw = typeof lotteryDraws.$inferSelect;
 export type InsertLotteryDraw = z.infer<typeof insertLotteryDrawSchema>;
 export type CommissionLog = typeof commissionLogs.$inferSelect;
 export type InsertCommissionLog = z.infer<typeof insertCommissionLogSchema>;
-
 // ============ API SCHEMAS ============
 export const registerSchema = z.object({
   phone: z.string().min(11).max(11),
@@ -639,6 +640,38 @@ export const adminBalanceAdjustSchema = z.object({
 export const adminDepositReviewSchema = z.object({
   approved: z.boolean(),
 });
+
+export const identityVerificationSubmitSchema = z.object({
+  realName: z.string().min(2, "请输入真实姓名"),
+  idNumber: z.string().regex(/^\d{17}[\dXx]$/, "请输入有效的身份证号码"),
+  idFrontImage: z.string().min(1, "请上传身份证正面照片"),
+  idBackImage: z.string().min(1, "请上传身份证背面照片"),
+});
+
+export const adminIdentityReviewSchema = z.object({
+  approved: z.boolean(),
+  reviewNote: z.string().optional(),
+});
+
+// ============ IDENTITY VERIFICATION ============
+export const identityVerifications = pgTable("identity_verifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  realName: varchar("real_name", { length: 50 }).notNull(),
+  idNumber: varchar("id_number", { length: 20 }).notNull(),
+  idFrontImage: text("id_front_image").notNull(),
+  idBackImage: text("id_back_image").notNull(),
+  status: varchar("status", { length: 20 }).default("pending").notNull(),  // pending|approved|rejected
+  reviewNote: text("review_note"),
+  reviewedBy: integer("reviewed_by").references(() => admins.id),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertIdentityVerificationSchema = createInsertSchema(identityVerifications).omit({ id: true, createdAt: true });
+
+export type IdentityVerification = typeof identityVerifications.$inferSelect;
+export type InsertIdentityVerification = z.infer<typeof insertIdentityVerificationSchema>;
 
 // ============ SMS VERIFICATION ============
 export const verificationCodes = pgTable("verification_codes", {
