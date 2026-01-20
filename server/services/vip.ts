@@ -250,21 +250,27 @@ async function distributeVipUpgradeCommission(fromUserId: number, payAmountCents
     const [uplineStatus] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, uplineUserId)).limit(1);
     const uplineVipLevel = uplineStatus?.vipLevel || 0;
 
-    if (uplineVipLevel < 1) continue;
-
-    const [commRate] = await db.select().from(vipCommissionRates).where(eq(vipCommissionRates.level, uplineVipLevel)).limit(1);
-    if (!commRate) continue;
-
-    const rate = relationLevel === 1 
-      ? parseFloat(commRate.directRate) 
-      : parseFloat(commRate.indirectRate);
+    // 获取佣金比例：VIP用户使用对应等级的比例，非VIP用户使用默认比例（直推10%，间推0%）
+    let rate = 0;
+    if (uplineVipLevel >= 1) {
+      const [commRate] = await db.select().from(vipCommissionRates).where(eq(vipCommissionRates.level, uplineVipLevel)).limit(1);
+      if (commRate) {
+        rate = relationLevel === 1 
+          ? parseFloat(commRate.directRate) 
+          : parseFloat(commRate.indirectRate);
+      }
+    } else {
+      // 非VIP用户的默认佣金比例：直推10%，间推0%
+      rate = relationLevel === 1 ? 0.10 : 0;
+    }
 
     if (rate <= 0) continue;
 
     const commissionCents = Math.floor(payAmountCents * rate);
     if (commissionCents <= 0) continue;
 
-    const isQualified = uplineStatus?.qualified || false;
+    // 非VIP用户直接到账，VIP用户根据达标状态决定
+    const isQualified = uplineVipLevel < 1 ? true : (uplineStatus?.qualified || false);
 
     await db.insert(commissionLogs).values({
       toUserId: uplineUserId,

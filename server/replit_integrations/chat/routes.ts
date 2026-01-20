@@ -1,11 +1,41 @@
 import type { Express, Request, Response } from "express";
-import OpenAI from "openai";
 import { chatStorage } from "./storage";
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+// 直接使用Google Gemini API
+const GEMINI_API_KEY = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
+const GEMINI_MODEL = "gemini-2.5-flash";
+
+async function callGeminiAPI(messages: Array<{ role: string; content: string }>) {
+  const contents = messages
+    .filter(m => m.role !== "system")
+    .map(m => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }]
+    }));
+
+  // 添加系统提示到第一条用户消息
+  const systemMessage = messages.find(m => m.role === "system");
+  if (systemMessage && contents.length > 0 && contents[0].role === "user") {
+    contents[0].parts[0].text = `${systemMessage.content}\n\n${contents[0].parts[0].text}`;
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents })
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(`Gemini API error: ${error.error?.message || response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
 
 export function registerChatRoutes(app: Express): void {
   // Get all conversations
@@ -93,23 +123,11 @@ export function registerChatRoutes(app: Express): void {
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      // Stream response from OpenAI
-      const stream = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: chatMessages,
-        stream: true,
-        max_tokens: 2048,
-      });
+      // 调用Gemini API获取回复
+      const fullResponse = await callGeminiAPI(chatMessages);
 
-      let fullResponse = "";
-
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || "";
-        if (content) {
-          fullResponse += content;
-          res.write(`data: ${JSON.stringify({ content })}\n\n`);
-        }
-      }
+      // 发送完整回复（非流式）
+      res.write(`data: ${JSON.stringify({ content: fullResponse })}\n\n`);
 
       // Save assistant message
       await chatStorage.createMessage(conversationId, "assistant", fullResponse);
