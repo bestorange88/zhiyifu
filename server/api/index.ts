@@ -392,6 +392,27 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  // 获取直推下级详细信息列表（包括实名认证状态和充值记录）
+  app.get("/api/referral/direct/details", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const referrals = await referralService.getDirectReferralsWithDetails(req.userId!);
+      res.json(referrals);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 获取单个下级用户详情
+  app.get("/api/referral/downline/:userId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const downlineUserId = parseInt(req.params.userId);
+      const detail = await referralService.getDownlineUserDetail(req.userId!, downlineUserId);
+      res.json(detail);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.get("/api/referral/ranks", async (req, res) => {
     try {
       const ranks = await referralService.getRankRules();

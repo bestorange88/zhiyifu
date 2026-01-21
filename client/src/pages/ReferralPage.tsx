@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, Users, Gift, Crown, Copy, Check, Share2, TrendingUp, Star, AlertCircle } from "lucide-react";
+import { ArrowLeft, Users, Gift, Crown, Copy, Check, Share2, TrendingUp, Star, AlertCircle, ChevronRight, Shield, Wallet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +20,26 @@ interface DirectReferral {
   phone: string;
   createdAt: string;
   vipLevel: number;
+  identityStatus?: string;
+  totalDeposit?: string;
+}
+
+interface DownlineDetail {
+  id: number;
+  phone: string;
+  vipLevel: number;
+  createdAt: string;
+  identityStatus: string;
+  identityName: string | null;
+  depositCount: number;
+  totalDeposit: string;
+  deposits: {
+    id: number;
+    amount: string;
+    status: string;
+    method: string | null;
+    createdAt: string;
+  }[];
 }
 
 interface ReferralReward {
@@ -51,6 +71,7 @@ export default function ReferralPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
+  const [selectedDownlineId, setSelectedDownlineId] = useState<number | null>(null);
 
   const { data: referralSummary } = useQuery<ReferralSummary>({
     queryKey: ["/api/referral/summary"],
@@ -58,8 +79,13 @@ export default function ReferralPage() {
   });
 
   const { data: directReferrals } = useQuery<DirectReferral[]>({
-    queryKey: ["/api/referral/direct"],
+    queryKey: ["/api/referral/direct/details"],
     enabled: !!user,
+  });
+
+  const { data: downlineDetail, isLoading: isLoadingDetail } = useQuery<DownlineDetail>({
+    queryKey: ["/api/referral/downline", selectedDownlineId],
+    enabled: !!user && !!selectedDownlineId,
   });
 
   const { data: referralRewards } = useQuery<ReferralReward[]>({
@@ -195,27 +221,40 @@ export default function ReferralPage() {
           </div>
           
           {directReferrals && directReferrals.length > 0 ? (
-            <div className="space-y-2 max-h-60 overflow-y-auto">
+            <div className="space-y-2 max-h-80 overflow-y-auto">
               {directReferrals.map((ref: any) => (
-                <div key={ref.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                <div 
+                  key={ref.id} 
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => setSelectedDownlineId(ref.id)}
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center">
                       <Users className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <p className="font-medium text-gray-800">
-                        {ref.phone?.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2")}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {new Date(ref.createdAt).toLocaleDateString("zh-CN")}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-gray-800">{ref.phone}</p>
+                        {ref.identityStatus === "approved" && (
+                          <Shield className="w-3.5 h-3.5 text-green-500" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <span>{new Date(ref.createdAt).toLocaleDateString("zh-CN")}</span>
+                        {ref.totalDeposit && parseFloat(ref.totalDeposit) > 0 && (
+                          <span className="text-blue-500">充值¥{ref.totalDeposit}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  {ref.vipLevel > 0 && (
-                    <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-full">
-                      VIP{ref.vipLevel}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {ref.vipLevel > 0 && (
+                      <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-full">
+                        VIP{ref.vipLevel}
+                      </span>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -227,6 +266,111 @@ export default function ReferralPage() {
             </div>
           )}
         </div>
+
+        {/* 下级详情弹窗 */}
+        {selectedDownlineId && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
+            <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[80vh] overflow-hidden animate-in slide-in-from-bottom">
+              <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center justify-between">
+                <h3 className="font-bold text-lg">下级详情</h3>
+                <button 
+                  onClick={() => setSelectedDownlineId(null)}
+                  className="p-2 hover:bg-gray-100 rounded-full"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              {isLoadingDetail ? (
+                <div className="p-8 text-center text-gray-400">加载中...</div>
+              ) : downlineDetail ? (
+                <div className="p-4 space-y-4 overflow-y-auto max-h-[calc(80vh-60px)]">
+                  {/* 基本信息 */}
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center">
+                        <Users className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-800">{downlineDetail.phone}</p>
+                        <p className="text-xs text-gray-500">
+                          注册于 {new Date(downlineDetail.createdAt).toLocaleDateString("zh-CN")}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="bg-white/60 rounded-lg p-2">
+                        <p className="text-lg font-bold text-purple-600">
+                          {downlineDetail.vipLevel > 0 ? `V${downlineDetail.vipLevel}` : "普通"}
+                        </p>
+                        <p className="text-xs text-gray-500">VIP等级</p>
+                      </div>
+                      <div className="bg-white/60 rounded-lg p-2">
+                        <div className="flex items-center justify-center gap-1">
+                          {downlineDetail.identityStatus === "approved" ? (
+                            <Shield className="w-4 h-4 text-green-500" />
+                          ) : downlineDetail.identityStatus === "pending" ? (
+                            <Shield className="w-4 h-4 text-yellow-500" />
+                          ) : (
+                            <Shield className="w-4 h-4 text-gray-300" />
+                          )}
+                          <p className="text-sm font-medium">
+                            {downlineDetail.identityStatus === "approved" ? "已认证" : 
+                             downlineDetail.identityStatus === "pending" ? "审核中" : "未认证"}
+                          </p>
+                        </div>
+                        <p className="text-xs text-gray-500">实名状态</p>
+                      </div>
+                      <div className="bg-white/60 rounded-lg p-2">
+                        <p className="text-lg font-bold text-green-600">¥{downlineDetail.totalDeposit}</p>
+                        <p className="text-xs text-gray-500">充值总额</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 充值记录 */}
+                  <div className="bg-white rounded-xl border p-4">
+                    <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                      <Wallet className="w-4 h-4 text-blue-500" />
+                      充值记录 ({downlineDetail.depositCount}笔)
+                    </h4>
+                    
+                    {downlineDetail.deposits && downlineDetail.deposits.length > 0 ? (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {downlineDetail.deposits.map((deposit) => (
+                          <div key={deposit.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                            <div>
+                              <p className="font-medium text-gray-800">¥{deposit.amount}</p>
+                              <p className="text-xs text-gray-400">
+                                {deposit.method === "alipay" ? "支付宝" : deposit.method === "wechat" ? "微信" : deposit.method || "未知"} · 
+                                {new Date(deposit.createdAt).toLocaleDateString("zh-CN")}
+                              </p>
+                            </div>
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              deposit.status === "completed" ? "bg-green-100 text-green-700" :
+                              deposit.status === "pending" ? "bg-yellow-100 text-yellow-700" :
+                              "bg-red-100 text-red-700"
+                            }`}>
+                              {deposit.status === "completed" ? "已完成" :
+                               deposit.status === "pending" ? "待审核" : "已拒绝"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-gray-400 text-sm">
+                        暂无充值记录
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-8 text-center text-gray-400">加载失败</div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl p-5 shadow-lg">
           <div className="flex items-center justify-between mb-4">
