@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Header } from "@/components/Header";
-import { User, CreditCard, FlaskConical, FileText, ChevronRight, ChevronDown, Headphones, Gift, MessageCircle, Send, Bot, ArrowLeft, Loader2, Users } from "lucide-react";
+import { User, CreditCard, FlaskConical, FileText, ChevronRight, ChevronDown, Headphones, Gift, MessageCircle, Send, Bot, ArrowLeft, Loader2, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -32,6 +32,34 @@ interface GroupMessage {
   content: string;
   createdAt: string;
   phone: string | null;
+}
+
+interface RedPacket {
+  id: number;
+  groupId: number;
+  totalAmount: string;
+  totalCount: number;
+  remainingAmount: string;
+  remainingCount: number;
+  greeting: string;
+  status: string;
+  createdAt: string;
+}
+
+interface RedPacketClaim {
+  id: number;
+  redPacketId: number;
+  userId: number;
+  amount: string;
+  isLuckiest: boolean;
+  claimedAt: string;
+  phone?: string;
+}
+
+interface RedPacketDetail extends RedPacket {
+  claims: RedPacketClaim[];
+  hasClaimed?: boolean;
+  userClaim?: RedPacketClaim | null;
 }
 
 const faqItems = [
@@ -94,6 +122,8 @@ export default function ServicePage() {
   const [groupInput, setGroupInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const groupScrollRef = useRef<HTMLDivElement>(null);
+  const [selectedRedPacket, setSelectedRedPacket] = useState<RedPacketDetail | null>(null);
+  const [showRedPacketModal, setShowRedPacketModal] = useState(false);
 
   const { data: serviceSession, refetch: refetchSession } = useQuery({
     queryKey: ["/api/service/session"],
@@ -209,6 +239,73 @@ export default function ServicePage() {
     sendGroupMessageMutation.mutate({ groupId: showGroupChat.id, content: groupInput.trim() });
   };
 
+  // 红包相关查询
+  const { data: groupRedPackets, refetch: refetchRedPackets } = useQuery<RedPacket[]>({
+    queryKey: ["/api/groups", showGroupChat?.id, "red-packets"],
+    queryFn: async () => {
+      if (!showGroupChat) return [];
+      const res = await fetch(`/api/groups/${showGroupChat.id}/red-packets`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!showGroupChat && !!token,
+    refetchInterval: 5000,
+  });
+
+  // 领取红包
+  const claimRedPacketMutation = useMutation({
+    mutationFn: async (redPacketId: number) => {
+      const res = await fetch(`/api/red-packets/${redPacketId}/claim`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "领取失败");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      refetchRedPackets();
+      // 更新红包详情
+      if (selectedRedPacket) {
+        fetchRedPacketDetail(selectedRedPacket.id);
+      }
+      alert(`恭喜您领取了 ¥${parseFloat(data.amount).toFixed(2)} 元红包！`);
+    },
+    onError: (error: Error) => {
+      alert(error.message);
+    },
+  });
+
+  // 获取红包详情
+  const fetchRedPacketDetail = async (redPacketId: number) => {
+    try {
+      const res = await fetch(`/api/red-packets/${redPacketId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const detail = await res.json();
+        setSelectedRedPacket(detail);
+      }
+    } catch (error) {
+      console.error("获取红包详情失败", error);
+    }
+  };
+
+  const handleOpenRedPacket = async (packet: RedPacket) => {
+    await fetchRedPacketDetail(packet.id);
+    setShowRedPacketModal(true);
+  };
+
+  const handleClaimRedPacket = () => {
+    if (selectedRedPacket && !selectedRedPacket.hasClaimed) {
+      claimRedPacketMutation.mutate(selectedRedPacket.id);
+    }
+  };
+
   useEffect(() => {
     if (groupScrollRef.current) {
       groupScrollRef.current.scrollTop = groupScrollRef.current.scrollHeight;
@@ -312,7 +409,121 @@ export default function ServicePage() {
               暂无消息，发送第一条消息吧
             </div>
           )}
+
+          {/* 红包列表 */}
+          {groupRedPackets && groupRedPackets.filter(p => p.status === "active").length > 0 && (
+            <div className="mt-4 space-y-2">
+              {groupRedPackets.filter(p => p.status === "active").map((packet) => (
+                <div
+                  key={packet.id}
+                  onClick={() => handleOpenRedPacket(packet)}
+                  className="bg-gradient-to-r from-red-500 to-orange-500 rounded-xl p-4 cursor-pointer hover:shadow-lg transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-yellow-400 rounded-full flex items-center justify-center">
+                      <Gift className="w-6 h-6 text-red-600" />
+                    </div>
+                    <div className="flex-1 text-white">
+                      <p className="font-bold">{packet.greeting || "恭喜发财，大吉大利"}</p>
+                      <p className="text-xs opacity-80">
+                        剩余 {packet.remainingCount}/{packet.totalCount} 个
+                      </p>
+                    </div>
+                    <div className="text-yellow-300 text-sm font-bold">
+                      点击领取
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* 红包弹窗 */}
+        {showRedPacketModal && selectedRedPacket && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-gradient-to-b from-red-500 to-red-600 rounded-2xl w-full max-w-sm overflow-hidden">
+              <div className="relative p-6 text-center text-white">
+                <button
+                  onClick={() => {
+                    setShowRedPacketModal(false);
+                    setSelectedRedPacket(null);
+                  }}
+                  className="absolute top-4 right-4 text-white/70 hover:text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+                
+                <div className="w-16 h-16 bg-yellow-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Gift className="w-8 h-8 text-red-600" />
+                </div>
+                
+                <h3 className="text-xl font-bold mb-2">
+                  {selectedRedPacket.greeting || "恭喜发财，大吉大利"}
+                </h3>
+                
+                {selectedRedPacket.hasClaimed && selectedRedPacket.userClaim ? (
+                  <div className="mt-4">
+                    <p className="text-yellow-300 text-3xl font-bold">
+                      ¥{parseFloat(selectedRedPacket.userClaim.amount).toFixed(2)}
+                    </p>
+                    <p className="text-white/70 text-sm mt-2">
+                      {selectedRedPacket.userClaim.isLuckiest && "🎉 手气最佳！"}
+                    </p>
+                  </div>
+                ) : selectedRedPacket.status === "active" ? (
+                  <button
+                    onClick={handleClaimRedPacket}
+                    disabled={claimRedPacketMutation.isPending}
+                    className="mt-4 w-32 h-32 bg-yellow-400 hover:bg-yellow-300 rounded-full flex items-center justify-center mx-auto text-red-600 font-bold text-xl shadow-lg transition-all"
+                  >
+                    {claimRedPacketMutation.isPending ? (
+                      <Loader2 className="w-8 h-8 animate-spin" />
+                    ) : (
+                      "開"
+                    )}
+                  </button>
+                ) : (
+                  <p className="text-white/70 mt-4">红包已被抢完</p>
+                )}
+                
+                <p className="text-white/60 text-xs mt-4">
+                  共 {selectedRedPacket.totalCount} 个红包，
+                  已领取 {selectedRedPacket.totalCount - selectedRedPacket.remainingCount} 个
+                </p>
+              </div>
+              
+              {/* 领取记录 */}
+              {selectedRedPacket.claims && selectedRedPacket.claims.length > 0 && (
+                <div className="bg-white rounded-t-2xl p-4 max-h-60 overflow-y-auto">
+                  <h4 className="text-gray-800 font-bold mb-3">领取记录</h4>
+                  <div className="space-y-2">
+                    {selectedRedPacket.claims.map((claim) => (
+                      <div key={claim.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                            <User className="w-4 h-4 text-gray-500" />
+                          </div>
+                          <span className="text-gray-700 text-sm">
+                            {claim.phone || `用户${claim.userId}`}
+                          </span>
+                          {claim.isLuckiest && (
+                            <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
+                              手气最佳
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-red-500 font-bold">
+                          ¥{parseFloat(claim.amount).toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 p-3">
           <div className="flex items-center gap-2">
