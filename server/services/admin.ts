@@ -3,7 +3,7 @@ import {
   admins, users, wallets, withdraws, orders, agentApplications, userRanks,
   systemSettings, featureFlags, deposits, adminActions, commissionRecords,
   serviceChatSessions, serviceChatMessages, wheelPrizes, wheelSpins, vipPlans, ledger,
-  paymentQrCodes
+  paymentQrCodes, commissionLogs
 } from "@shared/schema";
 import { eq, desc, sql, count, and, gt, gte, sum } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -618,19 +618,23 @@ export async function getDistributionUsers(page = 1, limit = 50) {
 }
 
 export async function getReferralRecords() {
-  const records = await db.select({
-    id: users.id,
-    phone: users.phone,
-    inviterId: users.inviterId,
-    createdAt: users.createdAt,
-  }).from(users).where(sql`${users.inviterId} IS NOT NULL`).orderBy(desc(users.createdAt)).limit(100);
+  const records = await db.select().from(commissionLogs).orderBy(desc(commissionLogs.createdAt)).limit(100);
   
   const result = await Promise.all(
     records.map(async (r) => {
-      const [inviter] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, r.inviterId!)).limit(1);
+      const [toUser] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, r.toUserId)).limit(1);
+      const [fromUser] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, r.fromUserId)).limit(1);
       return {
-        ...r,
-        inviterPhone: inviter?.phone || "未知",
+        id: r.id,
+        userId: r.toUserId,
+        fromUserId: r.fromUserId,
+        level: r.relationLevel,
+        amount: (r.amountCents / 100).toFixed(2),
+        status: r.status,
+        bizType: r.bizType,
+        createdAt: r.createdAt,
+        userPhone: toUser?.phone || "未知",
+        fromUserPhone: fromUser?.phone || "未知",
       };
     })
   );

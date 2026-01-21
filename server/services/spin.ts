@@ -153,10 +153,11 @@ export async function performSpin(userId: number, requestId: string) {
 
   if (selectedPrize.type === "cash" && selectedPrize.amount) {
     const fullAmount = parseFloat(selectedPrize.amount);
-    const userShare = fullAmount * 0.85;
     
-    await addCashAvailable(userId, userShare, "spin_win", spin.id, `转盘中奖: ${selectedPrize.name} (实得85%)`);
+    // 用户得到100%的奖金
+    await addCashAvailable(userId, fullAmount, "spin_win", spin.id, `转盘中奖: ${selectedPrize.name}`);
     
+    // 系统额外给上级返佣（不从用户奖金中扣除）
     await distributeLotteryCommission(userId, spin.id, fullAmount);
   } else if (selectedPrize.type === "points" && selectedPrize.amount) {
     await addPoints(userId, parseInt(selectedPrize.amount), "spin_win", spin.id, `转盘中奖: ${selectedPrize.name}`);
