@@ -731,6 +731,16 @@ export function registerApiRoutes(app: Express): void {
   });
 
   // ============ USER GROUP ENDPOINTS ============
+  // 获取系统群组（公共接口，不需要登录）
+  app.get("/api/groups/system", async (req, res) => {
+    try {
+      const groups = await groupService.getSystemGroups();
+      res.json(groups);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.get("/api/groups", authMiddleware, async (req: AuthRequest, res) => {
     try {
       const groups = await groupService.getUserGroups(req.userId!);

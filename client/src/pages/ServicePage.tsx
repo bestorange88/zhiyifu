@@ -201,6 +201,16 @@ export default function ServicePage() {
     enabled: !!token,
   });
 
+  // 获取系统群组（公共群组，不需要登录）
+  const { data: systemGroups } = useQuery<ChatGroup[]>({
+    queryKey: ["/api/groups/system"],
+    queryFn: async () => {
+      const res = await fetch("/api/groups/system");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
   const { data: groupMessages, refetch: refetchGroupMessages } = useQuery<GroupMessage[]>({
     queryKey: ["/api/groups", showGroupChat?.id, "messages"],
     queryFn: async () => {
@@ -751,15 +761,16 @@ export default function ServicePage() {
         </div>
       </div>
 
-      {user && userGroups && userGroups.length > 0 && (
+      {/* 系统群组入口 - 始终显示 */}
+      {systemGroups && systemGroups.length > 0 && (
         <div className="px-4 mt-6">
           <h3 className="section-title mb-3">
             <Users className="w-4 h-4 text-primary" />
-            我的群组
+            交流群组
           </h3>
           
           <div className="space-y-3">
-            {userGroups.map((group) => (
+            {systemGroups.map((group) => (
               <div 
                 key={group.id}
                 className="card-elevated p-4"
@@ -773,7 +784,13 @@ export default function ServicePage() {
                     <p className="text-xs text-gray-400 mt-1">{group.description || "群组聊天"}</p>
                   </div>
                   <button
-                    onClick={() => setShowGroupChat(group)}
+                    onClick={() => {
+                      if (!user) {
+                        alert("请先登录后再进入群组");
+                        return;
+                      }
+                      setShowGroupChat(group);
+                    }}
                     className="px-4 py-2 bg-primary/10 text-primary rounded-full text-sm font-medium hover:bg-primary/20 transition-colors"
                     data-testid={`button-enter-group-${group.id}`}
                   >

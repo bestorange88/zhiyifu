@@ -121,6 +121,13 @@ export async function getUserGroups(userId: number) {
   return groups;
 }
 
+export async function getSystemGroups() {
+  const groups = await db.select()
+    .from(chatGroups)
+    .where(and(eq(chatGroups.isSystem, true), eq(chatGroups.isActive, true)));
+  return groups;
+}
+
 export async function sendGroupMessage(groupId: number, userId: number, content: string) {
   const isMember = await db.select().from(groupMembers)
     .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
