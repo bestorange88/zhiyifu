@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles, Moon, Sun, Trash2, Info, Shield, MessageCircle, Phone, CreditCard, Upload, Camera } from "lucide-react";
+import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles, Moon, Sun, Trash2, Info, Shield, MessageCircle, Phone, CreditCard, Upload, Camera, ArrowDownCircle, History } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -25,6 +25,11 @@ export default function MinePage() {
   const [showLotteryDialog, setShowLotteryDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showIdentityDialog, setShowIdentityDialog] = useState(false);
+  const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawMethod, setWithdrawMethod] = useState("alipay");
+  const [withdrawAccount, setWithdrawAccount] = useState("");
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [identityRealName, setIdentityRealName] = useState("");
   const [identityIdNumber, setIdentityIdNumber] = useState("");
@@ -96,6 +101,64 @@ export default function MinePage() {
       toast({ title: "提交失败", description: error.message, variant: "destructive" });
     },
   });
+
+  const { data: withdrawHistory, refetch: refetchWithdrawHistory } = useQuery({
+    queryKey: ["/api/withdraw/history"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/withdraw/history");
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const handleWithdrawSubmit = async () => {
+    if (isWithdrawing) return;
+    
+    const amount = parseFloat(withdrawAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({ title: "请输入有效的提现金额", variant: "destructive" });
+      return;
+    }
+    if (amount < 10) {
+      toast({ title: "最低提现金额为10元", variant: "destructive" });
+      return;
+    }
+    if (!withdrawAccount.trim()) {
+      toast({ title: "请输入收款账户", variant: "destructive" });
+      return;
+    }
+
+    setIsWithdrawing(true);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch("/api/withdraw/apply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          amount,
+          method: withdrawMethod,
+          accountInfo: withdrawAccount,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "提现申请失败");
+      }
+      toast({ title: "提现申请已提交", description: "请等待审核" });
+      setShowWithdrawDialog(false);
+      setWithdrawAmount("");
+      setWithdrawAccount("");
+      queryClient.invalidateQueries({ queryKey: ["/api/wallet"] });
+      refetchWithdrawHistory();
+    } catch (error: any) {
+      toast({ title: "提现失败", description: error.message, variant: "destructive" });
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
 
   const handleIdFrontChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -443,11 +506,7 @@ export default function MinePage() {
           <p className="stat-value">{wallet?.balancePoints || 0}</p>
           <p className="stat-label">我的积分</p>
         </div>
-        <button
-          onClick={() => setLocation('/deposit')}
-          className="stat-card hover:shadow-md transition-all"
-          data-testid="button-deposit"
-        >
+        <div className="stat-card">
           <div className="w-9 h-9 gradient-success rounded-xl flex items-center justify-center mb-3">
             <Wallet className="w-4 h-4 text-white" />
           </div>
@@ -455,8 +514,30 @@ export default function MinePage() {
             {parseFloat(wallet?.balanceCashAvailable || '0').toFixed(2)} 
             <span className="text-sm font-normal text-gray-400 ml-1">¥</span>
           </p>
-          <p className="stat-label">账户余额 <span className="text-primary text-[10px]">充值</span></p>
-        </button>
+          <p className="stat-label">账户余额</p>
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => setLocation('/deposit')}
+              className="flex-1 px-2 py-1 bg-primary/10 text-primary rounded-lg text-xs font-medium hover:bg-primary/20 transition-colors"
+              data-testid="button-deposit"
+            >
+              充值
+            </button>
+            <button
+              onClick={() => {
+                if (!user) {
+                  setShowLoginDialog(true);
+                  return;
+                }
+                setShowWithdrawDialog(true);
+              }}
+              className="flex-1 px-2 py-1 bg-orange-500/10 text-orange-600 rounded-lg text-xs font-medium hover:bg-orange-500/20 transition-colors"
+              data-testid="button-withdraw"
+            >
+              提现
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="px-4 mt-3 grid grid-cols-2 gap-3">
@@ -909,6 +990,134 @@ export default function MinePage() {
                   {identitySubmitMutation.isPending ? "提交中..." : "提交认证"}
                 </button>
               </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showWithdrawDialog} onOpenChange={setShowWithdrawDialog}>
+        <DialogContent className="max-w-sm mx-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-center flex items-center justify-center gap-2 font-bold">
+              <ArrowDownCircle className="w-5 h-5 text-orange-500" />
+              申请提现
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
+              <p className="text-sm text-gray-500">可提现余额</p>
+              <p className="text-2xl font-bold text-orange-600">
+                ¥{parseFloat(wallet?.balanceCashAvailable || '0').toFixed(2)}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">提现金额</label>
+              <input
+                type="number"
+                placeholder="请输入提现金额（最低10元）"
+                value={withdrawAmount}
+                onChange={(e) => setWithdrawAmount(e.target.value)}
+                className="input-modern"
+                min="10"
+                step="0.01"
+                data-testid="input-withdraw-amount"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">提现方式</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setWithdrawMethod("alipay")}
+                  className={`flex-1 py-2 px-4 rounded-lg border-2 transition-colors ${
+                    withdrawMethod === "alipay" 
+                      ? "border-blue-500 bg-blue-50 text-blue-600" 
+                      : "border-gray-200 text-gray-600"
+                  }`}
+                >
+                  支付宝
+                </button>
+                <button
+                  onClick={() => setWithdrawMethod("wechat")}
+                  className={`flex-1 py-2 px-4 rounded-lg border-2 transition-colors ${
+                    withdrawMethod === "wechat" 
+                      ? "border-green-500 bg-green-50 text-green-600" 
+                      : "border-gray-200 text-gray-600"
+                  }`}
+                >
+                  微信
+                </button>
+                <button
+                  onClick={() => setWithdrawMethod("bank")}
+                  className={`flex-1 py-2 px-4 rounded-lg border-2 transition-colors ${
+                    withdrawMethod === "bank" 
+                      ? "border-orange-500 bg-orange-50 text-orange-600" 
+                      : "border-gray-200 text-gray-600"
+                  }`}
+                >
+                  银行卡
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {withdrawMethod === "alipay" ? "支付宝账号" : withdrawMethod === "wechat" ? "微信号" : "银行卡号"}
+              </label>
+              <input
+                type="text"
+                placeholder={`请输入${withdrawMethod === "alipay" ? "支付宝账号" : withdrawMethod === "wechat" ? "微信号" : "银行卡号"}`}
+                value={withdrawAccount}
+                onChange={(e) => setWithdrawAccount(e.target.value)}
+                className="input-modern"
+                data-testid="input-withdraw-account"
+              />
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-xs text-amber-700">
+                <Info className="w-3 h-3 inline mr-1" />
+                提现申请提交后，将由管理员审核。审核通过后，金额将转入您的账户。
+              </p>
+            </div>
+
+            <button
+              onClick={handleWithdrawSubmit}
+              disabled={isWithdrawing}
+              className="w-full py-3 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              data-testid="button-submit-withdraw"
+            >
+              {isWithdrawing ? "提交中..." : "提交提现申请"}
+            </button>
+
+            {withdrawHistory && withdrawHistory.length > 0 && (
+              <div className="mt-4">
+                <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                  <History className="w-4 h-4" />
+                  提现记录
+                </h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {withdrawHistory.slice(0, 5).map((record: any) => (
+                    <div key={record.id} className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded-lg">
+                      <div>
+                        <span className="font-medium">¥{record.amount}</span>
+                        <span className="text-gray-400 text-xs ml-2">
+                          {new Date(record.createdAt).toLocaleDateString("zh-CN")}
+                        </span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-xs ${
+                        record.status === "applied" ? "bg-orange-100 text-orange-600" :
+                        record.status === "approved" ? "bg-green-100 text-green-600" :
+                        "bg-red-100 text-red-600"
+                      }`}>
+                        {record.status === "applied" ? "审核中" : record.status === "approved" ? "已通过" : "已拒绝"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </DialogContent>

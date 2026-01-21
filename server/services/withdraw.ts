@@ -129,3 +129,52 @@ export async function markWithdrawPaid(withdrawId: number) {
 
   return { success: true };
 }
+
+export async function getAllWithdraws(page = 1, limit = 20) {
+  const offset = (page - 1) * limit;
+  
+  const withdrawList = await db.select({
+    id: withdraws.id,
+    userId: withdraws.userId,
+    phone: users.phone,
+    amount: withdraws.amount,
+    status: withdraws.status,
+    method: withdraws.method,
+    accountInfo: withdraws.accountInfo,
+    createdAt: withdraws.createdAt,
+    reviewedAt: withdraws.reviewedAt,
+    paidAt: withdraws.paidAt,
+  })
+    .from(withdraws)
+    .leftJoin(users, eq(withdraws.userId, users.id))
+    .orderBy(desc(withdraws.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  const [{ total }] = await db.select({ total: count() }).from(withdraws);
+  
+  return {
+    withdraws: withdrawList,
+    total: Number(total),
+    page,
+    limit,
+    totalPages: Math.ceil(Number(total) / limit),
+  };
+}
+
+export async function getPendingWithdraws() {
+  return db.select({
+    id: withdraws.id,
+    userId: withdraws.userId,
+    phone: users.phone,
+    amount: withdraws.amount,
+    status: withdraws.status,
+    method: withdraws.method,
+    accountInfo: withdraws.accountInfo,
+    createdAt: withdraws.createdAt,
+  })
+    .from(withdraws)
+    .leftJoin(users, eq(withdraws.userId, users.id))
+    .where(eq(withdraws.status, "applied"))
+    .orderBy(desc(withdraws.createdAt));
+}

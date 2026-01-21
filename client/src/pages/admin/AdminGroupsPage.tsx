@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Users, Plus, Trash2, Edit2, X, Check, UserPlus, MessageCircle, Send, ArrowLeft, Loader2 } from "lucide-react";
+import { Users, Plus, Trash2, Edit2, X, Check, UserPlus, MessageCircle, Send, ArrowLeft, Loader2, Gift, Image, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,7 +41,9 @@ interface GroupMessage {
   userId: number | null;
   senderType: string;
   senderName: string | null;
+  messageType: string;
   content: string;
+  mediaUrl: string | null;
   createdAt: string;
   phone: string | null;
 }
@@ -57,6 +59,16 @@ export default function AdminGroupsPage() {
   const [chatGroup, setChatGroup] = useState<Group | null>(null);
   const [chatInput, setChatInput] = useState("");
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
+  // 红包相关状态
+  const [showRedPacketDialog, setShowRedPacketDialog] = useState(false);
+  const [redPacketGroup, setRedPacketGroup] = useState<Group | null>(null);
+  const [redPacketAmount, setRedPacketAmount] = useState("");
+  const [redPacketCount, setRedPacketCount] = useState("");
+  const [redPacketPacketCount, setRedPacketPacketCount] = useState("1");
+  const [redPacketGreeting, setRedPacketGreeting] = useState("恭喜发财，大吉大利");
 
   const { data: groups, isLoading } = useQuery<Group[]>({
     queryKey: ["/api/admin/groups"],
@@ -160,14 +172,14 @@ export default function AdminGroupsPage() {
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async (data: { content: string; messageType?: string; mediaUrl?: string }) => {
       const res = await fetch(`/api/admin/groups/${chatGroup!.id}/messages`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to send message");
       return res.json();
@@ -189,7 +201,103 @@ export default function AdminGroupsPage() {
 
   const handleSendMessage = () => {
     if (!chatInput.trim() || sendMessageMutation.isPending) return;
-    sendMessageMutation.mutate(chatInput.trim());
+    sendMessageMutation.mutate({ content: chatInput.trim() });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+    
+    if (!isImage && !isVideo) {
+      toast({ title: "只支持图片和视频文件", variant: "destructive" });
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      toast({ title: "文件大小不能超过50MB", variant: "destructive" });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      
+      if (!res.ok) throw new Error("上传失败");
+      
+      const { url } = await res.json();
+      const messageType = isImage ? "image" : "video";
+      const content = isImage ? "[图片]" : "[视频]";
+      
+      sendMessageMutation.mutate({ content, messageType, mediaUrl: url });
+    } catch (error) {
+      toast({ title: "上传失败", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  // 发送红包
+  const sendRedPacketMutation = useMutation({
+    mutationFn: async (data: { groupId: number; totalAmount: number; totalCount: number; packetCount: number; greeting: string }) => {
+      const res = await fetch(`/api/admin/groups/${data.groupId}/red-packets`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "发送失败");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: `红包发送成功${data.count ? `，共${data.count}个红包` : ""}` });
+      resetRedPacketForm();
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetRedPacketForm = () => {
+    setShowRedPacketDialog(false);
+    setRedPacketGroup(null);
+    setRedPacketAmount("");
+    setRedPacketCount("");
+    setRedPacketPacketCount("1");
+    setRedPacketGreeting("恭喜发财，大吉大利");
+  };
+
+  const openRedPacketDialog = (group: Group) => {
+    setRedPacketGroup(group);
+    setShowRedPacketDialog(true);
+  };
+
+  const handleSendRedPacket = () => {
+    if (!redPacketGroup || !redPacketAmount || !redPacketCount) return;
+    sendRedPacketMutation.mutate({
+      groupId: redPacketGroup.id,
+      totalAmount: parseFloat(redPacketAmount),
+      totalCount: parseInt(redPacketCount),
+      packetCount: parseInt(redPacketPacketCount) || 1,
+      greeting: redPacketGreeting,
+    });
   };
 
   const resetForm = () => {
@@ -298,6 +406,16 @@ export default function AdminGroupsPage() {
                         >
                           <MessageCircle className="w-3 h-3 mr-1" />
                           对话
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openRedPacketDialog(group)}
+                          className="text-red-600 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-900/30"
+                          data-testid={`button-red-packet-group-${group.id}`}
+                        >
+                          <Gift className="w-3 h-3 mr-1" />
+                          发红包
                         </Button>
                         <Button
                           size="sm"
@@ -471,9 +589,24 @@ export default function AdminGroupsPage() {
                           ? "bg-gradient-to-br from-orange-400 to-red-500 text-white ml-auto max-w-[80%]" 
                           : "bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 max-w-[80%]"
                       )}>
-                        <p className="text-sm whitespace-pre-line">
-                          {msg.content}
-                        </p>
+                        {msg.messageType === "image" && msg.mediaUrl ? (
+                          <img 
+                            src={msg.mediaUrl} 
+                            alt="图片" 
+                            className="max-w-full rounded-lg cursor-pointer hover:opacity-90"
+                            onClick={() => window.open(msg.mediaUrl!, "_blank")}
+                          />
+                        ) : msg.messageType === "video" && msg.mediaUrl ? (
+                          <video 
+                            src={msg.mediaUrl} 
+                            controls 
+                            className="max-w-full rounded-lg"
+                          />
+                        ) : (
+                          <p className="text-sm whitespace-pre-line">
+                            {msg.content}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -493,6 +626,26 @@ export default function AdminGroupsPage() {
 
           <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             <div className="flex items-center gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                accept="image/*,video/*"
+                className="hidden"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading || sendMessageMutation.isPending}
+                title="发送图片或视频"
+              >
+                {isUploading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Image className="w-4 h-4" />
+                )}
+              </Button>
               <Input
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
@@ -503,13 +656,125 @@ export default function AdminGroupsPage() {
               />
               <Button
                 onClick={handleSendMessage}
-                disabled={!chatInput.trim() || sendMessageMutation.isPending}
+                disabled={!chatInput.trim() || sendMessageMutation.isPending || isUploading}
                 data-testid="button-send-admin-group-message"
               >
                 {sendMessageMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Send className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 红包发送弹窗 */}
+      <Dialog open={showRedPacketDialog} onOpenChange={() => resetRedPacketForm()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Gift className="w-5 h-5 text-red-500" />
+              发送红包到 {redPacketGroup?.name}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                单个红包金额 (元)
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={redPacketAmount}
+                onChange={(e) => setRedPacketAmount(e.target.value)}
+                placeholder="输入红包总金额"
+                data-testid="input-red-packet-amount"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                单个红包份数
+              </label>
+              <Input
+                type="number"
+                min="1"
+                value={redPacketCount}
+                onChange={(e) => setRedPacketCount(e.target.value)}
+                placeholder="输入红包份数"
+                data-testid="input-red-packet-count"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                每个红包将被随机分成这么多份
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                发送红包个数
+              </label>
+              <Input
+                type="number"
+                min="1"
+                value={redPacketPacketCount}
+                onChange={(e) => setRedPacketPacketCount(e.target.value)}
+                placeholder="一次发送多少个红包"
+                data-testid="input-red-packet-packet-count"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                可以一次性发送多个相同配置的红包
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                红包祝福语
+              </label>
+              <Input
+                value={redPacketGreeting}
+                onChange={(e) => setRedPacketGreeting(e.target.value)}
+                placeholder="输入祝福语"
+                data-testid="input-red-packet-greeting"
+              />
+            </div>
+
+            {redPacketAmount && redPacketCount && (
+              <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-sm">
+                <p className="text-red-700 dark:text-red-300">
+                  将发送 <strong>{redPacketPacketCount || 1}</strong> 个红包，
+                  每个红包 <strong>¥{parseFloat(redPacketAmount).toFixed(2)}</strong>，
+                  分成 <strong>{redPacketCount}</strong> 份
+                </p>
+                <p className="text-red-600 dark:text-red-400 mt-1">
+                  总计: ¥{(parseFloat(redPacketAmount) * (parseInt(redPacketPacketCount) || 1)).toFixed(2)}
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={resetRedPacketForm}>
+                取消
+              </Button>
+              <Button
+                onClick={handleSendRedPacket}
+                disabled={!redPacketAmount || !redPacketCount || sendRedPacketMutation.isPending}
+                className="bg-red-500 hover:bg-red-600 text-white"
+                data-testid="button-send-red-packet"
+              >
+                {sendRedPacketMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    发送中...
+                  </>
+                ) : (
+                  <>
+                    <Gift className="w-4 h-4 mr-2" />
+                    发送红包
+                  </>
                 )}
               </Button>
             </div>

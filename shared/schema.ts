@@ -336,7 +336,9 @@ export const groupMessages = pgTable("group_messages", {
   userId: integer("user_id").references(() => users.id),
   senderType: varchar("sender_type", { length: 20 }).default("user").notNull(),
   senderName: varchar("sender_name", { length: 100 }),
+  messageType: varchar("message_type", { length: 20 }).default("text").notNull(),
   content: text("content").notNull(),
+  mediaUrl: text("media_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -698,3 +700,39 @@ export const registerWithSmsSchema = z.object({
   message: "两次输入的密码不一致",
   path: ["confirmPassword"],
 });
+
+// ============ GROUP RED PACKETS (拼手气红包) ============
+export const groupRedPackets = pgTable("group_red_packets", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => chatGroups.id),
+  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),  // 红包总金额
+  totalCount: integer("total_count").notNull(),  // 红包总份数
+  remainingAmount: decimal("remaining_amount", { precision: 10, scale: 2 }).notNull(),  // 剩余金额
+  remainingCount: integer("remaining_count").notNull(),  // 剩余份数
+  greeting: varchar("greeting", { length: 200 }).default("恭喜发财，大吉大利"),  // 红包祝福语
+  status: varchar("status", { length: 20 }).default("active").notNull(),  // active|finished|expired
+  createdBy: integer("created_by").references(() => admins.id),  // 管理员发送
+  expireAt: timestamp("expire_at"),  // 过期时间
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const redPacketClaims = pgTable("red_packet_claims", {
+  id: serial("id").primaryKey(),
+  redPacketId: integer("red_packet_id").notNull().references(() => groupRedPackets.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),  // 领取金额
+  isLuckiest: boolean("is_luckiest").default(false).notNull(),  // 是否手气最佳
+  claimedAt: timestamp("claimed_at").defaultNow().notNull(),
+});
+
+export const insertGroupRedPacketSchema = createInsertSchema(groupRedPackets).omit({
+  id: true,
+  remainingAmount: true,
+  remainingCount: true,
+  status: true,
+  createdAt: true,
+});
+
+export type GroupRedPacket = typeof groupRedPackets.$inferSelect;
+export type InsertGroupRedPacket = z.infer<typeof insertGroupRedPacketSchema>;
+export type RedPacketClaim = typeof redPacketClaims.$inferSelect;

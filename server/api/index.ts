@@ -41,6 +41,7 @@ import * as adminService from "../services/admin";
 import * as agentService from "../services/agent";
 import * as groupService from "../services/group";
 import * as smsService from "../services/sms";
+import * as redPacketService from "../services/redPacket";
 import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema, adminRankUpdateSchema, requestCodeSchema, registerWithSmsSchema, identityVerificationSubmitSchema, adminIdentityReviewSchema } from "@shared/schema";
 import * as identityService from "../services/identity";
 
@@ -391,6 +392,27 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  // 获取直推下级详细信息列表（包括实名认证状态和充值记录）
+  app.get("/api/referral/direct/details", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const referrals = await referralService.getDirectReferralsWithDetails(req.userId!);
+      res.json(referrals);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 获取单个下级用户详情
+  app.get("/api/referral/downline/:userId", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const downlineUserId = parseInt(req.params.userId);
+      const detail = await referralService.getDownlineUserDetail(req.userId!, downlineUserId);
+      res.json(detail);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.get("/api/referral/ranks", async (req, res) => {
     try {
       const ranks = await referralService.getRankRules();
@@ -721,8 +743,8 @@ export function registerApiRoutes(app: Express): void {
   app.post("/api/admin/groups/:id/messages", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {
       const groupId = parseInt(req.params.id);
-      const { content } = req.body;
-      const message = await groupService.sendAdminGroupMessage(groupId, req.adminId!, content);
+      const { content, messageType, mediaUrl } = req.body;
+      const message = await groupService.sendAdminGroupMessage(groupId, req.adminId!, content, messageType || "text", mediaUrl);
       res.status(201).json(message);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -730,6 +752,16 @@ export function registerApiRoutes(app: Express): void {
   });
 
   // ============ USER GROUP ENDPOINTS ============
+  // 获取系统群组（公共接口，不需要登录）
+  app.get("/api/groups/system", async (req, res) => {
+    try {
+      const groups = await groupService.getSystemGroups();
+      res.json(groups);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.get("/api/groups", authMiddleware, async (req: AuthRequest, res) => {
     try {
       const groups = await groupService.getUserGroups(req.userId!);
@@ -756,6 +788,111 @@ export function registerApiRoutes(app: Express): void {
       const { content } = req.body;
       const message = await groupService.sendGroupMessage(groupId, req.userId!, content);
       res.status(201).json(message);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ GROUP RED PACKETS (拼手气红包) ============
+  // 获取群组红包列表
+  app.get("/api/groups/:id/red-packets", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const packets = await redPacketService.getGroupRedPackets(groupId);
+      res.json(packets);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 获取红包详情
+  app.get("/api/red-packets/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const redPacketId = parseInt(req.params.id);
+      const detail = await redPacketService.getRedPacketDetail(redPacketId);
+      if (!detail) {
+        return res.status(404).json({ error: "红包不存在" });
+      }
+      // 添加当前用户是否已领取的信息
+      const hasClaimed = await redPacketService.hasUserClaimedRedPacket(redPacketId, req.userId!);
+      const userClaim = hasClaimed ? await redPacketService.getUserRedPacketClaim(redPacketId, req.userId!) : null;
+      res.json({ ...detail, hasClaimed, userClaim });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 领取红包
+  app.post("/api/red-packets/:id/claim", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const redPacketId = parseInt(req.params.id);
+      const result = await redPacketService.claimRedPacket(redPacketId, req.userId!);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 管理员发送红包
+  app.post("/api/admin/groups/:id/red-packets", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const { totalAmount, totalCount, packetCount, greeting } = req.body;
+      
+      if (!totalAmount || totalAmount <= 0) {
+        return res.status(400).json({ error: "请输入有效的红包金额" });
+      }
+      if (!totalCount || totalCount <= 0) {
+        return res.status(400).json({ error: "请输入有效的红包份数" });
+      }
+      
+      // 如果指定了packetCount，则批量创建多个红包
+      if (packetCount && packetCount > 1) {
+        const packets = await redPacketService.createMultipleRedPackets(
+          groupId,
+          parseFloat(totalAmount),
+          parseInt(totalCount),
+          parseInt(packetCount),
+          greeting || "恭喜发财，大吉大利",
+          req.adminId!
+        );
+        res.status(201).json({ packets, count: packets.length });
+      } else {
+        const packet = await redPacketService.createRedPacket(
+          groupId,
+          parseFloat(totalAmount),
+          parseInt(totalCount),
+          greeting || "恭喜发财，大吉大利",
+          req.adminId!
+        );
+        res.status(201).json(packet);
+      }
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 管理员获取所有红包列表
+  app.get("/api/admin/red-packets", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const result = await redPacketService.getAllRedPackets(page, limit);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 管理员获取红包详情
+  app.get("/api/admin/red-packets/:id", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const redPacketId = parseInt(req.params.id);
+      const detail = await redPacketService.getRedPacketDetail(redPacketId);
+      if (!detail) {
+        return res.status(404).json({ error: "红包不存在" });
+      }
+      res.json(detail);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

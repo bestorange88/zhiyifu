@@ -134,6 +134,20 @@ export async function createVipUpgradeOrder(userId: number, targetLevel: number)
   const [targetVipLevel] = await db.select().from(vipLevels).where(eq(vipLevels.level, targetLevel)).limit(1);
   if (!targetVipLevel) throw new Error("VIP等级不存在");
 
+  // 检查升级条件：直推人数和三代内人数
+  const [requirement] = await db.select().from(vipRequirements).where(eq(vipRequirements.level, targetLevel)).limit(1);
+  if (requirement) {
+    const directCount = await getDirectReferralCount(userId);
+    const team3Count = await get3GenTeamCount(userId);
+    
+    if (directCount < requirement.directRequired) {
+      throw new Error(`升级V${targetLevel}需要直推${requirement.directRequired}人，当前直推${directCount}人`);
+    }
+    if (team3Count < requirement.team3Required) {
+      throw new Error(`升级V${targetLevel}需要三代内${requirement.team3Required}人，当前三代内${team3Count}人`);
+    }
+  }
+
   const wallet = await getWallet(userId);
   const availableBalance = Math.floor(parseFloat(wallet.balanceCashAvailable) * 100);
   

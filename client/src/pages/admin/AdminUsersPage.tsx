@@ -262,6 +262,7 @@ export default function AdminUsersPage() {
                 <th className="px-4 py-3 text-left">邀请码</th>
                 <th className="px-4 py-3 text-left">VIP等级</th>
                 <th className="px-4 py-3 text-left">余额</th>
+                <th className="px-4 py-3 text-left">积分</th>
                 <th className="px-4 py-3 text-left">状态</th>
                 <th className="px-4 py-3 text-left">注册时间</th>
                 <th className="px-4 py-3 text-left">操作</th>
@@ -271,7 +272,7 @@ export default function AdminUsersPage() {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i}>
-                    <td colSpan={8} className="px-4 py-4">
+                    <td colSpan={9} className="px-4 py-4">
                       <div className="h-4 bg-gray-200 rounded animate-pulse" />
                     </td>
                   </tr>
@@ -293,6 +294,9 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-4 py-3 text-sm">
                       ¥{user.wallet?.balanceCashAvailable || "0.00"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-orange-600 font-medium">
+                      {user.wallet?.balancePoints || 0}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 text-xs rounded-full ${
@@ -370,9 +374,9 @@ export default function AdminUsersPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
-                    <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    暂无用户数据
+                                    <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
+                                      <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                                      暂无用户数据
                   </td>
                 </tr>
               )}

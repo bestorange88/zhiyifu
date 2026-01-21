@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { users, userRanks, rankRules, referralRewards, orders, commissionRecords, commissionLogs, vipCommissionRates } from "@shared/schema";
+import { users, userRanks, rankRules, referralRewards, orders, commissionRecords, commissionLogs, vipCommissionRates, identityVerifications, deposits } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { addCashFrozen, addCashAvailable, deductCashAvailable, getWallet } from "./wallet";
 import { addSpins } from "./spin";
@@ -561,4 +561,94 @@ export async function getRankStatus(userId: number) {
     withdrawSpeed: currentRule?.withdrawSpeed || "T+3",
     winMultiplier: currentRule?.winMultiplier || "1.0",
   };
+}
+
+// 获取下级用户详情（包括实名认证状态和充值记录）
+export async function getDownlineUserDetail(uplineUserId: number, downlineUserId: number) {
+  // 验证下级用户确实是上级的直推
+  const [downlineUser] = await db.select().from(users).where(eq(users.id, downlineUserId)).limit(1);
+  
+  if (!downlineUser) {
+    throw new Error("用户不存在");
+  }
+  
+  if (downlineUser.inviterId !== uplineUserId) {
+    throw new Error("该用户不是您的直推下级");
+  }
+  
+  // 获取实名认证状态
+  const [identity] = await db.select({
+    status: identityVerifications.status,
+    realName: identityVerifications.realName,
+    reviewedAt: identityVerifications.reviewedAt,
+  }).from(identityVerifications).where(eq(identityVerifications.userId, downlineUserId)).limit(1);
+  
+  // 获取充值记录
+  const depositRecords = await db.select({
+    id: deposits.id,
+    amount: deposits.amount,
+    status: deposits.status,
+    method: deposits.method,
+    createdAt: deposits.createdAt,
+  }).from(deposits).where(eq(deposits.userId, downlineUserId)).orderBy(desc(deposits.createdAt)).limit(20);
+  
+  // 计算充值总额（已完成的）
+  const completedDeposits = depositRecords.filter(d => d.status === "completed");
+  const totalDeposit = completedDeposits.reduce((sum, d) => sum + parseFloat(d.amount), 0);
+  
+  return {
+    id: downlineUser.id,
+    phone: downlineUser.phone?.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2"),
+    vipLevel: downlineUser.vipLevel,
+    createdAt: downlineUser.createdAt,
+    identityStatus: identity?.status || "none",
+    identityName: identity?.status === "approved" ? identity.realName?.replace(/^(.).*$/, "$1**") : null,
+    depositCount: depositRecords.length,
+    totalDeposit: totalDeposit.toFixed(2),
+    deposits: depositRecords.map(d => ({
+      id: d.id,
+      amount: d.amount,
+      status: d.status,
+      method: d.method,
+      createdAt: d.createdAt,
+    })),
+  };
+}
+
+// 获取所有直推下级的详细信息列表
+export async function getDirectReferralsWithDetails(userId: number) {
+  const directReferrals = await db.select({
+    id: users.id,
+    phone: users.phone,
+    createdAt: users.createdAt,
+    vipLevel: users.vipLevel,
+  })
+    .from(users)
+    .where(eq(users.inviterId, userId))
+    .orderBy(desc(users.createdAt));
+  
+  const result = await Promise.all(
+    directReferrals.map(async (ref) => {
+      // 获取实名认证状态
+      const [identity] = await db.select({
+        status: identityVerifications.status,
+      }).from(identityVerifications).where(eq(identityVerifications.userId, ref.id)).limit(1);
+      
+      // 获取充值总额
+      const depositSum = await db.select({
+        total: sql<string>`COALESCE(SUM(CASE WHEN status = 'completed' THEN amount ELSE 0 END), 0)`,
+      }).from(deposits).where(eq(deposits.userId, ref.id));
+      
+      return {
+        id: ref.id,
+        phone: ref.phone?.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2"),
+        createdAt: ref.createdAt,
+        vipLevel: ref.vipLevel,
+        identityStatus: identity?.status || "none",
+        totalDeposit: parseFloat(depositSum[0]?.total || "0").toFixed(2),
+      };
+    })
+  );
+  
+  return result;
 }
