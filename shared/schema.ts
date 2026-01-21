@@ -336,7 +336,9 @@ export const groupMessages = pgTable("group_messages", {
   userId: integer("user_id").references(() => users.id),
   senderType: varchar("sender_type", { length: 20 }).default("user").notNull(),
   senderName: varchar("sender_name", { length: 100 }),
+  messageType: varchar("message_type", { length: 20 }).default("text").notNull(),
   content: text("content").notNull(),
+  mediaUrl: text("media_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

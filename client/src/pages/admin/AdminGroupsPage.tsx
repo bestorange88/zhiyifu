@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Users, Plus, Trash2, Edit2, X, Check, UserPlus, MessageCircle, Send, ArrowLeft, Loader2, Gift } from "lucide-react";
+import { Users, Plus, Trash2, Edit2, X, Check, UserPlus, MessageCircle, Send, ArrowLeft, Loader2, Gift, Image, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,7 +41,9 @@ interface GroupMessage {
   userId: number | null;
   senderType: string;
   senderName: string | null;
+  messageType: string;
   content: string;
+  mediaUrl: string | null;
   createdAt: string;
   phone: string | null;
 }
@@ -57,6 +59,8 @@ export default function AdminGroupsPage() {
   const [chatGroup, setChatGroup] = useState<Group | null>(null);
   const [chatInput, setChatInput] = useState("");
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
   
   // 红包相关状态
   const [showRedPacketDialog, setShowRedPacketDialog] = useState(false);
@@ -168,14 +172,14 @@ export default function AdminGroupsPage() {
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async (data: { content: string; messageType?: string; mediaUrl?: string }) => {
       const res = await fetch(`/api/admin/groups/${chatGroup!.id}/messages`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify(data),
       });
       if (!res.ok) throw new Error("Failed to send message");
       return res.json();
@@ -197,7 +201,52 @@ export default function AdminGroupsPage() {
 
   const handleSendMessage = () => {
     if (!chatInput.trim() || sendMessageMutation.isPending) return;
-    sendMessageMutation.mutate(chatInput.trim());
+    sendMessageMutation.mutate({ content: chatInput.trim() });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+    
+    if (!isImage && !isVideo) {
+      toast({ title: "只支持图片和视频文件", variant: "destructive" });
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      toast({ title: "文件大小不能超过50MB", variant: "destructive" });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      
+      if (!res.ok) throw new Error("上传失败");
+      
+      const { url } = await res.json();
+      const messageType = isImage ? "image" : "video";
+      const content = isImage ? "[图片]" : "[视频]";
+      
+      sendMessageMutation.mutate({ content, messageType, mediaUrl: url });
+    } catch (error) {
+      toast({ title: "上传失败", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
   };
 
   // 发送红包
@@ -540,9 +589,24 @@ export default function AdminGroupsPage() {
                           ? "bg-gradient-to-br from-orange-400 to-red-500 text-white ml-auto max-w-[80%]" 
                           : "bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 text-gray-800 dark:text-gray-200 max-w-[80%]"
                       )}>
-                        <p className="text-sm whitespace-pre-line">
-                          {msg.content}
-                        </p>
+                        {msg.messageType === "image" && msg.mediaUrl ? (
+                          <img 
+                            src={msg.mediaUrl} 
+                            alt="图片" 
+                            className="max-w-full rounded-lg cursor-pointer hover:opacity-90"
+                            onClick={() => window.open(msg.mediaUrl!, "_blank")}
+                          />
+                        ) : msg.messageType === "video" && msg.mediaUrl ? (
+                          <video 
+                            src={msg.mediaUrl} 
+                            controls 
+                            className="max-w-full rounded-lg"
+                          />
+                        ) : (
+                          <p className="text-sm whitespace-pre-line">
+                            {msg.content}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -562,6 +626,26 @@ export default function AdminGroupsPage() {
 
           <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
             <div className="flex items-center gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                accept="image/*,video/*"
+                className="hidden"
+              />
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading || sendMessageMutation.isPending}
+                title="发送图片或视频"
+              >
+                {isUploading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Image className="w-4 h-4" />
+                )}
+              </Button>
               <Input
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
@@ -572,7 +656,7 @@ export default function AdminGroupsPage() {
               />
               <Button
                 onClick={handleSendMessage}
-                disabled={!chatInput.trim() || sendMessageMutation.isPending}
+                disabled={!chatInput.trim() || sendMessageMutation.isPending || isUploading}
                 data-testid="button-send-admin-group-message"
               >
                 {sendMessageMutation.isPending ? (

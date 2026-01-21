@@ -743,8 +743,8 @@ export function registerApiRoutes(app: Express): void {
   app.post("/api/admin/groups/:id/messages", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {
       const groupId = parseInt(req.params.id);
-      const { content } = req.body;
-      const message = await groupService.sendAdminGroupMessage(groupId, req.adminId!, content);
+      const { content, messageType, mediaUrl } = req.body;
+      const message = await groupService.sendAdminGroupMessage(groupId, req.adminId!, content, messageType || "text", mediaUrl);
       res.status(201).json(message);
     } catch (error: any) {
       res.status(400).json({ error: error.message });

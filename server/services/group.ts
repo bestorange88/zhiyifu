@@ -128,7 +128,7 @@ export async function getSystemGroups() {
   return groups;
 }
 
-export async function sendGroupMessage(groupId: number, userId: number, content: string) {
+export async function sendGroupMessage(groupId: number, userId: number, content: string, messageType: string = "text", mediaUrl?: string) {
   const isMember = await db.select().from(groupMembers)
     .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
   
@@ -140,7 +140,9 @@ export async function sendGroupMessage(groupId: number, userId: number, content:
     groupId,
     userId,
     senderType: "user",
+    messageType,
     content,
+    mediaUrl,
   }).returning();
   
   return message;
@@ -161,7 +163,9 @@ export async function getGroupMessages(groupId: number, userId: number, limit: n
       userId: groupMessages.userId,
       senderType: groupMessages.senderType,
       senderName: groupMessages.senderName,
+      messageType: groupMessages.messageType,
       content: groupMessages.content,
+      mediaUrl: groupMessages.mediaUrl,
       createdAt: groupMessages.createdAt,
       phone: users.phone,
     })
@@ -196,7 +200,9 @@ export async function getAdminGroupMessages(groupId: number, limit: number = 50)
       userId: groupMessages.userId,
       senderType: groupMessages.senderType,
       senderName: groupMessages.senderName,
+      messageType: groupMessages.messageType,
       content: groupMessages.content,
+      mediaUrl: groupMessages.mediaUrl,
       createdAt: groupMessages.createdAt,
       phone: users.phone,
     })
@@ -209,7 +215,7 @@ export async function getAdminGroupMessages(groupId: number, limit: number = 50)
   return messages.reverse();
 }
 
-export async function sendAdminGroupMessage(groupId: number, adminId: number, content: string) {
+export async function sendAdminGroupMessage(groupId: number, adminId: number, content: string, messageType: string = "text", mediaUrl?: string) {
   const [group] = await db.select().from(chatGroups).where(eq(chatGroups.id, groupId));
   if (!group) {
     throw new Error("群组不存在");
@@ -220,7 +226,9 @@ export async function sendAdminGroupMessage(groupId: number, adminId: number, co
     userId: null,
     senderType: "admin",
     senderName: "管理员",
+    messageType,
     content,
+    mediaUrl,
   }).returning();
   
   return message;
