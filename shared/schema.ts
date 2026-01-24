@@ -244,6 +244,7 @@ export const withdraws = pgTable("withdraws", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  realName: varchar("real_name", { length: 50 }),
   status: varchar("status", { length: 20 }).default("applied").notNull(),
   method: varchar("method", { length: 30 }),
   accountInfo: text("account_info"),
