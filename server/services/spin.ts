@@ -185,7 +185,7 @@ async function distributeLotteryCommission(fromUserId: number, spinId: number, w
     const [uplineStatus] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, uplineUserId)).limit(1);
     const uplineVipLevel = uplineStatus?.vipLevel || 0;
 
-    // 获取佣金比例：VIP用户使用对应等级的比例，非VIP用户使用默认比例（直推5%，间推0%）
+    // 获取佣金比例：VIP用户使用对应等级的比例，非VIP用户使用默认比例（直推10%，间推0%）
     let rate = 0;
     if (uplineVipLevel >= 1) {
       const [commRate] = await db.select().from(lotteryCommissionRates).where(eq(lotteryCommissionRates.level, uplineVipLevel)).limit(1);
@@ -195,8 +195,8 @@ async function distributeLotteryCommission(fromUserId: number, spinId: number, w
           : parseFloat(commRate.indirectRate);
       }
     } else {
-      // 非VIP用户的默认佣金比例：直推5%，间推0%
-      rate = relationLevel === 1 ? 0.05 : 0;
+      // 非VIP用户的默认佣金比例：直推10%，间推0%
+      rate = relationLevel === 1 ? 0.10 : 0;
     }
 
     if (rate <= 0) continue;

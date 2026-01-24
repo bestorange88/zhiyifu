@@ -116,6 +116,52 @@ export async function getAllRankRulesAdmin() {
 
 export async function getReferralSummary(userId: number) {
   const [userRank] = await db.select().from(userRanks).where(eq(userRanks.userId, userId)).limit(1);
+
+  // Calculate commissions
+  // 1. From commissionLogs (VIP upgrades & New Lottery)
+  const logs = await db.select({
+    amount: commissionLogs.amountCents,
+    level: commissionLogs.relationLevel,
+  })
+  .from(commissionLogs)
+  .where(and(
+    eq(commissionLogs.toUserId, userId),
+    eq(commissionLogs.status, "credited")
+  ));
+
+  // 2. From commissionRecords (Old Spin)
+  const records = await db.select({
+    amount: commissionRecords.amount,
+    level: commissionRecords.level,
+  })
+  .from(commissionRecords)
+  .where(eq(commissionRecords.userId, userId));
+
+  let directCents = 0;
+  let teamCents = 0;
+
+  // Process logs (cents)
+  for (const log of logs) {
+    if (log.level === 1) {
+      directCents += log.amount;
+    } else {
+      teamCents += log.amount;
+    }
+  }
+
+  // Process records (yuan string -> cents)
+  for (const record of records) {
+    const cents = Math.floor(parseFloat(record.amount) * 100);
+    if (record.level === 1) {
+      directCents += cents;
+    } else {
+      teamCents += cents;
+    }
+  }
+
+  const totalCommissionYuan = ((directCents + teamCents) / 100).toFixed(2);
+  const directCommissionYuan = (directCents / 100).toFixed(2);
+  const teamCommissionYuan = (teamCents / 100).toFixed(2);
   
   if (!userRank) {
     return {
@@ -124,6 +170,9 @@ export async function getReferralSummary(userId: number) {
       currentRank: 0,
       currentRankName: "普通用户",
       nextRank: null,
+      totalCommissionYuan,
+      directCommissionYuan,
+      teamCommissionYuan,
     };
   }
 
@@ -150,6 +199,9 @@ export async function getReferralSummary(userId: number) {
     currentRank: userRank.currentRank,
     currentRankName: currentRule?.name || "普通用户",
     nextRank,
+    totalCommissionYuan,
+    directCommissionYuan,
+    teamCommissionYuan,
   };
 }
 
