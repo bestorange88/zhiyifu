@@ -20,8 +20,10 @@ interface DirectReferral {
   phone: string;
   createdAt: string;
   vipLevel: number;
+  level: number; // 1 or 2
   identityStatus?: string;
   totalDeposit?: string;
+  balance?: string;
 }
 
 interface DownlineDetail {
@@ -33,6 +35,7 @@ interface DownlineDetail {
   identityName: string | null;
   depositCount: number;
   totalDeposit: string;
+  balance?: string;
   deposits: {
     id: number;
     amount: string;
@@ -235,14 +238,22 @@ export default function ReferralPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-gray-800">{ref.phone}</p>
+                        {ref.level === 1 && <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 rounded">直推</span>}
+                        {ref.level === 2 && <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 rounded">间推</span>}
+                        {ref.level === 3 && <span className="text-[10px] bg-orange-100 text-orange-600 px-1.5 rounded">三代</span>}
                         {ref.identityStatus === "approved" && (
                           <Shield className="w-3.5 h-3.5 text-green-500" />
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
-                        <span>{new Date(ref.createdAt).toLocaleDateString("zh-CN")}</span>
-                        {ref.totalDeposit && parseFloat(ref.totalDeposit) > 0 && (
-                          <span className="text-blue-500">充值¥{ref.totalDeposit}</span>
+                      <div className="flex flex-col gap-0.5 text-xs text-gray-400">
+                        <div className="flex items-center gap-2">
+                          <span>{new Date(ref.createdAt).toLocaleDateString("zh-CN")}</span>
+                          {ref.totalDeposit && parseFloat(ref.totalDeposit) > 0 && (
+                            <span className="text-blue-500">充值¥{ref.totalDeposit}</span>
+                          )}
+                        </div>
+                        {ref.balance && (
+                           <span className="text-orange-500">余额: ¥{ref.balance}</span>
                         )}
                       </div>
                     </div>
@@ -299,7 +310,7 @@ export default function ReferralPage() {
                       </div>
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="grid grid-cols-2 gap-2 text-center">
                       <div className="bg-white/60 rounded-lg p-2">
                         <p className="text-lg font-bold text-purple-600">
                           {downlineDetail.vipLevel > 0 ? `V${downlineDetail.vipLevel}` : "普通"}
@@ -325,6 +336,10 @@ export default function ReferralPage() {
                       <div className="bg-white/60 rounded-lg p-2">
                         <p className="text-lg font-bold text-green-600">¥{downlineDetail.totalDeposit}</p>
                         <p className="text-xs text-gray-500">充值总额</p>
+                      </div>
+                      <div className="bg-white/60 rounded-lg p-2">
+                        <p className="text-lg font-bold text-orange-600">¥{downlineDetail.balance || "0.00"}</p>
+                        <p className="text-xs text-gray-500">当前余额</p>
                       </div>
                     </div>
                   </div>

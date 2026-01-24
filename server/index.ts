@@ -3,6 +3,8 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import path from "path";
+import { initDb } from "./db";
+import { initDefaultAdmin } from "./services/admin";
 
 const app = express();
 app.set('trust proxy', true);
@@ -64,6 +66,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await initDb();
+  await initDefaultAdmin();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -93,7 +97,6 @@ app.use((req, res, next) => {
     {
       port,
       host: "0.0.0.0",
-      reusePort: true,
     },
     () => {
       log(`serving on port ${port}`);

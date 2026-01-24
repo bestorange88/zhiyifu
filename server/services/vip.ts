@@ -251,7 +251,7 @@ export async function confirmVipUpgrade(userId: number, orderId: number) {
   };
 }
 
-async function distributeVipUpgradeCommission(fromUserId: number, payAmountCents: number, txId: number) {
+export async function distributeVipUpgradeCommission(fromUserId: number, payAmountCents: number, txId: number) {
   const [fromUser] = await db.select().from(users).where(eq(users.id, fromUserId)).limit(1);
   if (!fromUser?.inviterId) return;
 

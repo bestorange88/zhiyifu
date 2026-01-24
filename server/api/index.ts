@@ -85,6 +85,17 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/wallet/history", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const history = await walletService.getLedgerHistory(req.userId!, limit, offset);
+      res.json(history);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.get("/api/me", authMiddleware, async (req: AuthRequest, res) => {
     try {
       const user = await authService.getUserById(req.userId!);
@@ -395,19 +406,17 @@ export function registerApiRoutes(app: Express): void {
   // 获取直推下级详细信息列表（包括实名认证状态和充值记录）
   app.get("/api/referral/direct/details", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const referrals = await referralService.getDirectReferralsWithDetails(req.userId!);
+      const referrals = await referralService.getTeamMembersWithDetails(req.userId!);
       res.json(referrals);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
   });
 
-  // 获取单个下级用户详情
-  app.get("/api/referral/downline/:userId", authMiddleware, async (req: AuthRequest, res) => {
+  app.get("/api/referral/team-stats", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const downlineUserId = parseInt(req.params.userId);
-      const detail = await referralService.getDownlineUserDetail(req.userId!, downlineUserId);
-      res.json(detail);
+      const stats = await referralService.getTeamStats(req.userId!);
+      res.json(stats);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -422,34 +431,7 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/rank/status", authMiddleware, async (req: AuthRequest, res) => {
-    try {
-      const status = await referralService.getRankStatus(req.userId!);
-      res.json(status);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
 
-  app.post("/api/rank/buy", authMiddleware, async (req: AuthRequest, res) => {
-    try {
-      const { rank } = req.body;
-      const result = await referralService.buyRank(req.userId!, rank);
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/rank/confirm", authMiddleware, async (req: AuthRequest, res) => {
-    try {
-      const { orderId } = req.body;
-      const result = await referralService.confirmRankPurchase(req.userId!, orderId);
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
 
   // ============ IDENTITY VERIFICATION ============
   app.get("/api/identity/status", authMiddleware, async (req: AuthRequest, res) => {
@@ -528,6 +510,18 @@ export function registerApiRoutes(app: Express): void {
   app.get("/api/admin/me", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {
       res.json({ adminId: req.adminId, role: req.adminRole });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/points-history", adminAuthMiddleware, async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const search = req.query.search as string;
+      const result = await adminService.getPointsHistory(page, limit, search);
+      res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -715,6 +709,29 @@ export function registerApiRoutes(app: Express): void {
       const groupId = parseInt(req.params.id);
       await groupService.deleteGroup(groupId);
       res.json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/admin/groups/:groupId/members/:userId", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.groupId);
+      const userId = parseInt(req.params.userId);
+      const { role, isMuted } = req.body;
+      const result = await groupService.updateGroupMember(groupId, userId, { role, isMuted });
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/admin/groups/:groupId/members/:userId", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.groupId);
+      const userId = parseInt(req.params.userId);
+      const result = await groupService.removeGroupMember(groupId, userId);
+      res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -1102,6 +1119,21 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  app.post("/api/admin/identity-verifications/batch-review", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const { ids, approved, reviewNote } = adminIdentityBatchReviewSchema.parse(req.body);
+      const results = await identityService.batchReviewIdentityVerifications(
+        ids,
+        req.adminId!,
+        approved,
+        reviewNote
+      );
+      res.json(results);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ============ ADMIN DEPOSITS ============
   app.get("/api/admin/deposits", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {
@@ -1290,6 +1322,39 @@ export function registerApiRoutes(app: Express): void {
       const userId = parseInt(req.params.id);
       const tree = await adminService.getUserRelationshipTree(userId);
       res.json(tree);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ADMIN RANK UPGRADE REQUESTS ============
+  app.get("/api/admin/rank-upgrade-requests", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const requests = await referralService.getRankUpgradeRequests(status);
+      res.json(requests);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/rank-upgrade-requests/:id/approve", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const { adminNote } = req.body;
+      const result = await referralService.approveRankUpgradeRequest(requestId, req.adminId, adminNote);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/rank-upgrade-requests/:id/reject", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const { adminNote } = req.body;
+      const result = await referralService.rejectRankUpgradeRequest(requestId, req.adminId, adminNote);
+      res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

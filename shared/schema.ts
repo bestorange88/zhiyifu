@@ -75,6 +75,29 @@ export const signInLogs = pgTable("sign_in_logs", {
   userDateUnique: { unique: true, columns: [table.userId, table.signDate] },
 }));
 
+export const rankUpgradeRequests = pgTable("rank_upgrade_requests", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  targetRank: integer("target_rank").notNull(),
+  currentRank: integer("current_rank").notNull(),
+  directCount: integer("direct_count").default(0),
+  team3genCount: integer("team_3gen_count").default(0),
+  bonusAmount: decimal("bonus_amount", { precision: 10, scale: 2 }).default("0"),
+  status: varchar("status", { length: 20 }).default("pending").notNull(), // pending, approved, rejected
+  adminNote: text("admin_note"),
+  reviewedBy: varchar("reviewed_by", { length: 50 }),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertRankUpgradeRequestSchema = createInsertSchema(rankUpgradeRequests).omit({
+  id: true,
+  createdAt: true,
+  reviewedAt: true,
+});
+export type InsertRankUpgradeRequest = z.infer<typeof insertRankUpgradeRequestSchema>;
+export type RankUpgradeRequest = typeof rankUpgradeRequests.$inferSelect;
+
 // 签到连续奖励规则
 export const signInRewardRules = pgTable("sign_in_reward_rules", {
   id: serial("id").primaryKey(),
@@ -326,7 +349,8 @@ export const groupMembers = pgTable("group_members", {
   id: serial("id").primaryKey(),
   groupId: integer("group_id").notNull().references(() => chatGroups.id),
   userId: integer("user_id").notNull().references(() => users.id),
-  role: varchar("role", { length: 20 }).default("member").notNull(),
+  role: varchar("role", { length: 20 }).default("member").notNull(), // member | admin
+  isMuted: boolean("is_muted").default(false).notNull(),
   joinedAt: timestamp("joined_at").defaultNow().notNull(),
 });
 
@@ -651,6 +675,12 @@ export const identityVerificationSubmitSchema = z.object({
 });
 
 export const adminIdentityReviewSchema = z.object({
+  approved: z.boolean(),
+  reviewNote: z.string().optional(),
+});
+
+export const adminIdentityBatchReviewSchema = z.object({
+  ids: z.array(z.number()),
   approved: z.boolean(),
   reviewNote: z.string().optional(),
 });

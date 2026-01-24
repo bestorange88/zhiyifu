@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { db } from "../db";
 import { users, wallets, spinBalance, userRanks, chatGroups, groupMembers, ledger } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { updateUserRankStats } from "./referral";
 import { verifyCode } from "./sms";
 import { checkRegisterRisk, recordUserDevice, checkCycleReferrals } from "./riskControl";
@@ -184,8 +184,10 @@ async function joinSystemGroups(userId: number) {
   const systemGroups = await db.select().from(chatGroups).where(eq(chatGroups.isSystem, true));
   for (const group of systemGroups) {
     const existingMember = await db.select().from(groupMembers)
-      .where(eq(groupMembers.groupId, group.id))
-      .where(eq(groupMembers.userId, userId))
+      .where(and(
+        eq(groupMembers.groupId, group.id),
+        eq(groupMembers.userId, userId)
+      ))
       .limit(1);
     if (existingMember.length === 0) {
       await db.insert(groupMembers).values({

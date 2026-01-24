@@ -19,13 +19,15 @@ export async function getWithdrawRules(userId: number) {
     .from(wheelSpins)
     .where(eq(wheelSpins.userId, userId));
 
-  const minAmount = parseFloat(vipStatus.withdrawMinAmount);
+  const isVip = vipStatus.level > 0;
+  // VIP users can withdraw any amount (min 1 to avoid zero), Regular users need 100
+  const minAmount = isVip ? 1 : 100;
   const availableBalance = parseFloat(wallet.balanceCashAvailable);
   
   const conditions = {
-    minCheckins: 7,
+    minCheckins: 0,
     currentCheckins: checkinCount[0]?.count || 0,
-    minSpins: 10,
+    minSpins: 0,
     currentSpins: spinCount[0]?.count || 0,
     minAmount,
     availableBalance,

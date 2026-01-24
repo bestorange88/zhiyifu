@@ -119,3 +119,23 @@ export async function reviewIdentityVerification(
 
   return updated;
 }
+
+export async function batchReviewIdentityVerifications(
+  verificationIds: number[],
+  adminId: number,
+  approved: boolean,
+  reviewNote?: string
+) {
+  if (!verificationIds.length) return [];
+
+  const results = [];
+  for (const id of verificationIds) {
+    try {
+      const result = await reviewIdentityVerification(id, adminId, approved, reviewNote);
+      results.push({ id, status: "success", data: result });
+    } catch (error: any) {
+      results.push({ id, status: "error", error: error.message });
+    }
+  }
+  return results;
+}

@@ -11,9 +11,9 @@ import { apiRequest } from "@/lib/queryClient";
 
 const benefits = [
   { id: 'lottery', title: '转盘奖励', description: '资助贡献值', action: '去抽奖', icon: <Gift className="w-5 h-5 text-rose-500" />, gradient: 'from-rose-50 to-pink-50' },
-  { id: 'agent', title: '分佣奖励', description: '申请代理', action: '去开通', icon: <Zap className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-orange-50' },
-  { id: 'invite', title: '邀请好友', description: '无限福利', action: '去邀请', icon: <Share2 className="w-5 h-5 text-blue-500" />, gradient: 'from-blue-50 to-indigo-50' },
-  { id: 'vip', title: '会员中心', description: 'AI会员套餐', action: '立即开通', icon: <Crown className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-yellow-50' },
+  { id: 'team', title: '我的团队', description: '团队管理', action: '去查看', icon: <User className="w-5 h-5 text-blue-500" />, gradient: 'from-blue-50 to-indigo-50' },
+  { id: 'invite', title: '邀请好友', description: '无限福利', action: '去邀请', icon: <Share2 className="w-5 h-5 text-purple-500" />, gradient: 'from-purple-50 to-violet-50' },
+  { id: 'vip', title: 'VIP会员', description: 'AI会员套餐', action: '立即开通', icon: <Crown className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-yellow-50' },
 ];
 
 export default function MinePage() {
@@ -71,6 +71,12 @@ export default function MinePage() {
     enabled: !!user,
   });
 
+  useEffect(() => {
+    if (showIdentityDialog && identityStatus?.status === "rejected") {
+      setIdentityRealName(identityStatus.realName || "");
+    }
+  }, [showIdentityDialog, identityStatus]);
+
   const identitySubmitMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const token = localStorage.getItem("token");
@@ -111,6 +117,15 @@ export default function MinePage() {
     enabled: !!user,
   });
 
+  const { data: withdrawRules } = useQuery({
+    queryKey: ["/api/withdraw/rules"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/withdraw/rules");
+      return res.json();
+    },
+    enabled: !!user && showWithdrawDialog,
+  });
+
   const handleWithdrawSubmit = async () => {
     if (isWithdrawing) return;
     
@@ -119,8 +134,10 @@ export default function MinePage() {
       toast({ title: "请输入有效的提现金额", variant: "destructive" });
       return;
     }
-    if (amount < 10) {
-      toast({ title: "最低提现金额为10元", variant: "destructive" });
+    
+    const minAmount = withdrawRules?.minAmount || 100;
+    if (amount < minAmount) {
+      toast({ title: `最低提现金额为${minAmount}元`, variant: "destructive" });
       return;
     }
     if (!withdrawAccount.trim()) {
@@ -284,8 +301,8 @@ export default function MinePage() {
       case 'lottery':
         setShowLotteryDialog(true);
         break;
-      case 'agent':
-        setLocation('/referral');
+      case 'team':
+        setLocation('/team');
         break;
     }
   };
@@ -437,7 +454,16 @@ export default function MinePage() {
               </div>
             </div>
             <div className="text-white flex-1">
-              <h3 className="font-bold text-lg text-shadow-sm">{user.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg text-shadow-sm">{user.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}</h3>
+                <button 
+                  onClick={() => setLocation('/transactions')}
+                  className="px-2 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium backdrop-blur-sm transition-colors flex items-center gap-1"
+                >
+                  <History className="w-3 h-3" />
+                  资金明细
+                </button>
+              </div>
               <div className="flex items-center gap-2 mt-1.5">
                 {user.vipLevel > 0 ? (
                   <span className="badge-sm bg-amber-400/90 text-amber-900">VIP{user.vipLevel}</span>
@@ -535,6 +561,12 @@ export default function MinePage() {
               data-testid="button-withdraw"
             >
               提现
+            </button>
+            <button
+              onClick={() => setLocation('/transactions')}
+              className="flex-1 px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-200 transition-colors"
+            >
+              明细
             </button>
           </div>
         </div>
@@ -1016,11 +1048,11 @@ export default function MinePage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">提现金额</label>
               <input
                 type="number"
-                placeholder="请输入提现金额（最低10元）"
+                placeholder={`请输入提现金额（最低${withdrawRules?.minAmount || 100}元）`}
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
                 className="input-modern"
-                min="10"
+                min={withdrawRules?.minAmount || 100}
                 step="0.01"
                 data-testid="input-withdraw-amount"
               />

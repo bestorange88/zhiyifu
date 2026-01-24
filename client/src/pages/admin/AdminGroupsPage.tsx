@@ -11,13 +11,14 @@ import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "./AdminLayout";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, maskPhoneNumber } from "@/lib/utils";
 
 interface GroupMember {
   id: number;
   userId: number;
   role: string;
   phone: string | null;
+  isMuted: boolean;
 }
 
 interface Group {
@@ -56,6 +57,8 @@ export default function AdminGroupsPage() {
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<number[]>([]);
+  const [manageMembersDialog, setManageMembersDialog] = useState(false);
+  const [currentGroupMembers, setCurrentGroupMembers] = useState<GroupMember[]>([]);
   const [chatGroup, setChatGroup] = useState<Group | null>(null);
   const [chatInput, setChatInput] = useState("");
   const chatScrollRef = useRef<HTMLDivElement>(null);
@@ -155,6 +158,50 @@ export default function AdminGroupsPage() {
     },
     onError: () => {
       toast({ title: "删除失败", variant: "destructive" });
+    },
+  });
+
+  const updateMemberMutation = useMutation({
+    mutationFn: async ({ groupId, userId, data }: { groupId: number; userId: number; data: any }) => {
+      const res = await fetch(`/api/admin/groups/${groupId}/members/${userId}`, {
+        method: "PUT",
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update member");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/groups"] });
+      toast({ title: "成员状态已更新" });
+      // 更新本地状态以即时反映变化
+      setCurrentGroupMembers(prev => prev.map(m => {
+        // @ts-ignore
+        if (m.userId === updateMemberMutation.variables?.userId) {
+          // @ts-ignore
+          return { ...m, ...updateMemberMutation.variables?.data };
+        }
+        return m;
+      }));
+    },
+  });
+
+  const removeMemberMutation = useMutation({
+    mutationFn: async ({ groupId, userId }: { groupId: number; userId: number }) => {
+      const res = await fetch(`/api/admin/groups/${groupId}/members/${userId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to remove member");
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/groups"] });
+      toast({ title: "成员已移除" });
+      setCurrentGroupMembers(prev => prev.filter(m => m.userId !== variables.userId));
     },
   });
 
@@ -298,6 +345,12 @@ export default function AdminGroupsPage() {
       packetCount: parseInt(redPacketPacketCount) || 1,
       greeting: redPacketGreeting,
     });
+  };
+
+  const handleManageMembers = (group: Group) => {
+    setEditingGroup(group);
+    setCurrentGroupMembers(group.members);
+    setManageMembersDialog(true);
   };
 
   const resetForm = () => {
@@ -505,7 +558,7 @@ export default function AdminGroupsPage() {
                         data-testid={`checkbox-user-${user.id}`}
                       />
                       <span className="text-sm text-gray-700 dark:text-gray-300">
-                        {user.phone || `用户 ${user.id}`}
+                        {maskPhoneNumber(user.phone) || `用户 ${user.id}`}
                       </span>
                     </label>
                   ))
@@ -563,7 +616,7 @@ export default function AdminGroupsPage() {
             ) : (
               chatMessages.map((msg) => {
                 const isAdmin = msg.senderType === "admin";
-                const displayName = isAdmin ? (msg.senderName || "管理员") : (msg.phone || `用户 ${msg.userId}`);
+                const displayName = isAdmin ? (msg.senderName || "管理员") : (maskPhoneNumber(msg.phone) || `用户 ${msg.userId}`);
                 return (
                   <div key={msg.id} className={cn("flex gap-2", isAdmin && "flex-row-reverse")}>
                     <div className={cn(
@@ -634,7 +687,14 @@ export default function AdminGroupsPage() {
                 className="hidden"
               />
               <Button
-                variant="outline"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleManageMembers(group)}
+                  >
+                    <Users className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading || sendMessageMutation.isPending}
@@ -666,6 +726,83 @@ export default function AdminGroupsPage() {
                 )}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={manageMembersDialog} onOpenChange={setManageMembersDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>管理群成员 - {editingGroup?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-900">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">用户ID</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">手机号</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">角色</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {currentGroupMembers.map((member) => (
+                  <tr key={member.id}>
+                    <td className="px-4 py-2 text-sm">{member.userId}</td>
+                    <td className="px-4 py-2 text-sm">{member.phone}</td>
+                    <td className="px-4 py-2 text-sm">
+                      <select
+                        value={member.role}
+                        onChange={(e) => updateMemberMutation.mutate({
+                          groupId: editingGroup!.id,
+                          userId: member.userId,
+                          data: { role: e.target.value }
+                        })}
+                        className="border rounded px-2 py-1 text-xs"
+                      >
+                        <option value="member">成员</option>
+                        <option value="admin">管理员</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      <span className={`px-2 py-1 text-xs rounded-full ${member.isMuted ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
+                        {member.isMuted ? "已禁言" : "正常"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-sm">
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateMemberMutation.mutate({
+                            groupId: editingGroup!.id,
+                            userId: member.userId,
+                            data: { isMuted: !member.isMuted }
+                          })}
+                        >
+                          {member.isMuted ? "解禁" : "禁言"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => {
+                            if (confirm("确定要踢出该成员吗？")) {
+                              removeMemberMutation.mutate({
+                                groupId: editingGroup!.id,
+                                userId: member.userId
+                              });
+                            }
+                          }}
+                        >
+                          踢出
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </DialogContent>
       </Dialog>

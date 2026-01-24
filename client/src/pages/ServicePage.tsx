@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { User, CreditCard, FlaskConical, FileText, ChevronRight, ChevronDown, Headphones, Gift, MessageCircle, Send, Bot, ArrowLeft, Loader2, Users, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, maskPhoneNumber } from "@/lib/utils";
 import { format } from "date-fns";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
@@ -367,7 +367,7 @@ export default function ServicePage() {
             groupMessages.map((msg) => {
               const isMe = msg.userId === user?.id;
               const isAdmin = msg.senderType === "admin";
-              const displayName = isAdmin ? (msg.senderName || "管理员") : (msg.phone || `用户${msg.userId}`);
+              const displayName = isAdmin ? (msg.senderName || "管理员") : (maskPhoneNumber(msg.phone) || `用户${msg.userId}`);
               return (
                 <div
                   key={msg.id}
@@ -515,7 +515,7 @@ export default function ServicePage() {
                             <User className="w-4 h-4 text-gray-500" />
                           </div>
                           <span className="text-gray-700 text-sm">
-                            {claim.phone || `用户${claim.userId}`}
+                            {maskPhoneNumber(claim.phone) || `用户${claim.userId}`}
                           </span>
                           {claim.isLuckiest && (
                             <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">

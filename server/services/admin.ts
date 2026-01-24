@@ -3,7 +3,7 @@ import {
   admins, users, wallets, withdraws, orders, agentApplications, userRanks,
   systemSettings, featureFlags, deposits, adminActions, commissionRecords,
   serviceChatSessions, serviceChatMessages, wheelPrizes, wheelSpins, vipPlans, ledger,
-  paymentQrCodes, commissionLogs
+  paymentQrCodes, commissionLogs, identityVerifications
 } from "@shared/schema";
 import { eq, desc, sql, count, and, gt, gte, sum } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -181,8 +181,8 @@ export async function getUserList(page = 1, limit = 20, search?: string, vipLeve
   if (search) {
     const searchLower = search.toLowerCase();
     filtered = filtered.filter(u => 
-      u.phone.toLowerCase().includes(searchLower) || 
-      u.inviteCode.toLowerCase().includes(searchLower)
+      (u.phone || "").toLowerCase().includes(searchLower) || 
+      (u.inviteCode || "").toLowerCase().includes(searchLower)
     );
   }
   if (vipLevel !== undefined && vipLevel !== "") {
@@ -252,7 +252,12 @@ export async function getWithdrawList(status?: string, page = 1, limit = 20) {
   const listWithUser = await Promise.all(
     list.map(async (w) => {
       const [user] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, w.userId)).limit(1);
-      return { ...w, userPhone: user?.phone || "未知" };
+      const [identity] = await db.select({ realName: identityVerifications.realName }).from(identityVerifications).where(and(eq(identityVerifications.userId, w.userId), eq(identityVerifications.status, "approved"))).orderBy(desc(identityVerifications.createdAt)).limit(1);
+      return { 
+        ...w, 
+        userPhone: user?.phone || "未知",
+        realName: identity?.realName || "未实名"
+      };
     })
   );
   
@@ -514,7 +519,12 @@ export async function getDepositList(page = 1, limit = 50) {
   const listWithUser = await Promise.all(
     list.map(async (d) => {
       const [user] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, d.userId)).limit(1);
-      return { ...d, userPhone: user?.phone || "未知" };
+      const [identity] = await db.select({ realName: identityVerifications.realName }).from(identityVerifications).where(and(eq(identityVerifications.userId, d.userId), eq(identityVerifications.status, "approved"))).orderBy(desc(identityVerifications.createdAt)).limit(1);
+      return { 
+        ...d, 
+        userPhone: user?.phone || "未知",
+        realName: identity?.realName || "未实名"
+      };
     })
   );
   
@@ -886,6 +896,49 @@ export async function getUserRelationshipTree(userId: number) {
     },
     upline,
     downline: downlineWithCount,
+  };
+}
+
+export async function getPointsHistory(page = 1, limit = 50, search?: string) {
+  const offset = (page - 1) * limit;
+  
+  let query = db.select({
+    id: ledger.id,
+    userId: ledger.userId,
+    type: ledger.type,
+    amount: ledger.amount,
+    currency: ledger.currency,
+    description: ledger.description,
+    createdAt: ledger.createdAt,
+    userPhone: users.phone,
+  })
+  .from(ledger)
+  .leftJoin(users, eq(ledger.userId, users.id))
+  .where(eq(ledger.currency, "points"))
+  .orderBy(desc(ledger.createdAt));
+
+  if (search) {
+    query = query.where(and(
+      eq(ledger.currency, "points"),
+      sql`${users.phone} LIKE ${`%${search}%`}`
+    )) as any;
+  }
+
+  const history = await query.limit(limit).offset(offset);
+  
+  const [total] = await db.select({ count: count() })
+    .from(ledger)
+    .leftJoin(users, eq(ledger.userId, users.id))
+    .where(and(
+      eq(ledger.currency, "points"),
+      search ? sql`${users.phone} LIKE ${`%${search}%`}` : undefined
+    ));
+
+  return {
+    history,
+    total: total?.count || 0,
+    page,
+    limit,
   };
 }
 

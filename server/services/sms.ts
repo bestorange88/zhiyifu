@@ -3,7 +3,7 @@ import { verificationCodes, users } from "@shared/schema";
 import { eq, and, gt, desc, sql } from "drizzle-orm";
 
 const SMSBAO_USERNAME = "18515151970";
-const SMSBAO_API_KEY = process.env.SMSBAO_API_KEY;
+const SMSBAO_API_KEY = "aab12976268a446bb615bd38b46ef8e5";
 const CODE_EXPIRE_MINUTES = 5;
 const RESEND_COOLDOWN_SECONDS = 50;
 

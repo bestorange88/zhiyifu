@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yunzhiyifu-v1';
+const CACHE_NAME = 'yunzhiyifu-v2';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -41,6 +41,11 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - Network first, fallback to cache
 self.addEventListener('fetch', (event) => {
+  // Skip chrome-extension requests
+  if (event.request.url.startsWith('chrome-extension://')) {
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then((response) => {

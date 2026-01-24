@@ -128,12 +128,23 @@ export async function getSystemGroups() {
   return groups;
 }
 
+export async function updateGroupMember(groupId: number, userId: number, data: { role?: string; isMuted?: boolean }) {
+  await db.update(groupMembers)
+    .set(data)
+    .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
+  return { success: true };
+}
+
 export async function sendGroupMessage(groupId: number, userId: number, content: string, messageType: string = "text", mediaUrl?: string) {
-  const isMember = await db.select().from(groupMembers)
+  const [member] = await db.select().from(groupMembers)
     .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)));
   
-  if (isMember.length === 0) {
+  if (!member) {
     throw new Error("您不是该群组成员");
+  }
+
+  if (member.isMuted) {
+    throw new Error("您已被禁言");
   }
   
   const [message] = await db.insert(groupMessages).values({

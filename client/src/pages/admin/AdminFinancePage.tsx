@@ -4,12 +4,13 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Check, X, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { Check, X, ArrowUpCircle, ArrowDownCircle, Eye } from "lucide-react";
 
 interface Withdraw {
   id: number;
@@ -20,6 +21,8 @@ interface Withdraw {
   accountInfo: string | null;
   createdAt: string;
   phone?: string;
+  userPhone?: string;
+  realName?: string;
 }
 
 interface Deposit {
@@ -32,12 +35,16 @@ interface Deposit {
   remark: string | null;
   createdAt: string;
   phone?: string;
+  userPhone?: string;
+  realName?: string;
 }
 
 export default function AdminFinancePage() {
   const { token } = useAdminAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("withdraws");
+  const [showImageDialog, setShowImageDialog] = useState(false);
+  const [currentImage, setCurrentImage] = useState<string>("");
 
   const { data: withdraws, isLoading: withdrawsLoading } = useQuery<Withdraw[]>({
     queryKey: ["/api/admin/withdraws"],
@@ -103,6 +110,11 @@ export default function AdminFinancePage() {
     },
   });
 
+  const viewImage = (imageUrl: string) => {
+    setCurrentImage(imageUrl);
+    setShowImageDialog(true);
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
@@ -149,9 +161,10 @@ export default function AdminFinancePage() {
                       <tr>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">ID</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">用户</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">真实姓名</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">金额</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">方式</th>
-                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">账户</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">收款账户</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">状态</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">时间</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">操作</th>
@@ -161,10 +174,20 @@ export default function AdminFinancePage() {
                       {withdraws.map((item) => (
                         <tr key={item.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 text-sm">{item.id}</td>
-                          <td className="px-4 py-3 text-sm">{item.phone || `用户${item.userId}`}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <div className="flex flex-col">
+                              <span>{item.userPhone || item.phone}</span>
+                              <span className="text-xs text-gray-400">ID: {item.userId}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm">{item.realName}</td>
                           <td className="px-4 py-3 text-sm font-medium text-red-600">-¥{item.amount}</td>
-                          <td className="px-4 py-3 text-sm">{item.method || "-"}</td>
-                          <td className="px-4 py-3 text-sm max-w-[150px] truncate">{item.accountInfo || "-"}</td>
+                          <td className="px-4 py-3 text-sm">
+                            {item.method === 'alipay' ? '支付宝' : 
+                             item.method === 'wechat' ? '微信' : 
+                             item.method === 'bank' ? '银行卡' : item.method}
+                          </td>
+                          <td className="px-4 py-3 text-sm max-w-[150px] truncate" title={item.accountInfo || ""}>{item.accountInfo || "-"}</td>
                           <td className="px-4 py-3">{getStatusBadge(item.status)}</td>
                           <td className="px-4 py-3 text-sm text-gray-500">
                             {format(new Date(item.createdAt), "MM-dd HH:mm")}
@@ -219,8 +242,10 @@ export default function AdminFinancePage() {
                       <tr>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">ID</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">用户</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">真实姓名</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">金额</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">方式</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">付款凭证</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">备注</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">状态</th>
                         <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">时间</th>
@@ -231,9 +256,30 @@ export default function AdminFinancePage() {
                       {deposits.map((item) => (
                         <tr key={item.id} className="hover:bg-gray-50">
                           <td className="px-4 py-3 text-sm">{item.id}</td>
-                          <td className="px-4 py-3 text-sm">{item.phone || `用户${item.userId}`}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <div className="flex flex-col">
+                              <span>{item.userPhone || item.phone}</span>
+                              <span className="text-xs text-gray-400">ID: {item.userId}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm">{item.realName}</td>
                           <td className="px-4 py-3 text-sm font-medium text-green-600">+¥{item.amount}</td>
                           <td className="px-4 py-3 text-sm">{item.method || "-"}</td>
+                          <td className="px-4 py-3 text-sm">
+                            {item.proofImage ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => viewImage(item.proofImage!)}
+                                className="h-8 px-2"
+                              >
+                                <Eye className="w-3 h-3 mr-1" />
+                                查看
+                              </Button>
+                            ) : (
+                              <span className="text-gray-400">无</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-sm max-w-[150px] truncate">{item.remark || "-"}</td>
                           <td className="px-4 py-3">{getStatusBadge(item.status)}</td>
                           <td className="px-4 py-3 text-sm text-gray-500">
@@ -272,6 +318,22 @@ export default function AdminFinancePage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={showImageDialog} onOpenChange={setShowImageDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>查看凭证</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center">
+            <img 
+              src={currentImage} 
+              alt="凭证" 
+              className="max-w-full max-h-[70vh] object-contain rounded-lg"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }
+
