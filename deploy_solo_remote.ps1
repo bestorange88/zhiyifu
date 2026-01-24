@@ -9,6 +9,14 @@ Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "   SOLO Branch Deployment Tool" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 
+# 0. Build and Package
+Write-Host "[0/4] Building and Packaging..." -ForegroundColor Green
+npm run build
+if ($LASTEXITCODE -ne 0) { Write-Error "Build failed"; exit 1 }
+
+tar -czf $LocalPackage dist package.json package-lock.json
+if ($LASTEXITCODE -ne 0) { Write-Error "Packaging failed"; exit 1 }
+
 # 1. Upload Package
 Write-Host "[1/4] Uploading package..." -ForegroundColor Green
 scp $LocalPackage ${User}@${Server}:${RemotePackage}
