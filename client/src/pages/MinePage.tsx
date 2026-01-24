@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles, Moon, Sun, Trash2, Info, Shield, MessageCircle, Phone, CreditCard, Upload, Camera, ArrowDownCircle, History } from "lucide-react";
+import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles, Moon, Sun, Trash2, Info, Shield, MessageCircle, Phone, CreditCard, Upload, Camera, ArrowDownCircle, History, CalendarCheck, HelpCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -80,12 +80,12 @@ export default function MinePage() {
       gradient: 'from-blue-50 to-indigo-50' 
     },
     { 
-      id: 'checkin', 
-      title: '连续签到', 
-      description: `已连续${checkinStatus?.currentStreak || 0}天`, 
-      action: '去签到', 
-      icon: <CalendarCheck className="w-5 h-5 text-green-500" />, 
-      gradient: 'from-green-50 to-emerald-50' 
+      id: 'invite', 
+      title: '邀请好友', 
+      description: '无限福利', 
+      action: '去邀请', 
+      icon: <Share2 className="w-5 h-5 text-purple-500" />, 
+      gradient: 'from-purple-50 to-violet-50' 
     },
     { 
       id: 'commission', 
@@ -482,13 +482,6 @@ export default function MinePage() {
             <div className="text-white flex-1">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-lg text-shadow-sm">{user.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}</h3>
-                <button 
-                  onClick={() => setLocation('/transactions')}
-                  className="px-2 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-medium backdrop-blur-sm transition-colors flex items-center gap-1"
-                >
-                  <History className="w-3 h-3" />
-                  资金明细
-                </button>
               </div>
               <div className="flex items-center gap-2 mt-1.5">
                 {(vipStatus?.vipLevel || user.vipLevel) > 0 ? (
@@ -529,7 +522,7 @@ export default function MinePage() {
 
       <div className="mx-4 -mt-16 relative z-20">
         <button 
-          onClick={() => handleBenefitClick('vip')}
+          onClick={() => setLocation('/vip')}
           className="w-full bg-gradient-to-r from-amber-100 via-amber-50 to-amber-100 rounded-2xl p-4 shadow-lg border border-amber-200/50 cursor-pointer hover:shadow-xl transition-all shine text-left"
           data-testid="button-vip-banner"
         >
@@ -557,6 +550,10 @@ export default function MinePage() {
           </div>
           <p className="stat-value">{wallet?.balancePoints || 0}</p>
           <p className="stat-label">我的积分</p>
+          <div className="flex gap-2 mt-2 justify-center">
+            <button onClick={(e) => { e.stopPropagation(); setLocation('/points-history'); }} className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded hover:bg-gray-200">记录</button>
+            <button onClick={(e) => { e.stopPropagation(); setLocation('/points-rules'); }} className="text-[10px] text-gray-500 bg-gray-100 px-2 py-0.5 rounded hover:bg-gray-200">说明</button>
+          </div>
         </div>
         <div className="stat-card">
           <div className="w-9 h-9 gradient-success rounded-xl flex items-center justify-center mb-3">
@@ -611,15 +608,14 @@ export default function MinePage() {
         </button>
 
         <button 
-          onClick={() => setShowInviteDialog(true)}
+          onClick={() => setLocation('/checkin')}
           className="card-elevated p-4 text-center hover:bg-gray-50/50 transition-colors"
-          data-testid="button-invite-friend"
         >
-          <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
-             <Share2 className="w-5 h-5 text-purple-500" />
+          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
+             <CalendarCheck className="w-5 h-5 text-green-500" />
           </div>
-          <p className="font-bold text-gray-800">邀请好友</p>
-          <p className="text-xs text-gray-400 mt-1">得积分赚现金</p>
+          <p className="font-bold text-gray-800">连续签到</p>
+          <p className="text-xs text-gray-400 mt-1">已连续{checkinStatus?.currentStreak || 0}天</p>
         </button>
       </div>
 
