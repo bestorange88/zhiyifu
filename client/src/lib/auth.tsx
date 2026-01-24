@@ -13,7 +13,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (phone: string, password: string) => Promise<void>;
-  register: (phone: string, password: string, inviteCode: string) => Promise<void>;
+  register: (phone: string, password: string, inviteCode: string, code?: string, confirmPassword?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -72,11 +72,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
   }
 
-  async function register(phone: string, password: string, inviteCode: string) {
+  async function register(phone: string, password: string, inviteCode: string, code?: string, confirmPassword?: string) {
     const response = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, password, inviteCode }),
+      body: JSON.stringify({ 
+        phone, 
+        password, 
+        inviteCode,
+        code,
+        confirmPassword: confirmPassword || password 
+      }),
     });
 
     if (!response.ok) {

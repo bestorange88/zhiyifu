@@ -30,6 +30,7 @@ export async function getSpinBalance(userId: number) {
   return {
     userId,
     availableSpins: times.available,
+    breakdown: times.breakdown,
     updatedAt: new Date(),
   };
 }

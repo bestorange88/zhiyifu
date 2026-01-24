@@ -89,7 +89,8 @@ export function registerApiRoutes(app: Express): void {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
-      const history = await walletService.getLedgerHistory(req.userId!, limit, offset);
+      const currency = req.query.currency as string;
+      const history = await walletService.getLedgerHistory(req.userId!, limit, offset, currency);
       res.json(history);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -337,6 +338,37 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  // ============ ADMIN VIP UPGRADE REQUESTS ============
+  app.get("/api/admin/vip-upgrades", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const requests = await vipService.getVipUpgradeRequests(status);
+      res.json(requests);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/vip-upgrades/:id/approve", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const result = await vipService.approveVipUpgradeRequest(requestId, req.adminId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/vip-upgrades/:id/reject", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const requestId = parseInt(req.params.id);
+      const result = await vipService.rejectVipUpgradeRequest(requestId, req.adminId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ============ WITHDRAW ============
   app.get("/api/withdraw/rules", authMiddleware, async (req: AuthRequest, res) => {
     try {
@@ -396,7 +428,7 @@ export function registerApiRoutes(app: Express): void {
 
   app.get("/api/referral/commissions", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const records = await referralService.getCommissionRecords(req.userId!);
+      const records = await referralService.getDetailedCommissionHistory(req.userId!);
       res.json(records);
     } catch (error: any) {
       res.status(400).json({ error: error.message });

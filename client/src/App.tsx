@@ -26,6 +26,7 @@ const ArticleDetailPage = lazy(() => import("@/pages/ArticleDetailPage"));
 const DownloadPage = lazy(() => import("@/pages/DownloadPage"));
 const InvitePage = lazy(() => import("@/pages/InvitePage"));
 const TeamPage = lazy(() => import("@/pages/TeamPage"));
+const CommissionRewardsPage = lazy(() => import("@/pages/CommissionRewardsPage"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 // Admin Pages
@@ -81,7 +82,13 @@ function UserRouter() {
           <Route path="/invite" component={InvitePage} />
           <Route path="/mine" component={MinePage} />
           <Route path="/team" component={TeamPage} />
+          <Route path="/commission-rewards" component={CommissionRewardsPage} />
           <Route path="/transactions" component={FundHistoryPage} />
+          <Route path="/points-history" component={PointsHistoryPage} />
+          <Route path="/points-rules" component={PointsRulesPage} />
+          <Route path="/help" component={HelpCenterPage} />
+          <Route path="/about" component={AboutPage} />
+          <Route path="/rights" component={RightsPage} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>

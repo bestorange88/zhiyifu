@@ -171,6 +171,7 @@ export const vipLevels = pgTable("vip_levels", {
   incomeMultiplier: decimal("income_multiplier", { precision: 6, scale: 2 }).default("1.00").notNull(),  // 收益倍率
   withdrawThresholdCents: integer("withdraw_threshold_cents").default(10000).notNull(),  // 提现门槛(分)
   settleType: varchar("settle_type", { length: 10 }).default("T1").notNull(),  // 'T0'|'T1'
+  benefits: text("benefits"), // JSON string of benefits list
 });
 
 // VIP推广达标要求
@@ -178,6 +179,7 @@ export const vipRequirements = pgTable("vip_requirements", {
   level: integer("level").primaryKey().references(() => vipLevels.level),
   directRequired: integer("direct_required").default(0).notNull(),
   team3Required: integer("team3_required").default(0).notNull(),  // 三代内人数
+  downlineLevelRequirements: text("downline_level_requirements"), // JSON string: {"1": 10, "2": 10} means need 10 V1s, 10 V2s
 });
 
 // VIP升级分佣比例

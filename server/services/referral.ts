@@ -172,6 +172,7 @@ export async function getTeamMembersWithDetails(userId: number) {
     phone: users.phone,
     createdAt: users.createdAt,
     vipLevel: users.vipLevel,
+    inviterId: users.inviterId,
   })
   .from(users)
   .where(eq(users.inviterId, userId))
@@ -187,6 +188,7 @@ export async function getTeamMembersWithDetails(userId: number) {
       phone: users.phone,
       createdAt: users.createdAt,
       vipLevel: users.vipLevel,
+      inviterId: users.inviterId,
     })
     .from(users)
     .where(inArray(users.inviterId, directIds))
@@ -203,6 +205,7 @@ export async function getTeamMembersWithDetails(userId: number) {
       phone: users.phone,
       createdAt: users.createdAt,
       vipLevel: users.vipLevel,
+      inviterId: users.inviterId,
     })
     .from(users)
     .where(inArray(users.inviterId, indirectIds))
@@ -283,7 +286,8 @@ export async function getTeamMembersWithDetails(userId: number) {
       isVerified: !!details.isVerified,
       realName: details.realName,
       totalDeposit: details.totalDeposit || "0",
-      totalWithdraw: details.totalWithdraw || "0"
+      totalWithdraw: details.totalWithdraw || "0",
+      inviterId: member.inviterId
     };
   };
 
@@ -544,15 +548,100 @@ export async function distributeSpinCommission(fromUserId: number, spinId: numbe
   return { directCommission, indirectCommission };
 }
 
-export async function getCommissionRecords(userId: number, limit = 50) {
-  // 旧的佣金记录（仅抽奖相关）
-  const oldRecords = await db.select()
-    .from(commissionRecords)
-    .where(eq(commissionRecords.userId, userId))
-    .orderBy(desc(commissionRecords.createdAt))
-    .limit(limit);
+export async function getDetailedCommissionHistory(userId: number, limit = 50) {
+  // 1. Get VIP Commissions from commissionLogs
+  const vipCommissions = await db.select({
+    id: commissionLogs.id,
+    amount: commissionLogs.amountCents,
+    createdAt: commissionLogs.createdAt,
+    relationLevel: commissionLogs.relationLevel,
+    bizType: commissionLogs.bizType,
+    fromUserPhone: users.phone,
+    fromUserVipLevel: users.vipLevel,
+    baseCents: commissionLogs.baseCents,
+  })
+  .from(commissionLogs)
+  .leftJoin(users, eq(commissionLogs.fromUserId, users.id))
+  .where(and(
+    eq(commissionLogs.toUserId, userId),
+    eq(commissionLogs.bizType, "vip_upgrade")
+  ))
+  .orderBy(desc(commissionLogs.createdAt))
+  .limit(limit);
 
-  return oldRecords;
+  // 2. Get Spin/Activity Commissions from commissionRecords
+  const spinCommissions = await db.select({
+    id: commissionRecords.id,
+    amount: commissionRecords.amount, // This is decimal string
+    createdAt: commissionRecords.createdAt,
+    level: commissionRecords.level,
+    sourceType: commissionRecords.sourceType,
+    rate: commissionRecords.rate,
+    fromUserPhone: users.phone,
+    fromUserVipLevel: users.vipLevel,
+  })
+  .from(commissionRecords)
+  .leftJoin(users, eq(commissionRecords.fromUserId, users.id))
+  .where(eq(commissionRecords.userId, userId))
+  .orderBy(desc(commissionRecords.createdAt))
+  .limit(limit);
+
+  // 3. Format and Merge
+  const formattedVip = vipCommissions.map(c => {
+    const amountYuan = (c.amount / 100).toFixed(2);
+    const levelName = c.relationLevel === 1 ? "直推" : c.relationLevel === 2 ? "二级" : "三级";
+    const userPhone = c.fromUserPhone ? c.fromUserPhone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : "未知用户";
+    // baseCents corresponds to the upgrade fee. We can infer the target VIP level from it if we had the map, 
+    // or we can just say "upgraded VIP".
+    // Better: look at c.baseCents. 19800 -> VIP1, 29800 -> VIP2 etc.
+    // Or we can just use "升级VIP" text.
+    // The user example: "Lower-level member ... upgraded to VIP1, bonus 19.8 yuan."
+    
+    // Attempt to guess VIP level from base amount (not perfect but workable)
+    let upgradedTo = "VIP";
+    if (c.baseCents === 19800) upgradedTo = "VIP1";
+    else if (c.baseCents === 29800) upgradedTo = "VIP2/VIP3";
+    else if (c.baseCents === 49800) upgradedTo = "VIP4";
+    else if (c.baseCents === 59800) upgradedTo = "VIP5";
+
+    return {
+      id: `vip_${c.id}`,
+      type: "vip_commission",
+      amount: amountYuan,
+      createdAt: c.createdAt,
+      title: "VIP推广佣金",
+      description: `${levelName}下级会员${userPhone}升级${upgradedTo}，获得奖金${amountYuan}元。`,
+      raw: c
+    };
+  });
+
+  const formattedSpin = spinCommissions.map(c => {
+    const amountYuan = parseFloat(c.amount).toFixed(2);
+    const levelName = c.level === 1 ? "直推" : c.level === 2 ? "二级" : "三级";
+    const userPhone = c.fromUserPhone ? c.fromUserPhone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : "未知用户";
+    
+    // Calculate prize amount from commission amount and rate
+    // prize = commission / rate
+    const rate = parseFloat(c.rate);
+    const prizeAmount = rate > 0 ? (parseFloat(c.amount) / rate).toFixed(2) : "0.00";
+
+    return {
+      id: `spin_${c.id}`,
+      type: "lottery_commission",
+      amount: amountYuan,
+      createdAt: c.createdAt,
+      title: "活动推广佣金",
+      description: `${levelName}下级会员${userPhone}转盘中奖${prizeAmount}元，获得返佣${amountYuan}元。`,
+      raw: c
+    };
+  });
+
+  // Merge and Sort
+  const allHistory = [...formattedVip, ...formattedSpin].sort((a, b) => 
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  return allHistory.slice(0, limit);
 }
 
 // New functions for Rank Upgrade Requests

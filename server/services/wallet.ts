@@ -140,10 +140,16 @@ export async function unfreezeCash(userId: number, amount: number, description?:
   });
 }
 
-export async function getLedgerHistory(userId: number, limit = 50, offset = 0) {
-  return db.select()
+export async function getLedgerHistory(userId: number, limit = 50, offset = 0, currency?: string) {
+  let query = db.select()
     .from(ledger)
-    .where(eq(ledger.userId, userId))
+    .where(eq(ledger.userId, userId));
+
+  if (currency) {
+    query.where(eq(ledger.currency, currency));
+  }
+
+  return query
     .orderBy(sql`${ledger.createdAt} DESC`)
     .limit(limit)
     .offset(offset);

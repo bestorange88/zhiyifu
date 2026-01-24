@@ -13,7 +13,7 @@ const benefits = [
   { id: 'lottery', title: '转盘奖励', description: '资助贡献值', action: '去抽奖', icon: <Gift className="w-5 h-5 text-rose-500" />, gradient: 'from-rose-50 to-pink-50' },
   { id: 'team', title: '我的团队', description: '团队管理', action: '去查看', icon: <User className="w-5 h-5 text-blue-500" />, gradient: 'from-blue-50 to-indigo-50' },
   { id: 'invite', title: '邀请好友', description: '无限福利', action: '去邀请', icon: <Share2 className="w-5 h-5 text-purple-500" />, gradient: 'from-purple-50 to-violet-50' },
-  { id: 'vip', title: 'VIP会员', description: 'AI会员套餐', action: '立即开通', icon: <Crown className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-yellow-50' },
+  { id: 'commission', title: '佣金奖励', description: '查看收益', action: '去查看', icon: <Crown className="w-5 h-5 text-amber-500" />, gradient: 'from-amber-50 to-yellow-50' },
 ];
 
 export default function MinePage() {
@@ -61,6 +61,46 @@ export default function MinePage() {
   const { data: spinBalance } = useSpinBalance();
   const { data: referralSummary } = useReferralSummary();
   const checkinMutation = useCheckin();
+
+  const benefits = [
+    { 
+      id: 'lottery', 
+      title: '转盘奖励', 
+      description: `剩余次数: ${spinBalance?.availableSpins || 0}`, 
+      action: '去抽奖', 
+      icon: <Gift className="w-5 h-5 text-rose-500" />, 
+      gradient: 'from-rose-50 to-pink-50' 
+    },
+    { 
+      id: 'team', 
+      title: '我的团队', 
+      description: '团队管理', 
+      action: '去查看', 
+      icon: <User className="w-5 h-5 text-blue-500" />, 
+      gradient: 'from-blue-50 to-indigo-50' 
+    },
+    { 
+      id: 'checkin', 
+      title: '连续签到', 
+      description: `已连续${checkinStatus?.currentStreak || 0}天`, 
+      action: '去签到', 
+      icon: <CalendarCheck className="w-5 h-5 text-green-500" />, 
+      gradient: 'from-green-50 to-emerald-50' 
+    },
+    { 
+      id: 'commission', 
+      title: '佣金奖励', 
+      description: '查看收益', 
+      action: '去查看', 
+      icon: <Crown className="w-5 h-5 text-amber-500" />, 
+      gradient: 'from-amber-50 to-yellow-50' 
+    },
+  ];
+
+  const { data: vipStatus } = useQuery({
+    queryKey: ["/api/vip/status"],
+    enabled: !!user,
+  });
 
   const { data: identityStatus, refetch: refetchIdentityStatus } = useQuery({
     queryKey: ["/api/identity/status"],
@@ -295,8 +335,8 @@ export default function MinePage() {
       case 'invite':
         setShowInviteDialog(true);
         break;
-      case 'vip':
-        setLocation('/vip');
+      case 'commission':
+        setLocation('/commission-rewards');
         break;
       case 'lottery':
         setShowLotteryDialog(true);
@@ -362,27 +402,13 @@ export default function MinePage() {
     setIsSubmitting(true);
     try {
       if (isRegisterMode) {
-        const response = await fetch("/api/auth/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            phone,
-            code: smsCode,
-            password,
-            confirmPassword,
-            inviteCode: inviteCodeInput || undefined,
-          }),
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || "注册失败");
-        }
-        localStorage.setItem("auth_token", data.token);
+        await register(phone, password, inviteCodeInput || "", smsCode, confirmPassword);
         toast({ title: "注册成功", description: "欢迎加入云智医服！" });
-        window.location.reload();
+        setLocation("/home");
       } else {
         await login(phone, password);
         toast({ title: "登录成功" });
+        setLocation("/home");
       }
       setShowLoginDialog(false);
       setPhone("");
@@ -465,8 +491,8 @@ export default function MinePage() {
                 </button>
               </div>
               <div className="flex items-center gap-2 mt-1.5">
-                {user.vipLevel > 0 ? (
-                  <span className="badge-sm bg-amber-400/90 text-amber-900">VIP{user.vipLevel}</span>
+                {(vipStatus?.vipLevel || user.vipLevel) > 0 ? (
+                  <span className="badge-sm bg-amber-400/90 text-amber-900">VIP{vipStatus?.vipLevel || user.vipLevel}</span>
                 ) : (
                   <span className="badge-sm bg-white/20 text-white/90">普通用户</span>
                 )}
@@ -573,17 +599,27 @@ export default function MinePage() {
       </div>
 
       <div className="px-4 mt-3 grid grid-cols-2 gap-3">
-        <div className="card-elevated p-4 text-center">
-          <p className="text-2xl font-bold text-primary">{spinBalance?.availableSpins || 0}</p>
-          <p className="text-xs text-gray-400 mt-1">抽奖次数</p>
-        </div>
         <button 
-          onClick={() => setLocation('/checkin')}
+          onClick={() => setLocation('/help')}
           className="card-elevated p-4 text-center hover:bg-gray-50/50 transition-colors"
-          data-testid="button-checkin-streak"
         >
-          <p className="text-2xl font-bold text-orange-500">{checkinStatus?.currentStreak || 0}</p>
-          <p className="text-xs text-gray-400 mt-1">连续签到</p>
+           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+              <HelpCircle className="w-5 h-5 text-blue-500" />
+           </div>
+           <p className="font-bold text-gray-800">帮助中心</p>
+           <p className="text-xs text-gray-400 mt-1">常见问题与说明</p>
+        </button>
+
+        <button 
+          onClick={() => setShowInviteDialog(true)}
+          className="card-elevated p-4 text-center hover:bg-gray-50/50 transition-colors"
+          data-testid="button-invite-friend"
+        >
+          <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
+             <Share2 className="w-5 h-5 text-purple-500" />
+          </div>
+          <p className="font-bold text-gray-800">邀请好友</p>
+          <p className="text-xs text-gray-400 mt-1">得积分赚现金</p>
         </button>
       </div>
 
@@ -753,15 +789,15 @@ export default function MinePage() {
       />
 
       <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
-        <DialogContent className="max-w-sm mx-auto rounded-2xl">
-          <DialogHeader>
+        <DialogContent className="max-w-[90%] w-[350px] mx-auto rounded-2xl px-0 overflow-hidden">
+          <DialogHeader className="pt-6">
             <DialogTitle className="text-center flex items-center justify-center gap-2 font-bold">
               <Share2 className="w-5 h-5 text-primary" />
               邀请好友
             </DialogTitle>
           </DialogHeader>
           
-          <div className="py-4 space-y-4">
+          <div className="px-6 pb-6 space-y-4">
             <div className="gradient-primary rounded-2xl p-6 text-center text-white shine">
               <h3 className="font-bold text-lg mb-2 text-shadow-sm">邀请好友得奖励</h3>
               <p className="text-sm text-white/80">每邀请一位好友注册，获得50积分</p>

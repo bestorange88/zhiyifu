@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Crown, ArrowLeft, Check, Zap, Gift, Clock, Shield, Star, Sparkles } from "lucide-react";
+import { Crown, ArrowLeft, Check, Zap, Gift, Clock, Shield, Star, Sparkles, AlertCircle, ChevronDown, ChevronUp, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Progress } from "@/components/ui/progress";
 
 interface VipLevel {
   id: number;
@@ -31,6 +32,7 @@ interface VipLevel {
     directRate: number;
     indirectRate: number;
   };
+  benefitsList?: string[];
 }
 
 interface VipStatus {
@@ -41,44 +43,62 @@ interface VipStatus {
   directCount: number;
   team3GenCount: number;
   frozenCommission: number;
-  requirements: {
+  currentLevelDetails: VipLevel | null;
+  nextLevelDetails: VipLevel | null;
+  qualificationProgress: {
+    directCount: number;
     directRequired: number;
-    team3GenRequired: number;
     directMet: boolean;
-    team3GenMet: boolean;
-  };
+    team3Count: number;
+    team3Required: number;
+    team3Met: boolean;
+    downlineProgress: Record<string, { current: number, required: number, met: boolean }>;
+    downlineMet: boolean;
+    isQualified: boolean;
+  } | null;
+  canUpgrade: boolean;
+  pendingRequest?: {
+    id: number;
+    toLevel: number;
+    createdAt: string;
+  } | null;
 }
 
-const rankColors: Record<number, { bg: string; border: string; badge: string; icon: string }> = {
+const rankColors: Record<number, { bg: string; border: string; badge: string; icon: string; text: string }> = {
   1: { 
-    bg: "from-slate-100 to-slate-200", 
-    border: "border-slate-300",
+    bg: "from-slate-50 to-slate-100", 
+    border: "border-slate-200",
     badge: "bg-slate-600",
-    icon: "text-slate-600"
+    icon: "text-slate-600",
+    text: "text-slate-800"
   },
   2: { 
-    bg: "from-amber-100 to-yellow-200", 
-    border: "border-amber-400",
+    bg: "from-amber-50 to-yellow-100", 
+    border: "border-amber-200",
     badge: "bg-gradient-to-r from-amber-500 to-yellow-500",
-    icon: "text-amber-600"
+    icon: "text-amber-600",
+    text: "text-amber-800"
   },
   3: { 
-    bg: "from-teal-100 to-emerald-200", 
-    border: "border-teal-400",
+    bg: "from-teal-50 to-emerald-100", 
+    border: "border-teal-200",
     badge: "bg-gradient-to-r from-teal-500 to-emerald-500",
-    icon: "text-teal-600"
+    icon: "text-teal-600",
+    text: "text-teal-800"
   },
   4: { 
-    bg: "from-purple-100 via-pink-100 to-rose-100", 
-    border: "border-purple-400",
+    bg: "from-purple-50 via-pink-50 to-rose-100", 
+    border: "border-purple-200",
     badge: "bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500",
-    icon: "text-purple-600"
+    icon: "text-purple-600",
+    text: "text-purple-800"
   },
   5: { 
-    bg: "from-rose-100 via-orange-100 to-amber-100", 
-    border: "border-rose-400",
+    bg: "from-rose-50 via-orange-50 to-amber-100", 
+    border: "border-rose-200",
     badge: "bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500",
-    icon: "text-rose-600"
+    icon: "text-rose-600",
+    text: "text-rose-800"
   },
 };
 
@@ -88,13 +108,13 @@ export default function VipPage() {
   const { user } = useAuth();
   const [selectedLevel, setSelectedLevel] = useState<VipLevel | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [activeTab, setActiveTab] = useState<number>(1);
+  const [showReasons, setShowReasons] = useState(false);
 
-  const { data: levels, isLoading } = useQuery<VipLevel[]>({
+  const { data: levels, isLoading: levelsLoading } = useQuery<VipLevel[]>({
     queryKey: ["/api/vip/levels"],
   });
 
-  const { data: vipStatus } = useQuery<VipStatus>({
+  const { data: vipStatus, isLoading: statusLoading } = useQuery<VipStatus>({
     queryKey: ["/api/vip/status"],
     enabled: !!user,
   });
@@ -111,11 +131,18 @@ export default function VipPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/vip/status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/wallet"] });
       queryClient.invalidateQueries({ queryKey: ["/api/user/me"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/referral/summary"] });
-      toast({
-        title: "开通成功",
-        description: `恭喜您成为${selectedLevel?.name}会员！${data.rewardYuan && data.rewardYuan > 0 ? `获得¥${data.rewardYuan}现金奖励` : ''}`,
-      });
+      
+      if (data.status === "pending_review") {
+        toast({
+          title: "申请提交成功",
+          description: "您的VIP升级申请已提交，请等待管理员审核",
+        });
+      } else {
+        toast({
+          title: "开通成功",
+          description: `恭喜您成为${selectedLevel?.name}会员！`,
+        });
+      }
       setShowConfirmDialog(false);
       setSelectedLevel(null);
     },
@@ -128,16 +155,21 @@ export default function VipPage() {
     },
   });
 
-  const handleSelectLevel = (level: VipLevel) => {
-    if (!user) {
+  const handleUpgradeClick = () => {
+    if (!vipStatus?.nextLevelDetails) return;
+    
+    // Check if requirements met
+    const prog = vipStatus.qualificationProgress;
+    if (prog && !prog.isQualified) {
       toast({
-        title: "请先登录",
-        description: "登录后即可开通VIP会员",
-        variant: "destructive",
+        title: "条件未达标",
+        description: "请先完成所有升级任务要求",
+        variant: "destructive"
       });
       return;
     }
-    setSelectedLevel(level);
+
+    setSelectedLevel(vipStatus.nextLevelDetails);
     setShowConfirmDialog(true);
   };
 
@@ -147,405 +179,302 @@ export default function VipPage() {
     }
   };
 
-  const getFeatures = (level: VipLevel) => {
-    const features = [];
-    features.push(`每日${level.dailyLottery}次抽奖机会`);
-    features.push(`提现${level.withdrawMinYuan}元起`);
-    features.push(`${level.withdrawSpeed}到账`);
-    features.push(`中奖倍率${level.winMultiplier}x`);
-    features.push("专属VIP客服");
-    if (level.level >= 2) {
-      features.push("AI工具无限使用");
-    }
-    if (level.level >= 3) {
-      features.push("专属推广加成");
-      features.push("优先参与新福利");
-    }
-    return features;
-  };
+  const currentLevel = vipStatus?.vipLevel || 0;
+  const currentDetails = vipStatus?.currentLevelDetails;
+  const nextDetails = vipStatus?.nextLevelDetails;
+  const prog = vipStatus?.qualificationProgress;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-gradient-to-br from-amber-400 via-orange-400 to-rose-400 px-4 pt-4 pb-20 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl -mr-20 -mt-10" />
-        <div className="absolute bottom-0 left-0 w-60 h-60 bg-yellow-300/20 rounded-full blur-3xl -ml-20 mb-10" />
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* Top Header & Status */}
+      <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 pt-4 pb-20 px-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl -mr-20 -mt-20" />
         
         <div className="flex items-center gap-3 mb-6 relative z-10">
           <button
             onClick={() => setLocation("/mine")}
-            className="p-2 bg-white/20 rounded-xl backdrop-blur-sm"
-            data-testid="button-back-vip"
+            className="p-2 bg-white/10 rounded-xl backdrop-blur-sm hover:bg-white/20 transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
           <h1 className="text-white font-bold text-lg">VIP会员中心</h1>
         </div>
 
-        <div className="relative z-10 text-center text-white">
-          <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-            <Crown className="w-10 h-10" />
-          </div>
-          <h2 className="text-2xl font-bold mb-2 text-shadow-sm">尊享VIP特权</h2>
-          <p className="text-white/80 text-sm">开通会员 · 享受更多专属权益</p>
-          
-          {user && vipStatus && vipStatus.vipLevel > 0 && (
-            <div className="mt-4 bg-white/20 rounded-2xl px-6 py-3 inline-block backdrop-blur-sm">
-              <p className="text-sm">
-                当前等级：<span className="font-bold">{vipStatus.vipName}</span>
-                {vipStatus.qualified ? (
-                  <span className="ml-2 text-xs bg-green-500/30 px-2 py-0.5 rounded-full">已达标</span>
-                ) : (
-                  <span className="ml-2 text-xs bg-amber-500/30 px-2 py-0.5 rounded-full">待达标</span>
-                )}
-              </p>
-              {vipStatus.expireAt && (
-                <p className="text-xs text-white/70 mt-1">
-                  到期时间：{new Date(vipStatus.expireAt).toLocaleDateString()}
+        {/* Current Status Card */}
+        <div className="relative z-10 bg-gradient-to-r from-amber-200 to-yellow-400 rounded-2xl p-5 shadow-lg text-amber-900">
+          <div className="flex justify-between items-start mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center backdrop-blur-sm">
+                <Crown className="w-6 h-6 text-amber-900" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  {vipStatus?.vipName || "普通用户"}
+                  {currentLevel >= 2 && (
+                    <span className="text-[10px] bg-black/20 text-amber-900 px-2 py-0.5 rounded-full backdrop-blur-sm border border-amber-900/10">
+                      T+0极速提现
+                    </span>
+                  )}
+                </h2>
+                <p className="text-xs text-amber-800/80 font-medium mt-0.5">
+                  收益倍率: {currentDetails?.winMultiplier || "1.0"}x | 今日剩余抽奖: {currentDetails?.dailyLottery || 0}次
                 </p>
-              )}
-              {!vipStatus.qualified && (
-                <p className="text-xs text-white/70 mt-1">
-                  直推: {vipStatus.directCount}/{vipStatus.requirements.directRequired} | 
-                  三代: {vipStatus.team3GenCount}/{vipStatus.requirements.team3GenRequired}
-                </p>
-              )}
-              {vipStatus.frozenCommission > 0 && (
-                <p className="text-xs text-amber-200 mt-1">
-                  待解冻佣金: ¥{vipStatus.frozenCommission.toFixed(2)}
-                </p>
-              )}
+              </div>
             </div>
-          )}
+          </div>
+          
+          <div className="bg-white/20 rounded-xl p-3 backdrop-blur-sm flex justify-between items-center text-xs font-medium text-amber-900/90">
+             <span>下一级: {nextDetails?.name || "已满级"}</span>
+             {vipStatus?.pendingRequest ? (
+               <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> 审核中</span>
+             ) : nextDetails ? (
+               <span>需直推{nextDetails.directRequired}人 / 团队{nextDetails.team3GenRequired}人</span>
+             ) : (
+               <span>巅峰王者</span>
+             )}
+          </div>
         </div>
       </div>
 
-      <div className="px-4 -mt-12 relative z-20 pb-8">
-        {/* V1-V5 Level Tabs */}
-        {levels && levels.length > 0 && (
-          <div className="flex justify-center mb-4 bg-white rounded-2xl p-2 shadow-lg">
-            {levels.map((level) => {
-              const colors = rankColors[level.level] || rankColors[1];
-              const isActive = activeTab === level.level;
-              return (
-                <button
-                  key={level.level}
-                  onClick={() => setActiveTab(level.level)}
-                  className={cn(
-                    "flex-1 py-2 px-1 rounded-xl text-center transition-all text-sm font-medium",
-                    isActive 
-                      ? `bg-gradient-to-br ${colors.bg} ${colors.border} border shadow-sm` 
-                      : "text-gray-500 hover:text-gray-800"
-                  )}
-                  data-testid={`tab-v${level.level}`}
-                >
-                  <span className={cn(isActive && colors.icon)}>V{level.level}</span>
-                </button>
-              );
-            })}
+      <div className="px-4 -mt-16 relative z-20 space-y-4">
+        
+        {/* Upgrade Progress Section */}
+        {nextDetails && prog && (
+          <div className="bg-white rounded-2xl p-5 shadow-lg">
+             <h3 className="font-bold text-gray-900 mb-4 flex items-center justify-between">
+               <span>升级任务进度 (需全部达标)</span>
+               <span className="text-xs text-orange-500 bg-orange-50 px-2 py-1 rounded-full">
+                 目标: {nextDetails.name}
+               </span>
+             </h3>
+
+             <div className="space-y-4">
+                {/* Direct Referrals */}
+                <div>
+                   <div className="flex justify-between text-xs mb-1.5">
+                      <span className="text-gray-500">直推人数</span>
+                      <span className={prog.directMet ? "text-green-600 font-bold" : "text-orange-500 font-bold"}>
+                        {prog.directCount} / {prog.directRequired}
+                      </span>
+                   </div>
+                   <Progress value={Math.min(100, (prog.directCount / prog.directRequired) * 100)} className="h-2" />
+                </div>
+
+                {/* Team Size */}
+                <div>
+                   <div className="flex justify-between text-xs mb-1.5">
+                      <span className="text-gray-500">三代内团队人数</span>
+                      <span className={prog.team3Met ? "text-green-600 font-bold" : "text-orange-500 font-bold"}>
+                        {prog.team3Count} / {prog.team3Required}
+                      </span>
+                   </div>
+                   <Progress value={Math.min(100, (prog.team3Count / prog.team3Required) * 100)} className="h-2" />
+                </div>
+
+                {/* Downline Structure */}
+                {Object.keys(prog.downlineProgress).length > 0 && (
+                  <div className="pt-2 border-t border-dashed">
+                    <p className="text-xs text-gray-500 mb-2">团队VIP结构要求 (三代内)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(prog.downlineProgress).map(([lvl, data]) => (
+                        <div 
+                          key={lvl} 
+                          className={cn(
+                            "text-xs px-2 py-1 rounded border flex items-center gap-1",
+                            data.met ? "bg-green-50 border-green-200 text-green-700" : "bg-red-50 border-red-200 text-red-700"
+                          )}
+                        >
+                          <span className="font-bold">{lvl}</span>
+                          <span>{data.current}/{data.required}</span>
+                          {data.met ? <Check className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+             </div>
+
+             {/* Why can't I upgrade? */}
+             {!prog.isQualified && (
+               <div className="mt-4">
+                 <button 
+                   onClick={() => setShowReasons(!showReasons)}
+                   className="text-xs text-gray-400 flex items-center gap-1 hover:text-gray-600 transition-colors"
+                 >
+                   <AlertCircle className="w-3 h-3" />
+                   为什么我还不能升级?
+                   {showReasons ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                 </button>
+                 
+                 {showReasons && (
+                   <div className="mt-2 text-xs text-red-500 bg-red-50 p-2 rounded-lg space-y-1">
+                     {!prog.directMet && <p>• 直推人数未达标 (还差 {prog.directRequired - prog.directCount} 人)</p>}
+                     {!prog.team3Met && <p>• 团队人数未达标 (还差 {prog.team3Required - prog.team3Count} 人)</p>}
+                     {!prog.downlineMet && <p>• 团队VIP结构未达标 (请查看上方红框项目)</p>}
+                     <p className="text-gray-400 mt-1 pt-1 border-t border-red-100">必须逐级升级，不可跨级</p>
+                   </div>
+                 )}
+               </div>
+             )}
+
+             {/* Upgrade Button */}
+             <div className="mt-5">
+               <Button 
+                 className={cn(
+                   "w-full py-6 text-lg font-bold shadow-xl transition-all",
+                   prog.isQualified 
+                     ? "bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white animate-pulse" 
+                     : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                 )}
+                 disabled={!prog.isQualified || vipStatus.pendingRequest !== null}
+                 onClick={handleUpgradeClick}
+               >
+                 {vipStatus.pendingRequest 
+                   ? "审核中..." 
+                   : prog.isQualified 
+                     ? `立即申请升级 ${nextDetails.name}` 
+                     : "未满足升级条件"
+                 }
+               </Button>
+               {prog.isQualified && !vipStatus.pendingRequest && (
+                 <p className="text-center text-xs text-orange-500 mt-2">
+                   恭喜达标！升级需支付 ¥{nextDetails.priceYuan}，审核通过后返还 ¥{nextDetails.upgradeRewardYuan} 奖励
+                 </p>
+               )}
+             </div>
           </div>
         )}
 
-        {levels && levels.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-xl p-4 mb-6">
-            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              会员权益对比
-            </h3>
-            <div className="overflow-x-auto">
-              <div className={`grid gap-1 text-center text-xs min-w-[400px]`} style={{ gridTemplateColumns: `repeat(${levels.length + 1}, minmax(0, 1fr))` }}>
-                <div className="font-medium text-gray-500">权益</div>
-                {levels.map((l) => (
-                  <div key={`name-${l.level}`} className={`font-bold ${rankColors[l.level]?.icon || 'text-gray-600'}`}>
+        {/* Level Comparison Table */}
+        <div className="bg-white rounded-2xl p-5 shadow-lg overflow-hidden">
+           <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+             <Sparkles className="w-4 h-4 text-amber-500" />
+             VIP等级权益对比
+           </h3>
+           
+           <div className="overflow-x-auto pb-2 -mx-5 px-5 scrollbar-hide">
+              <div className="grid gap-0 min-w-[500px] text-xs border border-gray-100 rounded-lg overflow-hidden" 
+                   style={{ gridTemplateColumns: `80px repeat(${levels?.length || 5}, 1fr)` }}>
+                
+                {/* Header Row */}
+                <div className="bg-gray-50 p-2 font-medium text-gray-500 flex items-center justify-center border-b border-r">等级</div>
+                {levels?.map(l => (
+                  <div key={l.level} className={cn("p-2 font-bold text-center border-b border-r last:border-r-0", rankColors[l.level]?.text)}>
                     {l.name}
                   </div>
                 ))}
-                
-                <div className="text-gray-500 py-2 border-t">开通费</div>
-                {levels.map((l) => (
-                  <div key={`fee-${l.level}`} className="py-2 border-t">¥{l.priceYuan}</div>
-                ))}
-                
-                <div className="text-gray-500 py-2 border-t">抽奖/日</div>
-                {levels.map((l) => (
-                  <div key={`spin-${l.level}`} className="py-2 border-t">{l.dailyLottery}次</div>
-                ))}
-                
-                <div className="text-gray-500 py-2 border-t">中奖倍率</div>
-                {levels.map((l) => (
-                  <div key={`mult-${l.level}`} className="py-2 border-t">{l.winMultiplier}x</div>
-                ))}
-                
-                <div className="text-gray-500 py-2 border-t">现金奖励</div>
-                {levels.map((l) => (
-                  <div key={`bonus-${l.level}`} className={`py-2 border-t ${l.upgradeRewardYuan > 0 ? "text-orange-500 font-bold" : ""}`}>
-                    {l.upgradeRewardYuan > 0 ? `¥${l.upgradeRewardYuan}` : "-"}
+
+                {/* Price Row */}
+                <div className="bg-gray-50 p-2 font-medium text-gray-500 flex items-center justify-center border-b border-r">开通费</div>
+                {levels?.map(l => (
+                  <div key={`price-${l.level}`} className="p-2 text-center border-b border-r last:border-r-0">
+                    ¥{l.priceYuan}
                   </div>
                 ))}
-              </div>
-            </div>
-          </div>
-        )}
 
-        {isLoading ? (
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="bg-white rounded-2xl p-6 animate-pulse">
-                <div className="h-6 bg-gray-200 rounded w-1/3 mb-4" />
-                <div className="h-10 bg-gray-200 rounded w-1/2 mb-4" />
-                <div className="space-y-2">
-                  <div className="h-4 bg-gray-200 rounded w-full" />
-                  <div className="h-4 bg-gray-200 rounded w-3/4" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {levels?.map((level) => {
-              const colors = rankColors[level.level] || rankColors[1];
-              const features = getFeatures(level);
-              const currentLevel = vipStatus?.vipLevel || 0;
-              const isCurrentLevel = currentLevel === level.level;
-              const isAlreadyOwned = currentLevel >= level.level;
-              const canUpgrade = level.level === currentLevel + 1;
-              const isLocked = level.level > currentLevel + 1;
-              const cashBonus = level.upgradeRewardYuan;
-              
-              return (
-                <div
-                  key={level.id}
-                  className={cn(
-                    "bg-gradient-to-br rounded-2xl p-5 shadow-lg border-2 relative overflow-hidden",
-                    colors.bg,
-                    colors.border,
-                    isCurrentLevel && "ring-2 ring-primary ring-offset-2"
-                  )}
-                >
-                  {level.level === 5 && (
-                    <div className="absolute top-3 right-3">
-                      <span className="bg-gradient-to-r from-rose-500 to-orange-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">
-                        最高等级
-                      </span>
-                    </div>
-                  )}
-                  {level.level === 3 && (
-                    <div className="absolute top-3 right-3">
-                      <span className="bg-gradient-to-r from-teal-500 to-emerald-500 text-white text-[10px] px-2 py-1 rounded-full font-bold">
-                        最受欢迎
-                      </span>
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", colors.badge)}>
-                        <Star className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-gray-800 text-lg">{level.name}</h3>
-                        <p className="text-xs text-orange-600 font-medium">开通费: ¥{level.priceYuan}</p>
-                      </div>
-                    </div>
-                    {cashBonus > 0 && (
-                      <span className="text-orange-500 font-bold text-sm">
-                        奖励¥{level.upgradeRewardYuan}
-                      </span>
-                    )}
+                {/* Reward Row */}
+                <div className="bg-gray-50 p-2 font-medium text-gray-500 flex items-center justify-center border-b border-r">升级奖励</div>
+                {levels?.map(l => (
+                  <div key={`reward-${l.level}`} className="p-2 text-center border-b border-r last:border-r-0 text-orange-500 font-bold">
+                    ¥{l.upgradeRewardYuan}
                   </div>
+                ))}
 
-                  <div className="text-xs text-gray-600 mb-3">
-                    <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded mr-2">
-                      直推{level.directRequired}人
-                    </span>
-                    {level.team3GenRequired > 0 && (
-                      <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                        三代内{level.team3GenRequired}人
-                      </span>
-                    )}
+                {/* Draws Row */}
+                <div className="bg-gray-50 p-2 font-medium text-gray-500 flex items-center justify-center border-b border-r">每日抽奖</div>
+                {levels?.map(l => (
+                  <div key={`draw-${l.level}`} className="p-2 text-center border-b border-r last:border-r-0">
+                    {l.dailyLottery}次
                   </div>
+                ))}
 
-                  <div className="flex flex-wrap gap-1 mb-4">
-                    <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded">
-                      直推{(level.upgradeCommission.directRate * 100).toFixed(0)}%
-                    </span>
-                    {level.upgradeCommission.indirectRate > 0 && (
-                      <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded">
-                        间推{(level.upgradeCommission.indirectRate * 100).toFixed(0)}%
-                      </span>
-                    )}
-                    <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded">
-                      {level.dailyLottery}次/日抽奖
-                    </span>
-                    <span className="bg-teal-100 text-teal-700 text-xs px-2 py-0.5 rounded">
-                      {level.winMultiplier}x倍率
-                    </span>
+                {/* Multiplier Row */}
+                <div className="bg-gray-50 p-2 font-medium text-gray-500 flex items-center justify-center border-b border-r">收益倍率</div>
+                {levels?.map(l => (
+                  <div key={`mult-${l.level}`} className="p-2 text-center border-b border-r last:border-r-0">
+                    {l.winMultiplier}x
                   </div>
-
-                  <div className="space-y-1.5 mb-5">
-                    {features.slice(0, 5).map((feature, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-sm text-gray-600">
-                        <Check className={cn("w-4 h-4 flex-shrink-0", colors.icon)} />
-                        <span>{feature}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <Button
-                    onClick={() => handleSelectLevel(level)}
-                    disabled={isAlreadyOwned || isLocked}
-                    className={cn(
-                      "w-full",
-                      isAlreadyOwned
-                        ? "bg-gray-200 text-gray-500"
-                        : isLocked
-                        ? "bg-gray-300 text-gray-500"
-                        : level.level === 5
-                        ? "bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 hover:from-rose-600 hover:via-orange-600 hover:to-amber-600"
-                        : level.level === 4
-                        ? "bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 hover:from-purple-600 hover:via-pink-600 hover:to-rose-600"
-                        : level.level === 3
-                        ? "bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600"
-                        : level.level === 2
-                        ? "bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600"
-                        : "bg-slate-600 hover:bg-slate-700"
-                    )}
-                    data-testid={`button-select-level-${level.level}`}
-                  >
-                    {isCurrentLevel ? "当前等级" : isAlreadyOwned ? "已开通" : isLocked ? `需先开通VIP${level.level - 1}` : "立即开通"}
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        <div className="mt-6 bg-white rounded-2xl p-5 shadow-lg">
-          <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <Shield className="w-4 h-4 text-primary" />
-            会员保障
-          </h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                <Zap className="w-5 h-5 text-blue-500" />
+                ))}
               </div>
-              <div>
-                <p className="font-medium text-gray-800 text-sm">即时生效</p>
-                <p className="text-xs text-gray-400">开通即享权益</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
-                <Gift className="w-5 h-5 text-green-500" />
-              </div>
-              <div>
-                <p className="font-medium text-gray-800 text-sm">现金奖励</p>
-                <p className="text-xs text-gray-400">高级VIP享奖励</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center">
-                <Clock className="w-5 h-5 text-amber-500" />
-              </div>
-              <div>
-                <p className="font-medium text-gray-800 text-sm">24小时服务</p>
-                <p className="text-xs text-gray-400">专属客服响应</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
-                <Star className="w-5 h-5 text-purple-500" />
-              </div>
-              <div>
-                <p className="font-medium text-gray-800 text-sm">推广分成</p>
-                <p className="text-xs text-gray-400">邀请好友赚佣金</p>
-              </div>
-            </div>
-          </div>
+           </div>
         </div>
 
-              <div className="mt-6 bg-amber-50 rounded-2xl p-5 border border-amber-200">
-                <h4 className="font-semibold text-amber-800 mb-3 flex items-center gap-2">
-                  <Shield className="w-4 h-4" />
-                  VIP会员规则
-                </h4>
-                <ul className="text-xs text-amber-700 space-y-1.5">
-                  <li>1. 开通VIP需满足对应等级的直推和三代人数要求才能解锁升级奖励和佣金</li>
-                  <li>2. 未达标期间获得的佣金将被冻结，达标后自动解冻</li>
-                  <li>3. VIP每日抽奖次数系统自动发放，每日重置不累计</li>
-                  <li>4. 从V2起享受VIP专属客服、无限AI使用、提现T+0到账</li>
-                  <li>5. 直推：直接推荐用户产生的收益分成；间推：推荐用户的下级收益分成（三代内有效）</li>
-                  <li>6. 禁止虚假推广、刷人头、异常套利等行为</li>
-                  <li>7. 所有收益、奖励及到账时间以系统实际结算为准</li>
-                  <li>8. 平台保留VIP规则的最终解释权与调整权</li>
-                </ul>
-              </div>
+        {/* Benefits List */}
+        <div className="bg-white rounded-2xl p-5 shadow-lg">
+           <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+             <Gift className="w-4 h-4 text-rose-500" />
+             VIP专属权益 (V2起生效)
+           </h3>
+           <div className="space-y-3">
+             <div className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
+                   <Zap className="w-4 h-4 text-blue-500" />
+                </div>
+                <div>
+                   <h4 className="font-bold text-sm text-gray-800">提现极速到账 (T+0)</h4>
+                   <p className="text-xs text-gray-400 mt-0.5">V2及以上等级专享，以系统实际结算为准</p>
+                </div>
+             </div>
+             <div className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-purple-50 flex items-center justify-center shrink-0">
+                   <Sparkles className="w-4 h-4 text-purple-500" />
+                </div>
+                <div>
+                   <h4 className="font-bold text-sm text-gray-800">无限AI使用权限</h4>
+                   <p className="text-xs text-gray-400 mt-0.5">解锁所有高级AI克隆与对话功能</p>
+                </div>
+             </div>
+             <div className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-orange-50 flex items-center justify-center shrink-0">
+                   <Crown className="w-4 h-4 text-orange-500" />
+                </div>
+                <div>
+                   <h4 className="font-bold text-sm text-gray-800">推广收益加成</h4>
+                   <p className="text-xs text-gray-400 mt-0.5">享受更高的直推与间推佣金比例</p>
+                </div>
+             </div>
+           </div>
+        </div>
 
-              <p className="text-center text-xs text-gray-400 mt-6 px-4">
-                开通VIP即表示同意《VIP服务协议》
-                <br />
-                如有问题请联系客服
-              </p>
-            </div>
+        {/* Rules Footer */}
+        <div className="bg-gray-100 rounded-xl p-4 text-xs text-gray-500 space-y-2">
+           <p className="font-bold text-gray-700">规则补充：</p>
+           <p>• 所有收益、奖励金额及到账时间以系统实际结算结果为准</p>
+           <p>• 严禁虚假推广、刷人头、异常套利等违规行为，违者将冻结账户</p>
+           <p>• 平台保留VIP规则的最终解释权及调整权</p>
+        </div>
+      </div>
 
-            <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent className="max-w-sm mx-auto rounded-2xl">
+      {/* Confirmation Dialog */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent className="max-w-[90%] w-[350px] mx-auto rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-center flex items-center justify-center gap-2">
-              <Star className="w-5 h-5 text-amber-500" />
-              确认开通
-            </DialogTitle>
+            <DialogTitle className="text-center">确认升级 {selectedLevel?.name}</DialogTitle>
           </DialogHeader>
-
+          
           {selectedLevel && (
-            <div className="py-4">
-              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-5 text-center mb-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-                  <Star className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="font-bold text-gray-800 text-lg">{selectedLevel.name}</h3>
-                <p className="text-sm text-gray-500 mt-1">30天会员权益</p>
-                <div className="mt-4 text-3xl font-bold text-orange-500">
-                  ¥{selectedLevel.priceYuan}
-                </div>
-                {selectedLevel.upgradeRewardYuan > 0 && (
-                  <p className="text-sm text-green-600 mt-2">
-                    开通即送 ¥{selectedLevel.upgradeRewardYuan} 现金奖励
-                  </p>
-                )}
-              </div>
+            <div className="py-2">
+               <div className="bg-orange-50 rounded-xl p-4 text-center mb-4 border border-orange-100">
+                  <p className="text-sm text-gray-500">升级费用</p>
+                  <p className="text-2xl font-bold text-orange-600">¥{selectedLevel.priceYuan}</p>
+                  <div className="mt-2 pt-2 border-t border-orange-200/50 flex justify-between text-xs text-orange-700">
+                     <span>升级后奖励:</span>
+                     <span className="font-bold">¥{selectedLevel.upgradeRewardYuan}</span>
+                  </div>
+               </div>
 
-              <div className="space-y-2 text-sm text-gray-600 mb-6">
-                <p className="flex items-center justify-between">
-                  <span>每日抽奖次数</span>
-                  <span className="font-medium">{selectedLevel.dailyLottery}次</span>
-                </p>
-                <p className="flex items-center justify-between">
-                  <span>提现门槛</span>
-                  <span className="font-medium">{selectedLevel.withdrawMinYuan}元起</span>
-                </p>
-                <p className="flex items-center justify-between">
-                  <span>到账速度</span>
-                  <span className="font-medium">{selectedLevel.withdrawSpeed}</span>
-                </p>
-                <p className="flex items-center justify-between">
-                  <span>中奖倍率</span>
-                  <span className="font-medium">{selectedLevel.winMultiplier}x</span>
-                </p>
-              </div>
+               <p className="text-xs text-gray-500 text-center mb-4">
+                 支付后将提交管理员审核，审核通过后生效。<br/>
+                 若审核拒绝，资金将原路退回余额。
+               </p>
 
-              <Button
-                onClick={handleConfirmPurchase}
-                disabled={buyMutation.isPending}
-                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
-                data-testid="button-confirm-level"
-              >
-                {buyMutation.isPending ? "处理中..." : "确认支付"}
-              </Button>
-
-              <p className="text-center text-xs text-gray-400 mt-3">
-                支付后将从账户余额扣除
-              </p>
+               <Button 
+                 className="w-full bg-gradient-to-r from-amber-500 to-orange-600 font-bold"
+                 onClick={handleConfirmPurchase}
+                 disabled={buyMutation.isPending}
+               >
+                 {buyMutation.isPending ? "处理中..." : "确认支付并申请"}
+               </Button>
             </div>
           )}
         </DialogContent>

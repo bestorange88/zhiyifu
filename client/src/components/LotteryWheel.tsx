@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Gift, Star, Coins, Sparkles } from "lucide-react";
+import { Gift, Star, Coins, Sparkles, Clock, Crown, CalendarCheck } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -53,14 +53,35 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
   const [showResult, setShowResult] = useState(false);
   const [wonPrize, setWonPrize] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState("");
 
   useEffect(() => {
     if (open) {
       refetchBalance();
+      
+      const timer = setInterval(() => {
+        const now = new Date();
+        const tomorrow = new Date(now);
+        tomorrow.setHours(24, 0, 0, 0);
+        const diff = tomorrow.getTime() - now.getTime();
+        
+        const h = Math.floor(diff / (1000 * 60 * 60));
+        const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const s = Math.floor((diff % (1000 * 60)) / 1000);
+        
+        setCountdown(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`);
+      }, 1000);
+      
+      return () => clearInterval(timer);
     }
   }, [open, refetchBalance]);
 
   const spinsLeft = spinBalance?.availableSpins || 0;
+  const breakdown = spinBalance?.breakdown || {};
+  const vipSpins = breakdown.vip_daily || 0;
+  const baseSpins = breakdown.base || 0;
+  const signinSpins = breakdown.signin || 0;
+  const usedSpins = Math.abs(breakdown.draw_consume || 0);
 
   const spin = async () => {
     if (isSpinning || spinsLeft <= 0) return;
@@ -115,18 +136,40 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-sm mx-auto rounded-2xl p-0 overflow-hidden">
-        <div className="bg-gradient-to-b from-red-500 via-red-600 to-red-700 p-6">
-          <DialogHeader className="mb-4">
+        <div className="bg-gradient-to-b from-red-500 via-red-600 to-red-700 p-6 pb-8">
+          <DialogHeader className="mb-2">
             <DialogTitle className="text-center text-white flex items-center justify-center gap-2">
               <Gift className="w-5 h-5" />
               幸运大转盘
             </DialogTitle>
           </DialogHeader>
+          
+          <div className="text-center text-red-200 text-xs mb-4 flex items-center justify-center gap-1">
+             <Clock className="w-3 h-3" />
+             距离次数重置仅剩 {countdown}
+          </div>
 
-          <div className="flex justify-center mb-4">
-            <div className="bg-white/20 rounded-full px-4 py-1.5 text-white text-sm flex items-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              剩余 {spinsLeft} 次抽奖机会
+          <div className="flex justify-center mb-6">
+            <div className="bg-black/20 rounded-xl p-3 text-white text-sm w-full max-w-[280px] backdrop-blur-sm">
+              <div className="flex items-center justify-center gap-2 font-bold mb-2">
+                <Sparkles className="w-4 h-4 text-yellow-300" />
+                今日剩余次数: {spinsLeft}
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2 text-[10px] text-white/80 border-t border-white/10 pt-2">
+                 <div className="flex flex-col items-center gap-1">
+                    <span className="text-yellow-300 font-bold">{vipSpins}</span>
+                    <span className="flex items-center gap-0.5"><Crown className="w-3 h-3"/>VIP赠送</span>
+                 </div>
+                 <div className="flex flex-col items-center gap-1 border-x border-white/10">
+                    <span className="text-white font-bold">{baseSpins}</span>
+                    <span className="flex items-center gap-0.5"><Star className="w-3 h-3"/>基础次数</span>
+                 </div>
+                 <div className="flex flex-col items-center gap-1">
+                    <span className="text-green-300 font-bold">{signinSpins}</span>
+                    <span className="flex items-center gap-0.5"><CalendarCheck className="w-3 h-3"/>签到奖励</span>
+                 </div>
+              </div>
             </div>
           </div>
 
@@ -136,7 +179,7 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
             </div>
           )}
 
-          <div className="relative flex items-center justify-center">
+          <div className="relative flex items-center justify-center mb-6">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20">
               <div className="w-0 h-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-yellow-400 drop-shadow-lg" />
             </div>
@@ -226,33 +269,16 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-4 gap-2 text-center text-white/90 text-xs">
-            <div className="bg-white/10 rounded-lg p-2">
-              <div className="w-3 h-3 rounded-full bg-red-500 mx-auto mb-1" />
-              38元
-            </div>
-            <div className="bg-white/10 rounded-lg p-2">
-              <div className="w-3 h-3 rounded-full bg-orange-400 mx-auto mb-1" />
-              18元
-            </div>
-            <div className="bg-white/10 rounded-lg p-2">
-              <div className="w-3 h-3 rounded-full bg-purple-500 mx-auto mb-1" />
-              8元
-            </div>
-            <div className="bg-white/10 rounded-lg p-2">
-              <div className="w-3 h-3 rounded-full bg-blue-500 mx-auto mb-1" />
-              积分
-            </div>
-          </div>
-
-          <div className="mt-4 bg-white/10 rounded-lg p-3">
-            <h4 className="text-white text-xs font-semibold mb-2 text-center">活动规则</h4>
-            <ul className="text-white/80 text-xs space-y-1">
-              <li>1. 每日签到可获得抽奖机会</li>
-              <li>2. 现金奖励将自动发放至账户余额</li>
-              <li>3. 积分奖励可用于兑换会员服务</li>
-              <li>4. 每次抽奖消耗1次抽奖机会</li>
-              <li>5. 本活动最终解释权归平台所有</li>
+          <div className="bg-black/20 rounded-lg p-3 mx-4">
+            <h4 className="text-white text-xs font-semibold mb-2 text-center flex items-center justify-center gap-1">
+               <Gift className="w-3 h-3" />
+               活动规则
+            </h4>
+            <ul className="text-white/80 text-[10px] space-y-1 leading-relaxed">
+              <li>1. 每日0点重置所有抽奖次数，请及时使用</li>
+              <li>2. VIP用户每日自动获赠专属抽奖次数</li>
+              <li>3. 现金奖励直接发放至余额，可用于提现</li>
+              <li>4. 严禁使用作弊手段，违者封号处理</li>
             </ul>
           </div>
         </div>
