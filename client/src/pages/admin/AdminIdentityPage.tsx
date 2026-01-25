@@ -99,7 +99,9 @@ export default function AdminIdentityPage() {
   const handleBatchApprove = () => {
     if (selectedIds.length === 0) return;
     if (confirm(`确定要批量通过选中的 ${selectedIds.length} 个申请吗？`)) {
-      batchReviewMutation.mutate({ ids: selectedIds, approved: true });
+      // Ensure IDs are numbers
+      const numericIds = selectedIds.map(id => Number(id));
+      batchReviewMutation.mutate({ ids: numericIds, approved: true });
     }
   };
 
@@ -109,7 +111,9 @@ export default function AdminIdentityPage() {
       toast({ title: "请输入拒绝原因", variant: "destructive" });
       return;
     }
-    batchReviewMutation.mutate({ ids: selectedIds, approved: false, reviewNote: rejectReason });
+    // Ensure IDs are numbers
+    const numericIds = selectedIds.map(id => Number(id));
+    batchReviewMutation.mutate({ ids: numericIds, approved: false, reviewNote: rejectReason });
   };
 
   const filteredData = data?.filter((v: any) => {

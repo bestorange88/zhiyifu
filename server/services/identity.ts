@@ -102,6 +102,11 @@ export async function reviewIdentityVerification(
     throw new Error("实名认证申请不存在");
   }
 
+  const targetStatus = approved ? "approved" : "rejected";
+  if (existing.status === targetStatus) {
+    return existing;
+  }
+
   if (existing.status !== "pending") {
     throw new Error("该申请已处理");
   }

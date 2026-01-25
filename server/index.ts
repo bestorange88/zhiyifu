@@ -27,7 +27,7 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-app.use("/uploads", express.static(path.join(process.cwd(), "attached_assets", "uploads")));
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -66,9 +66,22 @@ app.use((req, res, next) => {
   next();
 });
 
+import * as vipService from "./services/vip";
+
 (async () => {
   await initDb();
   await initDefaultAdmin();
+  
+  // Auto-approve pending VIP upgrades on startup (as requested for migration)
+  try {
+    const result = await vipService.approveAllPendingVipUpgrades();
+    if (result.total > 0) {
+      log(`[VIP Migration] Processed ${result.total} pending upgrades: ${result.successCount} success, ${result.failCount} failed.`);
+    }
+  } catch (e: any) {
+    console.error("[VIP Migration] Error processing pending upgrades:", e.message);
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

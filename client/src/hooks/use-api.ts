@@ -101,3 +101,11 @@ export function useLedger() {
     enabled: !!localStorage.getItem("token"),
   });
 }
+
+export function useLotteryDraws() {
+  return useQuery({
+    queryKey: ["/api/lottery/draws"],
+    queryFn: () => authFetch("/api/lottery/draws"),
+    enabled: !!localStorage.getItem("token"),
+  });
+}

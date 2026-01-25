@@ -3,9 +3,9 @@ import {
   admins, users, wallets, withdraws, orders, agentApplications, userRanks,
   systemSettings, featureFlags, deposits, adminActions, commissionRecords,
   serviceChatSessions, serviceChatMessages, wheelPrizes, wheelSpins, vipPlans, ledger,
-  paymentQrCodes, commissionLogs, identityVerifications
+  paymentQrCodes, commissionLogs, identityVerifications, signInLogs, userDevices, vipUpgradeTxs, lotteryDraws
 } from "@shared/schema";
-import { eq, desc, sql, count, and, gt, gte, sum } from "drizzle-orm";
+import { eq, desc, sql, count, and, gt, gte, sum, inArray } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -72,46 +72,181 @@ export function verifyAdminToken(token: string) {
 }
 
 export async function getDashboardStats() {
-  const [userCount] = await db.select({ count: count() }).from(users);
-  const [vipCount] = await db.select({ count: count() }).from(users).where(gt(users.vipLevel, 0));
-  const [vip1Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 1));
-  const [vip2Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 2));
-  const [vip3Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 3));
-  const [vip4Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 4));
-  const [vip5Count] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, 5));
-  const [withdrawPending] = await db.select({ count: count() }).from(withdraws).where(eq(withdraws.status, "applied"));
-  const [orderCount] = await db.select({ count: count() }).from(orders);
-  
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
+  const todayStr = todayStart.toISOString().split('T')[0];
+
+  // 1. Users
+  const [userTotal] = await db.select({ count: count() }).from(users);
+  const [userToday] = await db.select({ count: count() }).from(users).where(gte(users.createdAt, todayStart));
+
+  // 2. Active Users
+  // Today Active: SignInLogs
+  const [activeToday] = await db.select({ count: count() }).from(signInLogs).where(eq(signInLogs.signDate, todayStr));
+  // Current Online: UserDevices active in last 15 mins
+  const onlineThreshold = new Date(Date.now() - 15 * 60 * 1000);
+  const [onlineCurrent] = await db.select({ count: count() }).from(userDevices).where(gte(userDevices.lastLoginAt, onlineThreshold));
+
+  // 3. VIP
+  const [vipTotal] = await db.select({ count: count() }).from(users).where(gt(users.vipLevel, 0));
+  // Today New VIP (from Upgrade Txs where status='paid' and paidAt >= today)
+  const [vipToday] = await db.select({ count: count() }).from(vipUpgradeTxs)
+    .where(and(eq(vipUpgradeTxs.status, "paid"), gte(vipUpgradeTxs.paidAt, todayStart)));
   
-  const [todayUsersCount] = await db.select({ count: count() }).from(users).where(gte(users.createdAt, todayStart));
-  const [todayOrdersCount] = await db.select({ count: count() }).from(orders).where(gte(orders.createdAt, todayStart));
-  const [todayWithdrawsCount] = await db.select({ count: count() }).from(withdraws).where(gte(withdraws.createdAt, todayStart));
+  // VIP Breakdown (V1-V5)
+  const vipCounts: Record<string, number> = {};
+  const vipTodayCounts: Record<string, number> = {};
   
-  const totalRevenueResult = await db.select({ total: sum(orders.amount) }).from(orders).where(eq(orders.status, "completed"));
-  const todayRevenueResult = await db.select({ total: sum(orders.amount) }).from(orders).where(and(eq(orders.status, "completed"), gte(orders.createdAt, todayStart)));
+  for (let i = 1; i <= 5; i++) {
+    const [c] = await db.select({ count: count() }).from(users).where(eq(users.vipLevel, i));
+    vipCounts[`v${i}`] = c?.count || 0;
+    
+    const [tc] = await db.select({ count: count() }).from(vipUpgradeTxs)
+      .where(and(
+        eq(vipUpgradeTxs.status, "paid"), 
+        gte(vipUpgradeTxs.paidAt, todayStart),
+        eq(vipUpgradeTxs.toLevel, i)
+      ));
+    vipTodayCounts[`v${i}`] = tc?.count || 0;
+  }
+
+  // 4. Revenue (Deposits)
+  // status='approved'
+  const [depositTotal] = await db.select({ 
+    amount: sum(deposits.amount), 
+    count: count() 
+  }).from(deposits).where(eq(deposits.status, "approved"));
+  
+  const [depositToday] = await db.select({ 
+    amount: sum(deposits.amount), 
+    count: count() 
+  }).from(deposits).where(and(eq(deposits.status, "approved"), gte(deposits.reviewedAt, todayStart)));
+
+  // 5. Withdrawals
+  // status IN ('approved', 'paid')
+  const [withdrawTotal] = await db.select({ 
+    amount: sum(withdraws.amount), 
+    count: count() 
+  }).from(withdraws).where(inArray(withdraws.status, ["approved", "paid"]));
+  
+  const [withdrawToday] = await db.select({ 
+    amount: sum(withdraws.amount), 
+    count: count() 
+  }).from(withdraws).where(and(inArray(withdraws.status, ["approved", "paid"]), gte(withdraws.reviewedAt, todayStart)));
+
+  // 7. Pending
+  const [pendingDeposits] = await db.select({ count: count() }).from(deposits).where(eq(deposits.status, "pending"));
+  const [pendingWithdraws] = await db.select({ count: count() }).from(withdraws).where(eq(withdraws.status, "applied"));
+  const [pendingKyc] = await db.select({ count: count() }).from(identityVerifications).where(eq(identityVerifications.status, "pending"));
+
+  // 8. Referral Rewards (CommissionLogs)
+  // status='credited'
+  const [referralTotal] = await db.select({ 
+    amount: sum(commissionLogs.amountCents), 
+    count: count() 
+  }).from(commissionLogs).where(eq(commissionLogs.status, "credited"));
+  
+  const [referralToday] = await db.select({ 
+    amount: sum(commissionLogs.amountCents), 
+    count: count() 
+  }).from(commissionLogs).where(and(eq(commissionLogs.status, "credited"), gte(commissionLogs.createdAt, todayStart)));
+
+  // 9. Lottery Wins (LotteryDraws)
+  const [lotteryTotal] = await db.select({ 
+    amount: sum(lotteryDraws.rewardCents) 
+  }).from(lotteryDraws);
+  
+  const [lotteryToday] = await db.select({ 
+    amount: sum(lotteryDraws.rewardCents) 
+  }).from(lotteryDraws).where(gte(lotteryDraws.createdAt, todayStart));
+  
+  const [spinsTotal] = await db.select({ count: count() }).from(wheelSpins);
+  const [spinsToday] = await db.select({ count: count() }).from(wheelSpins).where(gte(wheelSpins.createdAt, todayStart));
+
+  // 10. Lottery Commissions
+  const [lotteryCommTotal] = await db.select({ 
+    amount: sum(commissionLogs.amountCents),
+    count: count()
+  }).from(commissionLogs).where(and(eq(commissionLogs.bizType, "lottery_reward"), eq(commissionLogs.status, "credited")));
+  
+  const [lotteryCommToday] = await db.select({ 
+    amount: sum(commissionLogs.amountCents),
+    count: count()
+  }).from(commissionLogs).where(and(
+    eq(commissionLogs.bizType, "lottery_reward"), 
+    eq(commissionLogs.status, "credited"),
+    gte(commissionLogs.createdAt, todayStart)
+  ));
   
   const recentUsers = await db.select().from(users).orderBy(desc(users.createdAt)).limit(5);
   const recentWithdraws = await db.select().from(withdraws).orderBy(desc(withdraws.createdAt)).limit(5);
-  
+
   return {
-    totalUsers: userCount?.count || 0,
-    vipUsers: vipCount?.count || 0,
-    vip1Count: vip1Count?.count || 0,
-    vip2Count: vip2Count?.count || 0,
-    vip3Count: vip3Count?.count || 0,
-    vip4Count: vip4Count?.count || 0,
-    vip5Count: vip5Count?.count || 0,
-    pendingWithdraws: withdrawPending?.count || 0,
-    totalOrders: orderCount?.count || 0,
-    totalRevenue: totalRevenueResult[0]?.total || 0,
-    todayUsers: todayUsersCount?.count || 0,
-    todayOrders: todayOrdersCount?.count || 0,
-    todayRevenue: todayRevenueResult[0]?.total || 0,
-    todayWithdraws: todayWithdrawsCount?.count || 0,
+    // 1. Users
+    totalUsers: userTotal?.count || 0,
+    todayUsers: userToday?.count || 0,
+    
+    // 2. Active
+    activeToday: activeToday?.count || 0,
+    onlineCurrent: onlineCurrent?.count || 0,
+    
+    // 3. VIP
+    vipUsers: vipTotal?.count || 0,
+    vipToday: vipToday?.count || 0,
+    vipCounts,
+    vipTodayCounts,
+    // Backward compatibility if needed, but we'll update frontend
+    vip1Count: vipCounts.v1,
+    vip2Count: vipCounts.v2,
+    vip3Count: vipCounts.v3,
+    vip4Count: vipCounts.v4,
+    vip5Count: vipCounts.v5,
+
+    // 4. Revenue
+    totalRevenue: depositTotal?.amount || "0",
+    todayRevenue: depositToday?.amount || "0",
+    totalDepositCount: depositTotal?.count || 0,
+    todayDepositCount: depositToday?.count || 0,
+    
+    // 5. Withdrawals
+    totalWithdraw: withdrawTotal?.amount || "0",
+    todayWithdraw: withdrawToday?.amount || "0",
+    totalWithdrawCount: withdrawTotal?.count || 0,
+    todayWithdrawCount: withdrawToday?.count || 0,
+    
+    // 6. Net Difference
+    netTotal: (parseFloat(depositTotal?.amount || "0") - parseFloat(withdrawTotal?.amount || "0")).toFixed(2),
+    netToday: (parseFloat(depositToday?.amount || "0") - parseFloat(withdrawToday?.amount || "0")).toFixed(2),
+    
+    // 7. Pending
+    pendingDeposits: pendingDeposits?.count || 0,
+    pendingWithdraws: pendingWithdraws?.count || 0,
+    pendingKyc: pendingKyc?.count || 0,
+    
+    // 8. Referral Rewards
+    totalReferralRewards: (parseInt(referralTotal?.amount || "0") / 100).toFixed(2),
+    todayReferralRewards: (parseInt(referralToday?.amount || "0") / 100).toFixed(2),
+    totalReferralCount: referralTotal?.count || 0,
+    todayReferralCount: referralToday?.count || 0,
+    
+    // 9. Lottery Wins
+    totalLotteryWins: (parseInt(lotteryTotal?.amount || "0") / 100).toFixed(2),
+    todayLotteryWins: (parseInt(lotteryToday?.amount || "0") / 100).toFixed(2),
+    totalSpins: spinsTotal?.count || 0,
+    todaySpins: spinsToday?.count || 0,
+    
+    // 10. Lottery Commissions
+    totalLotteryCommissions: (parseInt(lotteryCommTotal?.amount || "0") / 100).toFixed(2),
+    todayLotteryCommissions: (parseInt(lotteryCommToday?.amount || "0") / 100).toFixed(2),
+    totalLotteryCommissionCount: lotteryCommTotal?.count || 0,
+    todayLotteryCommissionCount: lotteryCommToday?.count || 0,
+    
     recentUsers,
     recentWithdraws,
+    // Legacy fields for minimal breakage if any
+    totalOrders: 0,
+    todayOrders: 0,
+    todayWithdraws: withdrawToday?.count || 0,
   };
 }
 
@@ -870,22 +1005,61 @@ export async function getUserRelationshipTree(userId: number) {
     }
   }
 
-  const directDownline = await db.select({
+  // 1. Get Level 1 (Direct) - Fetch ALL for accurate stats
+  const l1Users = await db.select({
     id: users.id,
     phone: users.phone,
     vipLevel: users.vipLevel,
     createdAt: users.createdAt,
-  }).from(users).where(eq(users.inviterId, userId)).orderBy(desc(users.createdAt)).limit(50);
+    inviterId: users.inviterId,
+  }).from(users).where(eq(users.inviterId, userId)).orderBy(desc(users.createdAt));
 
-  const downlineWithCount = await Promise.all(
-    directDownline.map(async (d) => {
-      const [subCount] = await db.select({ count: count() }).from(users).where(eq(users.inviterId, d.id));
-      return {
-        ...d,
-        subCount: subCount?.count || 0,
-      };
-    })
-  );
+  const l1Ids = l1Users.map(u => u.id);
+
+  // 2. Get Level 2
+  let l2Users: typeof l1Users = [];
+  if (l1Ids.length > 0) {
+    l2Users = await db.select({
+      id: users.id,
+      phone: users.phone,
+      vipLevel: users.vipLevel,
+      createdAt: users.createdAt,
+      inviterId: users.inviterId,
+    }).from(users).where(inArray(users.inviterId, l1Ids));
+  }
+  const l2Ids = l2Users.map(u => u.id);
+
+  // 3. Get Level 3
+  let l3Users: typeof l1Users = [];
+  if (l2Ids.length > 0) {
+    l3Users = await db.select({
+      id: users.id,
+      phone: users.phone,
+      vipLevel: users.vipLevel,
+      createdAt: users.createdAt,
+      inviterId: users.inviterId,
+    }).from(users).where(inArray(users.inviterId, l2Ids));
+  }
+
+  // Calculate Stats
+  const allDownlines = [...l1Users, ...l2Users, ...l3Users];
+  const totalCount = allDownlines.length;
+  
+  const vipCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  allDownlines.forEach(u => {
+    if (u.vipLevel >= 1 && u.vipLevel <= 5) {
+      vipCounts[u.vipLevel as keyof typeof vipCounts]++;
+    }
+  });
+
+  // Prepare downline list for display (Level 1 only, limit 50)
+  const downlineForDisplay = l1Users.slice(0, 50).map(u => {
+    const subCount = l2Users.filter(l2 => l2.inviterId === u.id).length;
+    return {
+      ...u,
+      subCount
+    };
+  });
 
   return {
     user: {
@@ -895,7 +1069,21 @@ export async function getUserRelationshipTree(userId: number) {
       vipLevel: user.vipLevel,
     },
     upline,
-    downline: downlineWithCount,
+    downline: downlineForDisplay,
+    stats: {
+      total: totalCount,
+      l1: l1Users.length,
+      l2: l2Users.length,
+      l3: l3Users.length,
+      vipCounts,
+      vipDetails: {
+        1: allDownlines.filter(u => u.vipLevel === 1).map(u => u.phone),
+        2: allDownlines.filter(u => u.vipLevel === 2).map(u => u.phone),
+        3: allDownlines.filter(u => u.vipLevel === 3).map(u => u.phone),
+        4: allDownlines.filter(u => u.vipLevel === 4).map(u => u.phone),
+        5: allDownlines.filter(u => u.vipLevel === 5).map(u => u.phone),
+      }
+    }
   };
 }
 
@@ -958,4 +1146,92 @@ export async function sendUserServiceMessage(userId: number, content: string) {
     .returning();
   
   return message;
+}
+
+export async function getUserLedgerWithBalance(userId: number, page = 1, limit = 20, currency = "cash_available") {
+  const offset = (page - 1) * limit;
+
+  // 1. Get current balance
+  const [wallet] = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
+  if (!wallet) throw new Error("Wallet not found");
+
+  let currentBalance = 0;
+  // map currency to wallet field
+  // The ledger 'currency' field uses: "cash_available", "cash_frozen", "points", "cny" (in reviewDeposit it used "cny"?)
+  // Let's check wallet.ts again.
+  // addCashAvailable uses "cash_available".
+  // reviewDeposit uses "cny". This is Inconsistent!
+  // reviewDeposit in admin.ts:
+  // await db.insert(ledger).values({ ... currency: "cny" ... });
+  // But wallet.ts addCashAvailable uses "cash_available".
+  
+  // We should handle both "cny" and "cash_available" as the same wallet balance if needed, 
+  // OR we fix reviewDeposit to use "cash_available".
+  // Let's assume for now we normalize currency query.
+  
+  if (currency === "cash_available" || currency === "cny") {
+    currentBalance = parseFloat(wallet.balanceCashAvailable);
+  } else if (currency === "cash_frozen") {
+    currentBalance = parseFloat(wallet.balanceCashFrozen);
+  } else if (currency === "points") {
+    currentBalance = wallet.balancePoints || 0;
+  }
+
+  // Normalize currency for query: search for both "cny" and "cash_available" if requesting cash
+  let currencyCondition;
+  if (currency === "cash_available" || currency === "cny") {
+    currencyCondition = inArray(ledger.currency, ["cash_available", "cny"]);
+  } else {
+    currencyCondition = eq(ledger.currency, currency);
+  }
+
+  // 2. Get sum of amounts for records newer than current page
+  let offsetSum = 0;
+  if (offset > 0) {
+    const newerRecords = await db.select({ amount: ledger.amount })
+      .from(ledger)
+      .where(and(eq(ledger.userId, userId), currencyCondition))
+      .orderBy(desc(ledger.createdAt), desc(ledger.id))
+      .limit(offset);
+      
+    offsetSum = newerRecords.reduce((sum, r) => sum + parseFloat(r.amount), 0);
+  }
+
+  // 3. Get current page records
+  const records = await db.select()
+    .from(ledger)
+    .where(and(eq(ledger.userId, userId), currencyCondition))
+    .orderBy(desc(ledger.createdAt), desc(ledger.id))
+    .limit(limit)
+    .offset(offset);
+
+  // 4. Calculate total count
+  const [totalResult] = await db.select({ count: count() })
+    .from(ledger)
+    .where(and(eq(ledger.userId, userId), currencyCondition));
+  
+  // 5. Calculate snapshots
+  let runningBalance = currentBalance - offsetSum;
+
+  const recordsWithBalance = records.map(record => {
+    const amount = parseFloat(record.amount);
+    const balanceAfter = runningBalance;
+    const balanceBefore = runningBalance - amount;
+    
+    // Update for next (older) record
+    runningBalance = balanceBefore;
+
+    return {
+      ...record,
+      balanceAfter: balanceAfter.toFixed(2),
+      balanceBefore: balanceBefore.toFixed(2),
+    };
+  });
+
+  return {
+    records: recordsWithBalance,
+    total: totalResult?.count || 0,
+    page,
+    limit
+  };
 }

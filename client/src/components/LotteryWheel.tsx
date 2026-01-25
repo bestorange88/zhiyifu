@@ -3,7 +3,7 @@ import { Gift, Star, Coins, Sparkles, Clock, Crown, CalendarCheck } from "lucide
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useSpinBalance, useSpin } from "@/hooks/use-api";
+import { useSpinBalance, useSpin, useLotteryDraws } from "@/hooks/use-api";
 import { useAuth } from "@/lib/auth";
 
 interface DisplayPrize {
@@ -46,6 +46,7 @@ interface LotteryWheelProps {
 export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheelProps) {
   const { user } = useAuth();
   const { data: spinBalance, refetch: refetchBalance } = useSpinBalance();
+  const { data: history, refetch: refetchHistory } = useLotteryDraws();
   const spinMutation = useSpin();
   
   const [isSpinning, setIsSpinning] = useState(false);
@@ -54,10 +55,14 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
   const [wonPrize, setWonPrize] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if (open) {
       refetchBalance();
+      if (showHistory) {
+        refetchHistory();
+      }
       
       const timer = setInterval(() => {
         const now = new Date();
@@ -74,7 +79,7 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
       
       return () => clearInterval(timer);
     }
-  }, [open, refetchBalance]);
+  }, [open, refetchBalance, showHistory, refetchHistory]);
 
   const spinsLeft = spinBalance?.availableSpins || 0;
   const breakdown = spinBalance?.breakdown || {};
@@ -127,6 +132,7 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
       setShowResult(false);
       setWonPrize(null);
       setError(null);
+      setShowHistory(false);
     }
   };
 
@@ -137,150 +143,188 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-sm mx-auto rounded-2xl p-0 overflow-hidden">
         <div className="bg-gradient-to-b from-red-500 via-red-600 to-red-700 p-6 pb-8">
-          <DialogHeader className="mb-2">
+          <DialogHeader className="mb-2 relative">
             <DialogTitle className="text-center text-white flex items-center justify-center gap-2">
               <Gift className="w-5 h-5" />
-              幸运大转盘
+              {showHistory ? "中奖记录" : "幸运大转盘"}
             </DialogTitle>
+            <button 
+              onClick={() => {
+                if (isSpinning) return;
+                setShowHistory(!showHistory);
+                if (!showHistory) refetchHistory();
+              }} 
+              className="absolute right-0 top-0 text-white/80 hover:text-white text-xs px-2 py-1 bg-black/20 rounded-full"
+            >
+              {showHistory ? "返回抽奖" : "中奖记录"}
+            </button>
           </DialogHeader>
           
-          <div className="text-center text-red-200 text-xs mb-4 flex items-center justify-center gap-1">
-             <Clock className="w-3 h-3" />
-             距离次数重置仅剩 {countdown}
-          </div>
-
-          <div className="flex justify-center mb-6">
-            <div className="bg-black/20 rounded-xl p-3 text-white text-sm w-full max-w-[280px] backdrop-blur-sm">
-              <div className="flex items-center justify-center gap-2 font-bold mb-2">
-                <Sparkles className="w-4 h-4 text-yellow-300" />
-                今日剩余次数: {spinsLeft}
-              </div>
-              
-              <div className="grid grid-cols-3 gap-2 text-[10px] text-white/80 border-t border-white/10 pt-2">
-                 <div className="flex flex-col items-center gap-1">
-                    <span className="text-yellow-300 font-bold">{vipSpins}</span>
-                    <span className="flex items-center gap-0.5"><Crown className="w-3 h-3"/>VIP赠送</span>
-                 </div>
-                 <div className="flex flex-col items-center gap-1 border-x border-white/10">
-                    <span className="text-white font-bold">{baseSpins}</span>
-                    <span className="flex items-center gap-0.5"><Star className="w-3 h-3"/>基础次数</span>
-                 </div>
-                 <div className="flex flex-col items-center gap-1">
-                    <span className="text-green-300 font-bold">{signinSpins}</span>
-                    <span className="flex items-center gap-0.5"><CalendarCheck className="w-3 h-3"/>签到奖励</span>
-                 </div>
-              </div>
-            </div>
-          </div>
-
-          {error && (
-            <div className="bg-red-900/50 text-white text-center py-2 px-4 rounded-lg mb-4 text-sm">
-              {error}
-            </div>
-          )}
-
-          <div className="relative flex items-center justify-center mb-6">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20">
-              <div className="w-0 h-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-yellow-400 drop-shadow-lg" />
-            </div>
-
-            <div className="relative w-64 h-64">
-              <div className="absolute inset-0 rounded-full bg-gradient-to-b from-yellow-300 to-yellow-500 p-2 shadow-2xl">
-                <svg
-                  viewBox="0 0 200 200"
-                  className="w-full h-full"
-                  style={{
-                    transform: `rotate(${rotation}deg)`,
-                    transition: isSpinning ? "transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)" : "none",
-                  }}
-                >
-                  {displayPrizes.map((prize, index) => {
-                    const startAngle = index * sliceAngle - 90;
-                    const endAngle = startAngle + sliceAngle;
-                    const startRad = (startAngle * Math.PI) / 180;
-                    const endRad = (endAngle * Math.PI) / 180;
-                    
-                    const x1 = 100 + 95 * Math.cos(startRad);
-                    const y1 = 100 + 95 * Math.sin(startRad);
-                    const x2 = 100 + 95 * Math.cos(endRad);
-                    const y2 = 100 + 95 * Math.sin(endRad);
-                    
-                    const largeArc = sliceAngle > 180 ? 1 : 0;
-                    
-                    const midAngle = startAngle + sliceAngle / 2;
-                    const midRad = (midAngle * Math.PI) / 180;
-                    const textX = 100 + 60 * Math.cos(midRad);
-                    const textY = 100 + 60 * Math.sin(midRad);
-                    
-                    return (
-                      <g key={prize.id}>
-                        <path
-                          d={`M 100 100 L ${x1} ${y1} A 95 95 0 ${largeArc} 1 ${x2} ${y2} Z`}
-                          fill={prize.color}
-                          stroke="#fbbf24"
-                          strokeWidth="1"
-                        />
-                        <text
-                          x={textX}
-                          y={textY}
-                          fill="white"
-                          fontSize="9"
-                          fontWeight="bold"
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          transform={`rotate(${midAngle + 90}, ${textX}, ${textY})`}
-                          style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
-                        >
-                          {prize.name}
-                        </text>
-                      </g>
-                    );
-                  })}
-                  <circle cx="100" cy="100" r="30" fill="url(#centerGradient)" stroke="#fbbf24" strokeWidth="3" />
-                  <defs>
-                    <linearGradient id="centerGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor="#ef4444" />
-                      <stop offset="100%" stopColor="#b91c1c" />
-                    </linearGradient>
-                  </defs>
-                </svg>
-              </div>
-
-              <button
-                onClick={spin}
-                disabled={isSpinning || spinsLeft <= 0 || !user}
-                className={cn(
-                  "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10",
-                  "w-16 h-16 rounded-full",
-                  "bg-gradient-to-b from-red-500 to-red-700",
-                  "border-4 border-yellow-400",
-                  "shadow-lg",
-                  "flex flex-col items-center justify-center",
-                  "text-white font-bold",
-                  "transition-transform",
-                  isSpinning ? "scale-95" : "hover:scale-105 active:scale-95",
-                  (spinsLeft <= 0 || !user) && "opacity-50 cursor-not-allowed"
+          {showHistory ? (
+            <div className="h-[450px] overflow-y-auto px-1 pb-4 custom-scrollbar">
+              <div className="space-y-2">
+                {history?.map((item: any) => (
+                  <div key={item.id} className="bg-black/20 rounded-lg p-3 text-white flex justify-between items-center">
+                    <div>
+                      <div className="font-bold text-yellow-300">{item.prizeCode}</div>
+                      <div className="text-[10px] text-white/60 mt-1">{new Date(item.createdAt).toLocaleString()}</div>
+                    </div>
+                    {item.rewardCents > 0 ? (
+                      <div className="font-bold text-red-300">+{item.rewardCents / 100}元</div>
+                    ) : (
+                      <div className="text-xs text-white/40">已发放到账</div>
+                    )}
+                  </div>
+                ))}
+                {(!history || history.length === 0) && (
+                  <div className="text-center text-white/50 py-20 flex flex-col items-center">
+                    <Gift className="w-12 h-12 mb-2 opacity-30" />
+                    <p>暂无中奖记录</p>
+                  </div>
                 )}
-                data-testid="button-spin"
-              >
-                <Star className="w-4 h-4 mb-0.5" />
-                <span className="text-xs">{isSpinning ? "抽奖中" : "抽奖"}</span>
-              </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="text-center text-red-200 text-xs mb-4 flex items-center justify-center gap-1">
+                 <Clock className="w-3 h-3" />
+                 距离次数重置仅剩 {countdown}
+              </div>
 
-          <div className="bg-black/20 rounded-lg p-3 mx-4">
-            <h4 className="text-white text-xs font-semibold mb-2 text-center flex items-center justify-center gap-1">
-               <Gift className="w-3 h-3" />
-               活动规则
-            </h4>
-            <ul className="text-white/80 text-[10px] space-y-1 leading-relaxed">
-              <li>1. 每日0点重置所有抽奖次数，请及时使用</li>
-              <li>2. VIP用户每日自动获赠专属抽奖次数</li>
-              <li>3. 现金奖励直接发放至余额，可用于提现</li>
-              <li>4. 严禁使用作弊手段，违者封号处理</li>
-            </ul>
-          </div>
+              <div className="flex justify-center mb-6">
+                <div className="bg-black/20 rounded-xl p-3 text-white text-sm w-full max-w-[280px] backdrop-blur-sm">
+                  <div className="flex items-center justify-center gap-2 font-bold mb-2">
+                    <Sparkles className="w-4 h-4 text-yellow-300" />
+                    今日剩余次数: {spinsLeft}
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-2 text-[10px] text-white/80 border-t border-white/10 pt-2">
+                     <div className="flex flex-col items-center gap-1">
+                        <span className="text-yellow-300 font-bold">{vipSpins}</span>
+                        <span className="flex items-center gap-0.5"><Crown className="w-3 h-3"/>VIP赠送</span>
+                     </div>
+                     <div className="flex flex-col items-center gap-1 border-x border-white/10">
+                        <span className="text-white font-bold">{baseSpins}</span>
+                        <span className="flex items-center gap-0.5"><Star className="w-3 h-3"/>基础次数</span>
+                     </div>
+                     <div className="flex flex-col items-center gap-1">
+                        <span className="text-green-300 font-bold">{signinSpins}</span>
+                        <span className="flex items-center gap-0.5"><CalendarCheck className="w-3 h-3"/>签到奖励</span>
+                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {error && (
+                <div className="bg-red-900/50 text-white text-center py-2 px-4 rounded-lg mb-4 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div className="relative flex items-center justify-center mb-6">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20">
+                  <div className="w-0 h-0 border-l-[12px] border-r-[12px] border-t-[20px] border-l-transparent border-r-transparent border-t-yellow-400 drop-shadow-lg" />
+                </div>
+
+                <div className="relative w-64 h-64">
+                  <div className="absolute inset-0 rounded-full bg-gradient-to-b from-yellow-300 to-yellow-500 p-2 shadow-2xl">
+                    <svg
+                      viewBox="0 0 200 200"
+                      className="w-full h-full"
+                      style={{
+                        transform: `rotate(${rotation}deg)`,
+                        transition: isSpinning ? "transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)" : "none",
+                      }}
+                    >
+                      {displayPrizes.map((prize, index) => {
+                        const startAngle = index * sliceAngle - 90;
+                        const endAngle = startAngle + sliceAngle;
+                        const startRad = (startAngle * Math.PI) / 180;
+                        const endRad = (endAngle * Math.PI) / 180;
+                        
+                        const x1 = 100 + 95 * Math.cos(startRad);
+                        const y1 = 100 + 95 * Math.sin(startRad);
+                        const x2 = 100 + 95 * Math.cos(endRad);
+                        const y2 = 100 + 95 * Math.sin(endRad);
+                        
+                        const largeArc = sliceAngle > 180 ? 1 : 0;
+                        
+                        const midAngle = startAngle + sliceAngle / 2;
+                        const midRad = (midAngle * Math.PI) / 180;
+                        const textX = 100 + 60 * Math.cos(midRad);
+                        const textY = 100 + 60 * Math.sin(midRad);
+                        
+                        return (
+                          <g key={prize.id}>
+                            <path
+                              d={`M 100 100 L ${x1} ${y1} A 95 95 0 ${largeArc} 1 ${x2} ${y2} Z`}
+                              fill={prize.color}
+                              stroke="#fbbf24"
+                              strokeWidth="1"
+                            />
+                            <text
+                              x={textX}
+                              y={textY}
+                              fill="white"
+                              fontSize="9"
+                              fontWeight="bold"
+                              textAnchor="middle"
+                              dominantBaseline="middle"
+                              transform={`rotate(${midAngle + 90}, ${textX}, ${textY})`}
+                              style={{ textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}
+                            >
+                              {prize.name}
+                            </text>
+                          </g>
+                        );
+                      })}
+                      <circle cx="100" cy="100" r="30" fill="url(#centerGradient)" stroke="#fbbf24" strokeWidth="3" />
+                      <defs>
+                        <linearGradient id="centerGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stopColor="#ef4444" />
+                          <stop offset="100%" stopColor="#b91c1c" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                  </div>
+
+                  <button
+                    onClick={spin}
+                    disabled={isSpinning || spinsLeft <= 0 || !user}
+                    className={cn(
+                      "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10",
+                      "w-16 h-16 rounded-full",
+                      "bg-gradient-to-b from-red-500 to-red-700",
+                      "border-4 border-yellow-400",
+                      "shadow-lg",
+                      "flex flex-col items-center justify-center",
+                      "text-white font-bold",
+                      "transition-transform",
+                      isSpinning ? "scale-95" : "hover:scale-105 active:scale-95",
+                      (spinsLeft <= 0 || !user) && "opacity-50 cursor-not-allowed"
+                    )}
+                    data-testid="button-spin"
+                  >
+                    <Star className="w-4 h-4 mb-0.5" />
+                    <span className="text-xs">{isSpinning ? "抽奖中" : "抽奖"}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="bg-black/20 rounded-lg p-3 mx-4">
+                <h4 className="text-white text-xs font-semibold mb-2 text-center flex items-center justify-center gap-1">
+                   <Gift className="w-3 h-3" />
+                   活动规则
+                </h4>
+                <ul className="text-white/80 text-[10px] space-y-1 leading-relaxed">
+                  <li>1. 每日0点重置所有抽奖次数，请及时使用</li>
+                  <li>2. VIP用户每日自动获赠专属抽奖次数</li>
+                  <li>3. 现金奖励直接发放至余额，可用于提现</li>
+                  <li>4. 严禁使用作弊手段，违者封号处理</li>
+                </ul>
+              </div>
+            </>
+          )}
         </div>
 
         {showResult && wonPrize && (

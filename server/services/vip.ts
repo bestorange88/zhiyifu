@@ -253,16 +253,59 @@ export async function confirmVipUpgrade(userId: number, orderId: number) {
   const amountYuan = order.payAmountCents / 100;
   await deductCashAvailable(userId, amountYuan, "vip_upgrade_pay", orderId, `申请升级${targetLevel.name}支付`);
 
+  // Automatic Upgrade Logic (Bypassing pending_review)
+  
+  // 1. Update User VIP Status
+  let [status] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, userId)).limit(1);
+  
+  if (!status) {
+      await db.insert(userVipStatus).values({
+          userId,
+          vipLevel: order.toLevel,
+          upgradedAt: new Date(),
+          qualified: false,
+          directCount: 0,
+          team3Count: 0,
+      });
+  } else {
+      await db.update(userVipStatus)
+          .set({ 
+              vipLevel: order.toLevel,
+              upgradedAt: new Date(),
+          })
+          .where(eq(userVipStatus.userId, userId));
+  }
+
+  // 2. Update User table
+  await db.update(users)
+      .set({ vipLevel: order.toLevel })
+      .where(eq(users.id, userId));
+
+  // 3. Grant Daily Spins
+  if (targetLevel.dailyLottery > 0) {
+      await addSpins(userId, targetLevel.dailyLottery);
+  }
+
+  // 4. Distribute Upgrade Reward
+  if (targetLevel.upgradeRewardCents > 0) {
+      const rewardYuan = targetLevel.upgradeRewardCents / 100;
+      await addCashAvailable(userId, rewardYuan, "vip_upgrade_reward", orderId, `升级${targetLevel.name}奖励`);
+  }
+
+  // 5. Distribute Commissions
+  await distributeVipUpgradeCommission(userId, order.payAmountCents, orderId);
+
+  // 6. Update Order Status to Completed
   await db.update(vipUpgradeTxs)
-    .set({ status: "pending_review", paidAt: new Date() })
+    .set({ status: "completed", paidAt: new Date() })
     .where(eq(vipUpgradeTxs.id, orderId));
 
   return {
     success: true,
-    vipLevel: order.fromLevel, // Keep current level
+    vipLevel: order.toLevel,
     vipName: targetLevel.name,
-    message: "支付成功，请等待管理员审核",
-    status: "pending_review"
+    message: "升级成功！已自动发放奖励",
+    status: "completed"
   };
 }
 
@@ -355,6 +398,30 @@ export async function rejectVipUpgradeRequest(requestId: number, adminId?: numbe
     return { success: true };
 }
 
+export async function approveAllPendingVipUpgrades() {
+    const pendingRequests = await db.select().from(vipUpgradeTxs)
+        .where(eq(vipUpgradeTxs.status, "pending_review"));
+
+    console.log(`[VIP Auto-Approve] Found ${pendingRequests.length} pending requests.`);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const req of pendingRequests) {
+        try {
+            console.log(`[VIP Auto-Approve] Processing request ${req.id} for user ${req.userId}...`);
+            await approveVipUpgradeRequest(req.id);
+            successCount++;
+            console.log(`[VIP Auto-Approve] Request ${req.id} approved successfully.`);
+        } catch (error: any) {
+            failCount++;
+            console.error(`[VIP Auto-Approve] Failed to approve request ${req.id}:`, error.message);
+        }
+    }
+
+    return { successCount, failCount, total: pendingRequests.length };
+}
+
 export async function distributeVipUpgradeCommission(fromUserId: number, payAmountCents: number, txId: number) {
   const [fromUser] = await db.select().from(users).where(eq(users.id, fromUserId)).limit(1);
   if (!fromUser?.inviterId) return;
@@ -406,6 +473,8 @@ export async function distributeVipUpgradeCommission(fromUserId: number, payAmou
     });
 
     const commissionYuan = commissionCents / 100;
+    // 增加钱包检查，确保资金入账
+    await getWallet(uplineUserId);
     await addCashAvailable(uplineUserId, commissionYuan, "vip_commission", txId, `下级升级VIP分佣`);
   }
 }

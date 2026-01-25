@@ -3,8 +3,8 @@ import OpenAI, { toFile } from "openai";
 import { Buffer } from "node:buffer";
 
 export const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || "dummy_key_to_allow_server_start",
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+  apiKey: process.env.OPENAI_API_KEY || "dummy_key_to_allow_server_start",
+  baseURL: process.env.OPENAI_BASE_URL,
 });
 
 /**
@@ -16,7 +16,7 @@ export async function generateImageBuffer(
   size: "1024x1024" | "512x512" | "256x256" = "1024x1024"
 ): Promise<Buffer> {
   const response = await openai.images.generate({
-    model: "gpt-image-1",
+    model: process.env.OPENAI_IMAGE_MODEL || "dall-e-3",
     prompt,
     size,
   });
@@ -26,7 +26,7 @@ export async function generateImageBuffer(
 
 /**
  * Edit/combine multiple images into a composite.
- * Uses gpt-image-1 model via Replit AI Integrations.
+ * Uses standard DALL-E model (note: edit endpoint might differ in support across proxies).
  */
 export async function editImages(
   imageFiles: string[],
@@ -42,8 +42,25 @@ export async function editImages(
   );
 
   const response = await openai.images.edit({
-    model: "gpt-image-1",
-    image: images,
+    model: "dall-e-2", // DALL-E 3 does not support edits yet via API usually, DALL-E 2 does.
+    image: images[0], // OpenAI edit takes one image and one mask usually. This existing code passed an array? Replit specific?
+    // Replit's gpt-image-1 might have supported multiple images or this code was specific. 
+    // Standard OpenAI edit: image, mask, prompt. 
+    // Let's assume for now we just try to pass the first image if it's an edit.
+    // However, looking at the original code: `image: images` (array). 
+    // OpenAI Node SDK `images.edit` expects `image` (File), `mask` (File), `prompt`. 
+    // If the original code passed an array, it was definitely custom.
+    // To stay safe and avoid breaking "edit" if it's used, we might need to be careful.
+    // But since we are switching to a standard proxy, Replit custom behavior won't work anyway.
+    // For now, I'll comment out the edit implementation or try to adapt it to standard DALL-E 2 if possible, 
+    // but the signature `image: images` suggests it was doing something non-standard (maybe blending?).
+    // Standard edit requires a mask. 
+    // Let's just keep it as is but warn, or better, switch to dall-e-2 and pass first image.
+    // Actually, `openai.images.edit` signature in standard SDK:
+    // ({ image, prompt, mask?, ... })
+    // Passing an array `images` to `image` param would be a type error in standard SDK unless `images` was cast or Replit SDK was different.
+    // I will try to make it standard-compliant-ish.
+    image: images[0], 
     prompt,
   });
 

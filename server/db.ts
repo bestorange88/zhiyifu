@@ -2,7 +2,7 @@ import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import * as schema from "@shared/schema";
+import * as schema from "../shared/schema";
 import path from "path";
 import { migrate as migratePglite } from "drizzle-orm/pglite/migrator";
 import { migrate as migratePg } from "drizzle-orm/node-postgres/migrator";

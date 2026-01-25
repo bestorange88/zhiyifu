@@ -27,6 +27,11 @@ const DownloadPage = lazy(() => import("@/pages/DownloadPage"));
 const InvitePage = lazy(() => import("@/pages/InvitePage"));
 const TeamPage = lazy(() => import("@/pages/TeamPage"));
 const CommissionRewardsPage = lazy(() => import("@/pages/CommissionRewardsPage"));
+const PointsHistoryPage = lazy(() => import("@/pages/PointsHistoryPage"));
+const PointsRulesPage = lazy(() => import("@/pages/PointsRulesPage"));
+const HelpCenterPage = lazy(() => import("@/pages/HelpCenterPage"));
+const AboutPage = lazy(() => import("@/pages/AboutPage"));
+const RightsPage = lazy(() => import("@/pages/RightsPage"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 // Admin Pages

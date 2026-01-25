@@ -186,7 +186,7 @@ async function updateLuckiestClaim(redPacketId: number) {
 }
 
 // 获取群组红包列表
-export async function getGroupRedPackets(groupId: number, limit: number = 20) {
+export async function getGroupRedPackets(groupId: number, limit: number = 100) {
   const packets = await db.select().from(groupRedPackets)
     .where(eq(groupRedPackets.groupId, groupId))
     .orderBy(desc(groupRedPackets.createdAt))

@@ -7,13 +7,19 @@ import { Button } from "@/components/ui/button";
 
 export default function PointsHistoryPage() {
   const [, setLocation] = useLocation();
-  const { data: history, isLoading } = useQuery({
+  const { data: history, isLoading, error } = useQuery({
     queryKey: ["/api/wallet/history", "points"],
     queryFn: async () => {
       const res = await fetch("/api/wallet/history?currency=points");
+      if (res.status === 401) {
+        // 未登录，跳转到登录页
+        setLocation("/");
+        throw new Error("Unauthorized");
+      }
       if (!res.ok) throw new Error("Failed to fetch history");
       return res.json();
-    }
+    },
+    retry: false
   });
 
   return (

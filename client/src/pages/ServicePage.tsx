@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Header } from "@/components/Header";
 import { User, CreditCard, FlaskConical, FileText, ChevronRight, ChevronDown, Headphones, Gift, MessageCircle, Send, Bot, ArrowLeft, Loader2, Users, X } from "lucide-react";
 import { cn, maskPhoneNumber } from "@/lib/utils";
@@ -316,11 +316,18 @@ export default function ServicePage() {
     }
   };
 
+  // Combine messages and red packets into a single timeline
+  const timeline = useMemo(() => {
+    const msgs = (groupMessages || []).map(m => ({ type: 'message' as const, data: m, time: new Date(m.createdAt).getTime() }));
+    const packets = (groupRedPackets || []).map(p => ({ type: 'red_packet' as const, data: p, time: new Date(p.createdAt).getTime() }));
+    return [...msgs, ...packets].sort((a, b) => a.time - b.time);
+  }, [groupMessages, groupRedPackets]);
+
   useEffect(() => {
     if (groupScrollRef.current) {
       groupScrollRef.current.scrollTop = groupScrollRef.current.scrollHeight;
     }
-  }, [groupMessages]);
+  }, [timeline]);
 
   const toggleFaq = (index: number) => {
     setExpandedFaq(expandedFaq === index ? null : index);
@@ -363,88 +370,112 @@ export default function ServicePage() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={groupScrollRef}>
-          {groupMessages && groupMessages.length > 0 ? (
-            groupMessages.map((msg) => {
-              const isMe = msg.userId === user?.id;
-              const isAdmin = msg.senderType === "admin";
-              const displayName = isAdmin ? (msg.senderName || "管理员") : (maskPhoneNumber(msg.phone) || `用户${msg.userId}`);
-              return (
-                <div
-                  key={msg.id}
-                  className={cn(
-                    "flex gap-2",
-                    isMe ? "flex-row-reverse" : "flex-row"
-                  )}
-                >
+          {timeline.length > 0 ? (
+            timeline.map((item) => {
+              if (item.type === 'message') {
+                const msg = item.data as GroupMessage;
+                const isMe = msg.userId === user?.id;
+                const isAdmin = msg.senderType === "admin";
+                const displayName = isAdmin ? (msg.senderName || "管理员") : (maskPhoneNumber(msg.phone) || `用户${msg.userId}`);
+                return (
                   <div
+                    key={`msg-${msg.id}`}
                     className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
-                      isMe
-                        ? "bg-gradient-to-br from-primary to-cyan-500"
-                        : isAdmin 
-                          ? "bg-gradient-to-br from-orange-400 to-red-500"
-                          : "bg-gradient-to-br from-purple-400 to-pink-500"
+                      "flex gap-2",
+                      isMe ? "flex-row-reverse" : "flex-row"
                     )}
                   >
-                    <User className="w-4 h-4 text-white" />
-                  </div>
-                  <div className="max-w-[75%]">
-                    {!isMe && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{displayName}</p>
-                    )}
                     <div
                       className={cn(
-                        "rounded-2xl px-4 py-3",
+                        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
                         isMe
-                          ? "bg-gradient-to-br from-primary to-cyan-500 text-white rounded-tr-sm"
-                          : "bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 shadow-sm border border-gray-100 dark:border-gray-700 rounded-tl-sm"
+                          ? "bg-gradient-to-br from-primary to-cyan-500"
+                          : isAdmin 
+                            ? "bg-gradient-to-br from-orange-400 to-red-500"
+                            : "bg-gradient-to-br from-purple-400 to-pink-500"
                       )}
                     >
-                      <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
-                      <p
+                      <User className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="max-w-[75%]">
+                      {!isMe && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{displayName}</p>
+                      )}
+                      <div
                         className={cn(
-                          "text-[10px] mt-1",
-                          isMe ? "text-white/70" : "text-gray-400"
+                          "rounded-2xl px-4 py-3",
+                          isMe
+                            ? "bg-gradient-to-br from-primary to-cyan-500 text-white rounded-tr-sm"
+                            : "bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 shadow-sm border border-gray-100 dark:border-gray-700 rounded-tl-sm"
                         )}
                       >
-                        {format(new Date(msg.createdAt), "HH:mm")}
-                      </p>
+                        <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
+                        <p
+                          className={cn(
+                            "text-[10px] mt-1",
+                            isMe ? "text-white/70" : "text-gray-400"
+                          )}
+                        >
+                          {format(new Date(msg.createdAt), "HH:mm")}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
+                );
+              } else {
+                const packet = item.data as RedPacket;
+                return (
+                  <div
+                    key={`packet-${packet.id}`}
+                    onClick={() => handleOpenRedPacket(packet)}
+                    className={cn(
+                      "rounded-xl p-4 cursor-pointer hover:shadow-lg transition-all max-w-[80%] mx-auto w-full",
+                      packet.status === "active" 
+                        ? "bg-gradient-to-r from-red-500 to-orange-500" 
+                        : "bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-12 h-12 rounded-full flex items-center justify-center",
+                        packet.status === "active" ? "bg-yellow-400" : "bg-gray-200 dark:bg-gray-600"
+                      )}>
+                        <Gift className={cn(
+                          "w-6 h-6",
+                          packet.status === "active" ? "text-red-600" : "text-gray-400"
+                        )} />
+                      </div>
+                      <div className={cn(
+                        "flex-1",
+                        packet.status === "active" ? "text-white" : "text-gray-600 dark:text-gray-300"
+                      )}>
+                        <p className="font-bold">{packet.greeting || "恭喜发财，大吉大利"}</p>
+                        <p className={cn(
+                          "text-xs",
+                          packet.status === "active" ? "opacity-80" : "text-gray-400"
+                        )}>
+                          {packet.status === "active" 
+                            ? `剩余 ${packet.remainingCount}/${packet.totalCount} 个` 
+                            : packet.status === "finished" 
+                              ? `已抢完 ${packet.totalCount}/${packet.totalCount} 个`
+                              : "已过期"
+                          }
+                        </p>
+                      </div>
+                      <div className={cn(
+                        "text-sm font-bold",
+                        packet.status === "active" ? "text-yellow-300" : "text-gray-400"
+                      )}>
+                        {packet.status === "active" ? "点击领取" : packet.status === "finished" ? "已抢完" : "已过期"}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
             })
           ) : (
             <div className="text-center text-gray-500 dark:text-gray-400 py-10">
               暂无消息，发送第一条消息吧
-            </div>
-          )}
-
-          {/* 红包列表 */}
-          {groupRedPackets && groupRedPackets.filter(p => p.status === "active").length > 0 && (
-            <div className="mt-4 space-y-2">
-              {groupRedPackets.filter(p => p.status === "active").map((packet) => (
-                <div
-                  key={packet.id}
-                  onClick={() => handleOpenRedPacket(packet)}
-                  className="bg-gradient-to-r from-red-500 to-orange-500 rounded-xl p-4 cursor-pointer hover:shadow-lg transition-all"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-yellow-400 rounded-full flex items-center justify-center">
-                      <Gift className="w-6 h-6 text-red-600" />
-                    </div>
-                    <div className="flex-1 text-white">
-                      <p className="font-bold">{packet.greeting || "恭喜发财，大吉大利"}</p>
-                      <p className="text-xs opacity-80">
-                        剩余 {packet.remainingCount}/{packet.totalCount} 个
-                      </p>
-                    </div>
-                    <div className="text-yellow-300 text-sm font-bold">
-                      点击领取
-                    </div>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
         </div>

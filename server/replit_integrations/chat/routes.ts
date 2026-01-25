@@ -1,40 +1,32 @@
 import type { Express, Request, Response } from "express";
 import { chatStorage } from "./storage";
+import OpenAI from "openai";
 
-// 直接使用Google Gemini API
-const GEMINI_API_KEY = process.env.AI_INTEGRATIONS_OPENAI_API_KEY;
-const GEMINI_MODEL = "gemini-2.5-flash";
+// Configure OpenAI Client for Free/Community Instances
+// Users can set OPENAI_BASE_URL to any compatible provider (e.g. LocalAI, vLLM, or public free proxies)
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || "sk-dummy-key-for-free-instances", // Many free instances don't check key, but some require a dummy one
+  baseURL: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1", // Default to official, can be overridden env
+});
 
-async function callGeminiAPI(messages: Array<{ role: string; content: string }>) {
-  const contents = messages
-    .filter(m => m.role !== "system")
-    .map(m => ({
-      role: m.role === "assistant" ? "model" : "user",
-      parts: [{ text: m.content }]
-    }));
+const AI_MODEL = process.env.OPENAI_MODEL || "gpt-3.5-turbo";
 
-  // 添加系统提示到第一条用户消息
-  const systemMessage = messages.find(m => m.role === "system");
-  if (systemMessage && contents.length > 0 && contents[0].role === "user") {
-    contents[0].parts[0].text = `${systemMessage.content}\n\n${contents[0].parts[0].text}`;
+async function callOpenAIAPI(messages: Array<{ role: string; content: string }>) {
+  try {
+    const completion = await openai.chat.completions.create({
+      messages: messages.map(m => ({
+        role: m.role as "system" | "user" | "assistant",
+        content: m.content
+      })),
+      model: AI_MODEL,
+      temperature: 0.7,
+    });
+
+    return completion.choices[0]?.message?.content || "";
+  } catch (error: any) {
+    console.error("AI API Error:", error);
+    throw new Error(`AI API Error: ${error.message || "Unknown error"}`);
   }
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents })
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(`Gemini API error: ${error.error?.message || response.statusText}`);
-  }
-
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 }
 
 export function registerChatRoutes(app: Express): void {
@@ -123,8 +115,8 @@ export function registerChatRoutes(app: Express): void {
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      // 调用Gemini API获取回复
-      const fullResponse = await callGeminiAPI(chatMessages);
+      // 调用AI API获取回复
+      const fullResponse = await callOpenAIAPI(chatMessages);
 
       // 发送完整回复（非流式）
       res.write(`data: ${JSON.stringify({ content: fullResponse })}\n\n`);

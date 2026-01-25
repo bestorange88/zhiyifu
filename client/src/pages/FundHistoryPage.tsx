@@ -88,9 +88,14 @@ export default function FundHistoryPage() {
                     {parseFloat(tx.amount) > 0 ? "+" : ""}
                     {parseFloat(tx.amount).toFixed(2)}
                   </div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    {tx.currency === "cash_available" ? "可用余额" : tx.currency === "cash_frozen" ? "冻结余额" : "积分"}
+                  <div className="text-xs text-gray-500 mt-1">
+                    余额: {tx.balanceAfter || "-"}
                   </div>
+                  {tx.balanceBefore && (
+                    <div className="text-[10px] text-gray-400 mt-0.5">
+                      变动前: {tx.balanceBefore}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

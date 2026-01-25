@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yunzhiyifu-v2';
+const CACHE_NAME = 'yunzhiyifu-v3';
 const urlsToCache = [
   '/',
   '/index.html',
@@ -52,8 +52,8 @@ self.addEventListener('fetch', (event) => {
         // Clone the response
         const responseClone = response.clone();
         
-        // Only cache successful responses
-        if (response.status === 200) {
+        // Only cache successful GET responses
+        if (response.status === 200 && event.request.method === 'GET') {
           caches.open(CACHE_NAME)
             .then((cache) => {
               cache.put(event.request, responseClone);

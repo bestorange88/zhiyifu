@@ -32,6 +32,27 @@ $RemoteScript = @"
 set -e
 echo "Starting deployment..."
 
+# Backup current data
+echo "Backing up current deployment..."
+rm -rf /tmp/binarycent_backup
+mkdir -p /tmp/binarycent_backup
+if [ -d "$DeployPath/.data" ]; then
+    cp -r $DeployPath/.data /tmp/binarycent_backup/.data
+    echo "Backed up .data"
+fi
+if [ -f "$DeployPath/.env" ]; then
+    cp $DeployPath/.env /tmp/binarycent_backup/.env
+    echo "Backed up .env"
+fi
+if [ -d "$DeployPath/uploads" ]; then
+    cp -r $DeployPath/uploads /tmp/binarycent_backup/uploads
+    echo "Backed up uploads"
+fi
+if [ -d "$DeployPath/attached_assets" ]; then
+    cp -r $DeployPath/attached_assets /tmp/binarycent_backup/attached_assets
+    echo "Backed up legacy attached_assets"
+fi
+
 # Clean target (it might be empty or partial)
 mkdir -p $DeployPath
 # Don't rm -rf everything if we are restoring, but we need to ensure clean code.
@@ -52,19 +73,27 @@ else
 fi
 
 # Restore Env
-echo "Restoring .env..."
-if [ -f "/tmp/binarycent_backup/.env" ]; then
-    cp /tmp/binarycent_backup/.env $DeployPath/.env
-    echo "Restored .env from backup."
-else
-    echo "⚠️ No .env backup found. Using fallback..."
+echo "Updating .env..."
+if [ -f "/tmp/.env.prod.fallback" ]; then
     cp /tmp/.env.prod.fallback $DeployPath/.env
+    echo "✅ Updated .env with new configuration."
+elif [ -f "/tmp/binarycent_backup/.env" ]; then
+    cp /tmp/binarycent_backup/.env $DeployPath/.env
+    echo "⚠️ Restored .env from backup (no new config found)."
 fi
 
 # Restore Uploads
 if [ -d "/tmp/binarycent_backup/uploads" ]; then
     echo "Restoring uploads..."
     cp -r /tmp/binarycent_backup/uploads $DeployPath/uploads
+fi
+
+# Restore/Migrate Legacy Uploads
+if [ -d "/tmp/binarycent_backup/attached_assets/uploads" ]; then
+    echo "Found legacy uploads in backup attached_assets, merging to root uploads..."
+    mkdir -p $DeployPath/uploads
+    cp -r /tmp/binarycent_backup/attached_assets/uploads/* $DeployPath/uploads/
+    echo "✅ Merged legacy uploads."
 fi
 
 # Install
@@ -74,8 +103,19 @@ npm install --production
 
 # Restart
 echo "Restarting service..."
+# Set System Timezone
+echo "Setting system timezone to Asia/Shanghai..."
+if command -v timedatectl >/dev/null; then
+    timedatectl set-timezone Asia/Shanghai || true
+fi
+if [ -f /usr/share/zoneinfo/Asia/Shanghai ]; then
+    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+fi
+echo "Current system time: $(date)"
+
+export TZ=Asia/Shanghai
 pm2 delete ai-clone || true
-pm2 start dist/index.cjs --name "ai-clone"
+TZ=Asia/Shanghai pm2 start dist/index.cjs --name "ai-clone"
 pm2 save
 
 echo "✅ Deployment Successful!"

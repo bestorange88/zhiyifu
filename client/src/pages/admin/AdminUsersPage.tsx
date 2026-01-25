@@ -9,6 +9,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "./AdminLayout";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -41,6 +42,9 @@ export default function AdminUsersPage() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [relationshipModalOpen, setRelationshipModalOpen] = useState(false);
   const [createUserModalOpen, setCreateUserModalOpen] = useState(false);
+  const [ledgerModalOpen, setLedgerModalOpen] = useState(false);
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerCurrency, setLedgerCurrency] = useState("cash_available");
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [balanceAmount, setBalanceAmount] = useState("");
   const [balanceReason, setBalanceReason] = useState("");
@@ -87,6 +91,23 @@ export default function AdminUsersPage() {
       return res.json();
     },
     enabled: !!selectedUser && relationshipModalOpen,
+  });
+
+  const { data: ledgerData, isLoading: loadingLedger } = useQuery({
+    queryKey: ["/api/admin/users", selectedUser?.id, "ledger", ledgerPage, ledgerCurrency],
+    queryFn: async () => {
+      const params = new URLSearchParams({ 
+        page: String(ledgerPage), 
+        limit: "10", 
+        currency: ledgerCurrency 
+      });
+      const res = await fetch(`/api/admin/users/${selectedUser.id}/ledger?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load ledger");
+      return res.json();
+    },
+    enabled: !!selectedUser && ledgerModalOpen,
   });
 
   const updateStatusMutation = useMutation({
@@ -208,6 +229,12 @@ export default function AdminUsersPage() {
   const openRelationshipModal = (user: any) => {
     setSelectedUser(user);
     setRelationshipModalOpen(true);
+  };
+
+  const openLedgerModal = (user: any) => {
+    setSelectedUser(user);
+    setLedgerModalOpen(true);
+    setLedgerPage(1);
   };
 
   const totalPages = Math.ceil((data?.total || 0) / 20);
@@ -490,7 +517,20 @@ export default function AdminUsersPage() {
               </div>
 
               <Card className="p-4">
-                <h4 className="font-semibold mb-3">钱包信息</h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold">钱包信息</h4>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setDetailModalOpen(false);
+                      openLedgerModal(selectedUser);
+                    }}
+                  >
+                    资金明细
+                  </Button>
+                </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="text-gray-500">可用余额</span>
@@ -546,6 +586,55 @@ export default function AdminUsersPage() {
                 <p className="font-bold text-lg">{relationshipData.user?.phone}</p>
                 <p className="text-xs text-purple-600">邀请码: {relationshipData.user?.inviteCode}</p>
               </div>
+
+              {relationshipData.stats && (
+                <div className="p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+                  <div className="grid gap-3">
+                    <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
+                      <span className="font-bold text-gray-800">下级：{relationshipData.stats.total}人</span>
+                      <span className="text-gray-600">直推：{relationshipData.stats.l1}人</span>
+                      <span className="text-gray-600">间推：{relationshipData.stats.l2}人</span>
+                      <span className="text-gray-600">三代：{relationshipData.stats.l3}人</span>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-2">
+                      {[1, 2, 3, 4, 5].map(level => {
+                        const count = relationshipData.stats.vipCounts[level] || 0;
+                        const details = relationshipData.stats.vipDetails?.[level] || [];
+                        
+                        if (count === 0) return null;
+
+                        return (
+                          <TooltipProvider key={level}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded border border-amber-200 cursor-pointer hover:bg-amber-200 transition-colors">
+                                  VIP{level}: {count}人
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-[200px] max-h-[300px] overflow-y-auto">
+                                <p className="font-semibold mb-1 text-xs">VIP{level} 用户列表</p>
+                                {details.length > 0 ? (
+                                  <div className="text-xs space-y-0.5">
+                                    {details.map((phone: string, idx: number) => (
+                                      <div key={idx}>{phone}</div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-gray-500">无详情</p>
+                                )}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        );
+                      })}
+                      {Object.values(relationshipData.stats.vipCounts).every((c: any) => c === 0) && (
+                         <span className="text-xs text-gray-400">暂无VIP下级</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
@@ -674,6 +763,73 @@ export default function AdminUsersPage() {
             >
               {createUserMutation.isPending ? "创建中..." : "创建用户"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={ledgerModalOpen} onOpenChange={setLedgerModalOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>资金往来明细 - {selectedUser?.phone}</DialogTitle>
+          </DialogHeader>
+          
+          <Tabs value={ledgerCurrency} onValueChange={(v) => { setLedgerCurrency(v); setLedgerPage(1); }}>
+            <TabsList>
+              <TabsTrigger value="cash_available">可用余额</TabsTrigger>
+              <TabsTrigger value="cash_frozen">冻结余额</TabsTrigger>
+              <TabsTrigger value="points">积分</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <div className="overflow-x-auto min-h-[400px]">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left">时间</th>
+                  <th className="px-3 py-2 text-left">类型</th>
+                  <th className="px-3 py-2 text-right">变动金额</th>
+                  <th className="px-3 py-2 text-right">变动后余额</th>
+                  <th className="px-3 py-2 text-left">备注</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {loadingLedger ? (
+                  <tr><td colSpan={5} className="text-center py-4">加载中...</td></tr>
+                ) : ledgerData?.records?.length > 0 ? (
+                  ledgerData.records.map((record: any) => (
+                    <tr key={record.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2">{new Date(record.createdAt).toLocaleString()}</td>
+                      <td className="px-3 py-2">
+                         <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{record.type}</span>
+                      </td>
+                      <td className={`px-3 py-2 text-right font-medium ${parseFloat(record.amount) > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {parseFloat(record.amount) > 0 ? '+' : ''}{record.amount}
+                      </td>
+                      <td className="px-3 py-2 text-right text-gray-700">
+                        {record.balanceAfter}
+                      </td>
+                      <td className="px-3 py-2 text-gray-500 max-w-[200px] truncate" title={record.description}>
+                        {record.description}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                   <tr><td colSpan={5} className="text-center py-8 text-gray-400">暂无记录</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-between pt-4 border-t">
+             <span className="text-xs text-gray-500">共 {ledgerData?.total || 0} 条</span>
+             <div className="flex gap-2">
+               <Button size="sm" variant="outline" disabled={ledgerPage <= 1} onClick={() => setLedgerPage(p => p - 1)}>
+                 上一页
+               </Button>
+               <Button size="sm" variant="outline" disabled={ledgerPage * 10 >= (ledgerData?.total || 0)} onClick={() => setLedgerPage(p => p + 1)}>
+                 下一页
+               </Button>
+             </div>
           </div>
         </DialogContent>
       </Dialog>

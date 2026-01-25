@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { wallets, ledger } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 
 export type LedgerType = 
   | "checkin_bonus" 
@@ -38,6 +38,9 @@ export async function getWallet(userId: number) {
 }
 
 export async function addCashAvailable(userId: number, amount: number, type: LedgerType, refId?: number, description?: string) {
+  // Ensure wallet exists
+  await getWallet(userId);
+
   await db.update(wallets)
     .set({ 
       balanceCashAvailable: sql`${wallets.balanceCashAvailable} + ${amount}`,
@@ -56,6 +59,9 @@ export async function addCashAvailable(userId: number, amount: number, type: Led
 }
 
 export async function addCashFrozen(userId: number, amount: number, type: LedgerType, refId?: number, description?: string) {
+  // Ensure wallet exists
+  await getWallet(userId);
+
   await db.update(wallets)
     .set({ 
       balanceCashFrozen: sql`${wallets.balanceCashFrozen} + ${amount}`,
@@ -74,6 +80,9 @@ export async function addCashFrozen(userId: number, amount: number, type: Ledger
 }
 
 export async function addPoints(userId: number, amount: number, type: LedgerType, refId?: number, description?: string) {
+  // Ensure wallet exists
+  await getWallet(userId);
+
   await db.update(wallets)
     .set({ 
       balancePoints: sql`${wallets.balancePoints} + ${amount}`,
@@ -115,6 +124,9 @@ export async function deductCashAvailable(userId: number, amount: number, type: 
 }
 
 export async function unfreezeCash(userId: number, amount: number, description?: string) {
+  // Ensure wallet exists
+  await getWallet(userId);
+
   await db.update(wallets)
     .set({ 
       balanceCashFrozen: sql`${wallets.balanceCashFrozen} - ${amount}`,
@@ -153,4 +165,88 @@ export async function getLedgerHistory(userId: number, limit = 50, offset = 0, c
     .orderBy(sql`${ledger.createdAt} DESC`)
     .limit(limit)
     .offset(offset);
+}
+
+export async function getLedgerWithBalance(userId: number, limit = 50, offset = 0, currency?: string) {
+  // 1. Get current wallet
+  const [wallet] = await db.select().from(wallets).where(eq(wallets.userId, userId)).limit(1);
+  if (!wallet) return [];
+
+  // Current running balances
+  let runningCash = parseFloat(wallet.balanceCashAvailable);
+  let runningFrozen = parseFloat(wallet.balanceCashFrozen);
+  let runningPoints = wallet.balancePoints || 0;
+
+  // 2. If offset > 0, we need to subtract newer transactions to find starting balance for this page
+  if (offset > 0) {
+    let newerQuery = db.select({
+      currency: ledger.currency,
+      amount: ledger.amount
+    })
+    .from(ledger)
+    .where(eq(ledger.userId, userId))
+    .orderBy(desc(ledger.createdAt), desc(ledger.id))
+    .limit(offset);
+
+    if (currency) {
+      newerQuery = newerQuery.where(eq(ledger.currency, currency)) as any;
+    }
+
+    const newerRecords = await newerQuery;
+
+    // Adjust running balances by reversing newer transactions
+    for (const record of newerRecords) {
+       const amount = parseFloat(record.amount);
+       if (record.currency === "cash_available" || record.currency === "cny") {
+         runningCash -= amount;
+       } else if (record.currency === "cash_frozen") {
+         runningFrozen -= amount;
+       } else if (record.currency === "points") {
+         runningPoints -= amount;
+       }
+    }
+  }
+
+  // 3. Fetch current page records
+  let query = db.select()
+    .from(ledger)
+    .where(eq(ledger.userId, userId))
+    .orderBy(desc(ledger.createdAt), desc(ledger.id))
+    .limit(limit)
+    .offset(offset);
+
+  if (currency) {
+    query = query.where(eq(ledger.currency, currency)) as any;
+  }
+
+  const records = await query;
+
+  // 4. Calculate balance for each record
+  const result = records.map(record => {
+    const amount = parseFloat(record.amount);
+    let balanceAfter = 0;
+    let balanceBefore = 0;
+
+    if (record.currency === "cash_available" || record.currency === "cny") {
+      balanceAfter = runningCash;
+      balanceBefore = runningCash - amount;
+      runningCash = balanceBefore; // Update for next iteration (older record)
+    } else if (record.currency === "cash_frozen") {
+      balanceAfter = runningFrozen;
+      balanceBefore = runningFrozen - amount;
+      runningFrozen = balanceBefore;
+    } else if (record.currency === "points") {
+      balanceAfter = runningPoints;
+      balanceBefore = runningPoints - amount;
+      runningPoints = balanceBefore;
+    }
+
+    return {
+      ...record,
+      balanceAfter: balanceAfter.toFixed(2),
+      balanceBefore: balanceBefore.toFixed(2),
+    };
+  });
+
+  return result;
 }

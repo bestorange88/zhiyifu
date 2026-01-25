@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { users, userRanks, rankRules, referralRewards, orders, commissionRecords, commissionLogs, vipCommissionRates, identityVerifications, deposits, rankUpgradeRequests, wallets } from "@shared/schema";
+import { users, userRanks, rankRules, referralRewards, orders, commissionRecords, commissionLogs, vipCommissionRates, identityVerifications, deposits, rankUpgradeRequests, wallets, withdraws } from "@shared/schema";
 import { eq, sql, desc, and, inArray } from "drizzle-orm";
 import { addCashFrozen, addCashAvailable, deductCashAvailable, getWallet } from "./wallet";
 import { addSpins } from "./spin";
@@ -284,6 +284,7 @@ export async function getTeamMembersWithDetails(userId: number) {
       userId: identityVerifications.userId,
       status: identityVerifications.status,
       realName: identityVerifications.realName,
+      createdAt: identityVerifications.createdAt,
     })
     .from(identityVerifications)
     .where(inArray(identityVerifications.userId, allMemberIds));
@@ -312,7 +313,16 @@ export async function getTeamMembersWithDetails(userId: number) {
       memberDetailsMap.set(w.userId, { ...current, balance: w.available });
     });
 
+    // Process verifications to get the latest status for each user
+    const latestVerifications = new Map();
     memberVerifications.forEach(v => {
+      const existing = latestVerifications.get(v.userId);
+      if (!existing || new Date(v.createdAt).getTime() > new Date(existing.createdAt).getTime()) {
+        latestVerifications.set(v.userId, v);
+      }
+    });
+
+    latestVerifications.forEach(v => {
       const current = memberDetailsMap.get(v.userId) || {};
       memberDetailsMap.set(v.userId, { ...current, isVerified: v.status === 'approved', realName: v.realName });
     });

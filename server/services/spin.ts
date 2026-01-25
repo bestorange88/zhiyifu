@@ -219,9 +219,12 @@ async function distributeLotteryCommission(fromUserId: number, spinId: number, w
       status: isQualified ? "credited" : "frozen",
     });
 
+    const commissionYuan = commissionCents / 100;
     if (isQualified) {
-      const commissionYuan = commissionCents / 100;
       await addCashAvailable(uplineUserId, commissionYuan, "lottery_commission", spinId, `下级抽奖中奖分佣`);
+    } else {
+      // 修复：未达标时添加到冻结余额，确保资金明细有记录
+      await addCashFrozen(uplineUserId, commissionYuan, "lottery_commission", spinId, `下级抽奖分佣(待达标解冻)`);
     }
   }
 }

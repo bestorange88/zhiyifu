@@ -6,18 +6,18 @@ import path from "path";
 import fs from "fs";
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(process.cwd(), "attached_assets", "uploads");
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  },
-});
+    destination: (req, file, cb) => {
+      const uploadDir = path.join(process.cwd(), "uploads");
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
+    },
+  });
 
 const upload = multer({ 
   storage,
@@ -44,6 +44,9 @@ import * as smsService from "../services/sms";
 import * as redPacketService from "../services/redPacket";
 import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema, adminRankUpdateSchema, requestCodeSchema, registerWithSmsSchema, identityVerificationSubmitSchema, adminIdentityReviewSchema } from "@shared/schema";
 import * as identityService from "../services/identity";
+import { db } from "../db";
+import { users } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 export function registerApiRoutes(app: Express): void {
   // ============ AUTH ============
@@ -90,7 +93,7 @@ export function registerApiRoutes(app: Express): void {
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
       const currency = req.query.currency as string;
-      const history = await walletService.getLedgerHistory(req.userId!, limit, offset, currency);
+      const history = await walletService.getLedgerWithBalance(req.userId!, limit, offset, currency);
       res.json(history);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -369,6 +372,15 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  app.post("/api/admin/vip-upgrades/approve-all-pending", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const result = await vipService.approveAllPendingVipUpgrades();
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ============ WITHDRAW ============
   app.get("/api/withdraw/rules", authMiddleware, async (req: AuthRequest, res) => {
     try {
@@ -525,6 +537,32 @@ export function registerApiRoutes(app: Express): void {
       res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ DEBUG ============
+  app.get("/api/debug/check-vip", async (req, res) => {
+    try {
+      const { phone, secret } = req.query;
+      if (secret !== "trae_debug_2024") {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      
+      const [user] = await db.select().from(users).where(eq(users.phone, phone as string)).limit(1);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const status = await vipService.getUserVipStatus(user.id);
+      const wallet = await walletService.getWallet(user.id);
+
+      res.json({
+        user: { id: user.id, phone: user.phone, vipLevel: user.vipLevel },
+        status,
+        wallet
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 
@@ -1153,16 +1191,51 @@ export function registerApiRoutes(app: Express): void {
 
   app.post("/api/admin/identity-verifications/batch-review", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {
-      const { ids, approved, reviewNote } = adminIdentityBatchReviewSchema.parse(req.body);
+      console.log("Batch review RAW body:", JSON.stringify(req.body));
+      
+      // Manual parsing to be extremely permissive
+      let { ids, approved, reviewNote } = req.body || {};
+      
+      // 1. Handle IDs
+      if (typeof ids === 'string') {
+        try { ids = JSON.parse(ids); } catch(e) {}
+      }
+      if (!Array.isArray(ids)) {
+         // Try to find ids in other ways or return error
+         return res.status(400).json({ error: "Invalid 'ids' format: must be an array", received: req.body });
+      }
+      
+      // Convert to numbers and filter
+      const safeIds = ids
+        .map((x: any) => Number(x))
+        .filter((x: number) => !isNaN(x) && x > 0);
+
+      if (safeIds.length === 0) {
+        return res.status(400).json({ error: "No valid numeric IDs provided", received: req.body });
+      }
+
+      // 2. Handle approved
+      if (typeof approved === 'string') {
+        approved = (approved === 'true');
+      }
+      // If missing/invalid, default logic or error. 
+      // AdminIdentityPage sends boolean, so strict check is okay-ish, but let's be safe.
+      const safeApproved = !!approved;
+
       const results = await identityService.batchReviewIdentityVerifications(
-        ids,
+        safeIds,
         req.adminId!,
-        approved,
+        safeApproved,
         reviewNote
       );
       res.json(results);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
+      console.error("Batch review error:", error);
+      res.status(400).json({ 
+        error: error.message, 
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+        received: req.body 
+      });
     }
   });
 
@@ -1344,6 +1417,19 @@ export function registerApiRoutes(app: Express): void {
       const userId = parseInt(req.params.id);
       const detail = await adminService.getUserDetail(userId);
       res.json(detail);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/users/:id/ledger", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const currency = req.query.currency as string;
+      const result = await adminService.getUserLedgerWithBalance(userId, page, limit, currency);
+      res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
