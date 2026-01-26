@@ -60,7 +60,6 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
       subItems: [
         { id: "users", label: "用户列表", icon: Users, path: "/admin/users" },
         { id: "identity", label: "实名认证", icon: IdCard, path: "/admin/identity" },
-        { id: "agents", label: "代理审核", icon: UserCheck, path: "/admin/agents" },
       ]
     },
     {
@@ -69,7 +68,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
       icon: Crown,
       subItems: [
         { id: "vipranks", label: "VIP等级", icon: Crown, path: "/admin/vipranks" },
-        { id: "rank-requests", label: "VIP升级审核", icon: UserCheck, path: "/admin/rank-requests" },
+        { id: "rank-requests", label: "VIP升级记录", icon: UserCheck, path: "/admin/rank-requests" },
       ]
     },
     {
@@ -88,6 +87,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
       label: "营销管理",
       icon: Gift,
       subItems: [
+        { id: "activity", label: "活动管理", icon: Gift, path: "/admin/activity" },
         { id: "lottery", label: "抽奖管理", icon: Gift, path: "/admin/lottery" },
         { id: "distribution", label: "分销管理", icon: Share2, path: "/admin/distribution" },
       ]

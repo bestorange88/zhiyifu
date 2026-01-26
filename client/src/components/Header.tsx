@@ -1,7 +1,8 @@
-import { User, Bell } from "lucide-react";
+import { User, Bell, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
+import { useTheme } from "@/hooks/use-theme";
 import logoImage from "@assets/logo.jpg";
 
 interface HeaderProps {
@@ -21,6 +22,7 @@ export function Header({
 }: HeaderProps) {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const { toggleTheme } = useTheme();
   
   return (
     <header className={cn(
@@ -53,6 +55,15 @@ export function Header({
                 <Bell className="w-4 h-4 text-gray-500" />
                 <span className="absolute top-1 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
               </button>
+
+              <button 
+                onClick={toggleTheme}
+                className="w-9 h-9 bg-gray-50 hover:bg-gray-100 rounded-full flex items-center justify-center transition-colors"
+                title="切换主题"
+              >
+                <Palette className="w-4 h-4 text-primary" />
+              </button>
+
               <button 
                 onClick={() => setLocation('/mine')}
                 className="w-9 h-9 gradient-primary rounded-full flex items-center justify-center shadow-md transition-transform hover:scale-105"

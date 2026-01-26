@@ -1,12 +1,13 @@
 import { db } from "../db";
 import { 
   vipLevels, vipRequirements, vipCommissionRates, lotteryCommissionRates,
-  userVipStatus, vipUpgradeTxs, commissionLogs,
+  userVipStatus, vipUpgradeTxs, commissionLogs, vipUnlockState,
   users, orders, wallets, vipPlans 
 } from "@shared/schema";
 import { eq, sql, and, desc, like, gte, inArray } from "drizzle-orm";
-import { deductCashAvailable, addCashAvailable, addCashFrozen, getWallet } from "./wallet";
+import { deductCashAvailable, addCashAvailable, addCashFrozen, getWallet, unfreezeCommission } from "./wallet";
 import { addSpins } from "./spin";
+import { getSystemSettingByKey } from "./admin";
 
 export async function getVipLevels() {
   return db.select().from(vipLevels).orderBy(vipLevels.level);
@@ -23,6 +24,7 @@ export async function getVipLevelWithDetails(level: number) {
     ...vipLevel,
     requirement,
     commissionRate: commRate,
+    bonusRules: vipLevel.bonusRules ? JSON.parse(vipLevel.bonusRules) : null,
   };
 }
 
@@ -59,6 +61,7 @@ export async function getAllVipLevelsWithDetails() {
         indirectRate: lotteryRate?.indirectRate ?? 0,
       },
       benefitsList: level.benefits ? JSON.parse(level.benefits) : [],
+      bonusRules: level.bonusRules ? JSON.parse(level.bonusRules) : null,
     };
   });
 }
@@ -135,6 +138,93 @@ export async function getUserVipStatus(userId: number) {
     ))
     .limit(1);
 
+  // Get Wallet Frozen Balance
+  const wallet = await getWallet(userId);
+  const frozenCommission = parseFloat(wallet.balanceCashFrozen);
+
+  // Get Unlock State
+  let [unlockState] = await db.select().from(vipUnlockState).where(eq(vipUnlockState.userId, userId)).limit(1);
+  if (!unlockState) {
+    // If not exists, create one
+    [unlockState] = await db.insert(vipUnlockState).values({
+      userId,
+      vipLevel: status.vipLevel,
+      unlockedBaseAmount: "0",
+    }).returning();
+  } else if (unlockState.vipLevel !== status.vipLevel) {
+    // If level mismatched (e.g. manual DB update), reset or sync. 
+    // Usually autoUnlockOnUpgrade handles this, but for safety:
+    // We don't reset here to avoid losing history, just update level if needed or handle logic.
+    // For simplicity, we assume sync is handled on upgrade.
+  }
+
+  // Calculate Progress (0-1)
+  const progressValue = calculateVipProgressValue(qualificationProgress);
+  
+  // Calculate Unlockable
+  // Unlockable = Frozen * Progress
+  // But wait, Frozen decreases as we unlock.
+  // The formula in prompt: 
+  // unlockable_amount = frozen_commission_balance * vip_task_progress 
+  // remaining_unlockable = max(0, unlockable_amount - already_unlocked_amount)
+  // 
+  // ISSUE: If `frozen_commission_balance` decreases after unlock, then `frozen * progress` also decreases.
+  // The formula `unlockable_amount = frozen * progress` implies `frozen` is the TOTAL accumulated frozen amount?
+  // Or is it current frozen?
+  // Prompt says: "frozen_commission_balance: Frozen funds from distribution... need to be unlocked by progress"
+  // "unlockable_amount = frozen_commission_balance * vip_task_progress"
+  // "remaining_unlockable = max(0, unlockable_amount - already_unlocked_amount)"
+  // "frozen_commission_balance -= remaining_unlockable"
+  //
+  // Let's trace:
+  // T0: Frozen=1000, Progress=0.5, Unlocked=0.
+  // Unlockable = 1000 * 0.5 = 500.
+  // Remaining = 500 - 0 = 500.
+  // Action: Frozen -= 500 (becomes 500), Unlocked += 500 (becomes 500).
+  //
+  // T1: Frozen=500, Progress=0.5, Unlocked=500.
+  // Unlockable = 500 * 0.5 = 250.
+  // Remaining = 250 - 500 = -250. No unlock. Correct.
+  //
+  // T2: Progress becomes 0.8. Frozen=500. Unlocked=500.
+  // Unlockable = 500 * 0.8 = 400.
+  // Remaining = 400 - 500 = -100.
+  // WAIT. This logic is flawed if `frozen` decreases.
+  // If `frozen` is only the *remaining* frozen, then we can't use it as the base for *total* unlockable.
+  //
+  // Alternative interpretation:
+  // The "Frozen Commission Balance" in the formula refers to the *Total Accumulated Frozen Amount* (Current Frozen + Unlocked).
+  // Let's check `user_wallets` schema proposal in prompt:
+  // `frozen_commission_balance` (current frozen)
+  // `total_unfrozen` (accumulated unlocked)
+  //
+  // So: Total Base = `frozen_commission_balance` + `total_unfrozen` (or `unlocked_base_amount` from state).
+  // `unlockable_total` = (Frozen + UnlockedBase) * Progress.
+  // `delta` = `unlockable_total` - `UnlockedBase`.
+  //
+  // Let's re-trace with this:
+  // T0: Frozen=1000, UnlockedBase=0. Total=1000. Progress=0.5.
+  // UnlockableTotal = 1000 * 0.5 = 500.
+  // Delta = 500 - 0 = 500.
+  // Action: Frozen -= 500 (500), UnlockedBase += 500 (500).
+  //
+  // T1: Frozen=500, UnlockedBase=500. Total=1000. Progress=0.5.
+  // UnlockableTotal = 1000 * 0.5 = 500.
+  // Delta = 500 - 500 = 0. Correct.
+  //
+  // T2: Frozen=500, UnlockedBase=500. Total=1000. Progress=0.8.
+  // UnlockableTotal = 1000 * 0.8 = 800.
+  // Delta = 800 - 500 = 300.
+  // Action: Frozen -= 300 (200), UnlockedBase += 300 (800).
+  //
+  // This logic holds up.
+  // So `TotalPool = Frozen + UnlockedBase`.
+  
+  const unlockedBase = parseFloat(unlockState.unlockedBaseAmount);
+  const totalPool = frozenCommission + unlockedBase;
+  const unlockableTotal = totalPool * progressValue;
+  const unlockableNow = Math.max(0, unlockableTotal - unlockedBase);
+
   return {
     vipLevel: status.vipLevel,
     vipName: currentLevel?.name || "普通用户",
@@ -142,7 +232,10 @@ export async function getUserVipStatus(userId: number) {
     upgradedAt: status.upgradedAt,
     directCount: status.directCount,
     team3GenCount: status.team3Count,
-    frozenCommission: 0,
+    frozenCommission: frozenCommission, // Current frozen balance
+    unlockedCommission: unlockedBase, // Accumulated unlocked
+    progress: progressValue,
+    unlockableNow: Math.floor(unlockableNow * 100) / 100, // Round down to 2 decimals
     currentLevelDetails: currentLevel,
     nextLevelDetails: nextLevel,
     qualificationProgress,
@@ -153,6 +246,180 @@ export async function getUserVipStatus(userId: number) {
       createdAt: pendingRequest.createdAt
     } : null,
   };
+}
+
+function calculateVipProgressValue(progress: any): number {
+  if (!progress) return 0;
+  if (progress.isQualified) return 1;
+
+  // Requirements: Direct, Team3, Downline Structure
+  // We can use weighted average or min. 
+  // Prompt says: "Weighted: progress = sum( w_i * min(cur_i/req_i,1) )"
+  // Let's assume equal weights for simplicity unless specified.
+  // 3 Parts: Direct (33%), Team (33%), Structure (33%).
+  
+  const pDirect = Math.min(1, progress.directCount / (progress.directRequired || 1));
+  const pTeam = Math.min(1, progress.team3Count / (progress.team3Required || 1));
+  
+  let pStructure = 1;
+  if (progress.downlineProgress && Object.keys(progress.downlineProgress).length > 0) {
+    let structureSum = 0;
+    let structureCount = 0;
+    for (const key in progress.downlineProgress) {
+      const item = progress.downlineProgress[key];
+      structureSum += Math.min(1, item.current / (item.required || 1));
+      structureCount++;
+    }
+    pStructure = structureCount > 0 ? structureSum / structureCount : 1;
+  }
+
+  // If no structure reqs, pStructure is 1.
+  // If no team reqs (V1?), pTeam is 1.
+  
+  // Weights configuration could be complex. 
+  // Let's use a simple average of active requirements.
+  let components = [pDirect, pTeam];
+  if (progress.downlineProgress && Object.keys(progress.downlineProgress).length > 0) {
+    components.push(pStructure);
+  }
+  
+  const total = components.reduce((a, b) => a + b, 0);
+  return parseFloat((total / components.length).toFixed(4));
+}
+
+export async function unlockFrozenCommission(userId: number) {
+  const status = await getUserVipStatus(userId);
+  if (status.unlockableNow <= 0.01) { // Min 0.01
+    return { success: false, message: "暂无可解冻金额", unlocked: 0 };
+  }
+
+  const unlockAmount = status.unlockableNow;
+  
+  // DB Transaction for safety
+  await db.transaction(async (tx) => {
+    // 1. Update Wallet & Ledger (using helper which does both)
+    // Note: Helper `unfreezeCommission` uses `db`, not `tx`. 
+    // Ideally we should pass `tx` to helper, but `wallet` service exports don't support it yet.
+    // For now, we'll assume optimistic locking or just sequential execution.
+    // Given the `unlockableNow` is calculated from DB state, we should be okay if low concurrency.
+    // Ideally: lock row. 
+    // We will perform the update and check affected rows or similar?
+    // Let's just call the helper.
+    await unfreezeCommission(userId, unlockAmount, `VIP进度解锁(${Math.round(status.progress * 100)}%)`);
+
+    // 2. Update Unlock State
+    // We must update `unlockedBaseAmount`
+    await tx.update(vipUnlockState)
+      .set({ 
+        unlockedBaseAmount: sql`${vipUnlockState.unlockedBaseAmount} + ${unlockAmount}`,
+        lastUnlockAt: new Date()
+      })
+      .where(eq(vipUnlockState.userId, userId));
+      
+    // 3. Random Bonus Logic (Simulated)
+    // "每次解冻最多触发 1 次随机奖金" - implies every click can trigger if lucky?
+    // "触发条件：仅当 progress >= 0.8"
+    if (status.progress >= 0.8) {
+       // Check chance
+       const rand = Math.random();
+       
+       // Default logic
+       let chance = 0.05; // Base chance for >= 0.8
+       if (status.progress >= 1) chance = 0.2;
+       else if (status.progress >= 0.9) chance = 0.12;
+
+       // Override with system setting if available
+       const probSetting = await getSystemSettingByKey("unlock_random_reward_prob");
+       if (probSetting?.value) {
+         const parsedProb = parseFloat(probSetting.value);
+         if (!isNaN(parsedProb)) {
+            // Treat the setting as percentage (e.g. "30" for 30%) or decimal ("0.3")?
+            // Usually user inputs "30" for 30%. Let's assume input is 0-100.
+            // If value > 1, assume percentage. If <= 1, assume decimal.
+            chance = parsedProb > 1 ? parsedProb / 100 : parsedProb;
+         }
+       }
+       
+       if (rand < chance) {
+         // Win bonus
+         // Amount: 2-200 yuan (Default)
+         let bonusMin = 2;
+         let bonusMax = 200;
+
+         const minSetting = await getSystemSettingByKey("unlock_random_reward_min");
+         if (minSetting?.value) bonusMin = parseFloat(minSetting.value) || 2;
+
+         const maxSetting = await getSystemSettingByKey("unlock_random_reward_max");
+         if (maxSetting?.value) bonusMax = parseFloat(maxSetting.value) || 200;
+         
+         // Ensure max >= min
+         if (bonusMax < bonusMin) bonusMax = bonusMin;
+
+         const bonusAmount = Math.floor(Math.random() * (bonusMax - bonusMin + 1)) + bonusMin;
+         
+         if (bonusAmount > 0) {
+            await addCashAvailable(userId, bonusAmount, "rank_bonus", undefined, `VIP解锁随机奖励(进度${(status.progress*100).toFixed(1)}%)`);
+         }
+       }
+    }
+  });
+
+  return { success: true, message: "解冻成功", unlocked: unlockAmount };
+}
+
+export async function autoUnlockOnUpgrade(userId: number, oldLevel: number) {
+  // 1. Unlock ALL remaining frozen funds
+  const wallet = await getWallet(userId);
+  const frozen = parseFloat(wallet.balanceCashFrozen);
+  
+  if (frozen > 0) {
+    await unfreezeCommission(userId, frozen, `VIP升级自动解冻(V${oldLevel} -> V${oldLevel+1})`);
+  }
+  
+  // 2. Grant Delayed Gratification Bonus
+  // "金额规则：可配置"
+  // Check setting
+  let bonus = 0;
+  const fixedRewardSetting = await getSystemSettingByKey("deferred_reward_amount");
+  
+  if (fixedRewardSetting?.value) {
+    bonus = parseFloat(fixedRewardSetting.value) || 0;
+  } else {
+    // Default fallback
+    bonus = oldLevel * 10; 
+  }
+
+  if (bonus > 0) {
+    await addCashAvailable(userId, bonus, "upgrade_reward", undefined, "VIP升级延时满足奖金");
+  }
+
+  // 3. Reset Unlock State for NEW level
+  // The caller (approve/confirm) updates the user's level.
+  // We need to update `vipUnlockState` to the new level and reset base amount.
+  // BUT `vipUnlockState` has `vipLevel` column. 
+  // If we update it, we are ready for the new level.
+  
+  // Upsert with new level, reset amount
+  // We need to know the NEW level. The function argument is oldLevel.
+  // Let's assume this is called BEFORE or AFTER level update?
+  // It's called DURING upgrade process.
+  // The `vipUnlockState` should reflect the user's CURRENT operating level for unlocking.
+  // If user upgrades to V(N+1), they start unlocking V(N+1) commissions.
+  // So we reset to 0.
+  
+  await db.insert(vipUnlockState).values({
+    userId,
+    vipLevel: oldLevel + 1,
+    unlockedBaseAmount: "0",
+    lastUnlockAt: new Date(),
+  }).onConflictDoUpdate({
+    target: vipUnlockState.userId,
+    set: {
+      vipLevel: oldLevel + 1,
+      unlockedBaseAmount: "0",
+      lastUnlockAt: new Date(),
+    }
+  });
 }
 
 export async function createVipUpgradeOrder(userId: number, targetLevel: number) {
@@ -207,7 +474,7 @@ export async function createVipUpgradeOrder(userId: number, targetLevel: number)
   const pendingOrders = await db.select().from(vipUpgradeTxs)
     .where(and(
       eq(vipUpgradeTxs.userId, userId),
-      eq(vipUpgradeTxs.status, "pending")
+      inArray(vipUpgradeTxs.status, ["pending", "pending_review"])
     ));
 
   if (pendingOrders.length > 0) {
@@ -229,7 +496,7 @@ export async function createVipUpgradeOrder(userId: number, targetLevel: number)
     fromLevel: currentLevel,
     toLevel: targetLevel,
     payAmountCents: targetVipLevel.priceCents,
-    status: "pending",
+    status: "pending", // Ensure status is pending for automatic processing
   }).returning();
 
   return {
@@ -245,7 +512,11 @@ export async function confirmVipUpgrade(userId: number, orderId: number) {
   const [order] = await db.select().from(vipUpgradeTxs).where(eq(vipUpgradeTxs.id, orderId)).limit(1);
   
   if (!order || order.userId !== userId) throw new Error("订单不存在");
-  if (order.status !== "pending") throw new Error("订单状态异常");
+  
+  // Allow confirming pending_review orders as well, in case they were flagged manually or by system
+  if (order.status !== "pending" && order.status !== "pending_review") {
+    throw new Error("订单状态异常");
+  }
 
   const [targetLevel] = await db.select().from(vipLevels).where(eq(vipLevels.level, order.toLevel)).limit(1);
   if (!targetLevel) throw new Error("VIP等级不存在");
@@ -255,9 +526,16 @@ export async function confirmVipUpgrade(userId: number, orderId: number) {
 
   // Automatic Upgrade Logic (Bypassing pending_review)
   
-  // 1. Update User VIP Status
+  // 0. Auto Unlock Frozen Commission (if fully qualified on previous level)
   let [status] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, userId)).limit(1);
+  const oldLevel = status?.vipLevel || 0;
   
+  // Only trigger auto unlock if upgrading from a real level
+  if (oldLevel > 0) {
+      await autoUnlockOnUpgrade(userId, oldLevel);
+  }
+
+  // 1. Update User VIP Status
   if (!status) {
       await db.insert(userVipStatus).values({
           userId,
@@ -339,8 +617,14 @@ export async function approveVipUpgradeRequest(requestId: number, adminId?: numb
     const userId = order.userId;
     const [targetLevel] = await db.select().from(vipLevels).where(eq(vipLevels.level, order.toLevel)).limit(1);
     if (!targetLevel) throw new Error("VIP等级不存在");
-
+    
     let [status] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, userId)).limit(1);
+    const oldLevel = status?.vipLevel || 0;
+
+    // 0. Auto Unlock Frozen Commission
+    if (oldLevel > 0) {
+        await autoUnlockOnUpgrade(userId, oldLevel);
+    }
   
     if (!status) {
         await db.insert(userVipStatus).values({

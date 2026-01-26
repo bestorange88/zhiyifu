@@ -32,6 +32,7 @@ const PointsRulesPage = lazy(() => import("@/pages/PointsRulesPage"));
 const HelpCenterPage = lazy(() => import("@/pages/HelpCenterPage"));
 const AboutPage = lazy(() => import("@/pages/AboutPage"));
 const RightsPage = lazy(() => import("@/pages/RightsPage"));
+const TopicHealthSystem = lazy(() => import("@/pages/topic/TopicHealthSystem"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 // Admin Pages
@@ -55,6 +56,7 @@ const AdminRankRequestsPage = lazy(() => import("@/pages/admin/AdminRankRequests
 const AdminContentPage = lazy(() => import("@/pages/admin/AdminContentPage"));
 const AdminServicePage = lazy(() => import("@/pages/admin/AdminServicePage"));
 const AdminIdentityPage = lazy(() => import("@/pages/admin/AdminIdentityPage"));
+const AdminActivityPage = lazy(() => import("@/pages/admin/AdminActivityPage"));
 
 function UserRouter() {
   const [location] = useLocation();
@@ -94,6 +96,7 @@ function UserRouter() {
           <Route path="/help" component={HelpCenterPage} />
           <Route path="/about" component={AboutPage} />
           <Route path="/rights" component={RightsPage} />
+          <Route path="/topic/health-system" component={TopicHealthSystem} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>
@@ -126,6 +129,7 @@ function AdminRouter() {
           <Route path="/admin/identity" component={AdminIdentityPage} />
           <Route path="/admin/stats" component={AdminStatsPage} />
           <Route path="/admin/settings" component={AdminSettingsPage} />
+          <Route path="/admin/activity" component={AdminActivityPage} />
           <Route path="/admin/withdraws" component={AdminWithdrawsPage} />
         </Switch>
       </Suspense>

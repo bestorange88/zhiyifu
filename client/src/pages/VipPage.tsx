@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Crown, ArrowLeft, Check, Zap, Gift, Clock, Shield, Star, Sparkles, AlertCircle, ChevronDown, ChevronUp, Lock } from "lucide-react";
+import { Crown, ArrowLeft, Check, Zap, Gift, Clock, Shield, Star, Sparkles, AlertCircle, ChevronDown, ChevronUp, Lock, Unlock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Progress } from "@/components/ui/progress";
+import { VipFrozenUnlockModal } from "@/components/VipFrozenUnlockModal";
 
 interface VipLevel {
   id: number;
@@ -43,6 +44,9 @@ interface VipStatus {
   directCount: number;
   team3GenCount: number;
   frozenCommission: number;
+  unlockedCommission: number;
+  progress: number;
+  unlockableNow: number;
   currentLevelDetails: VipLevel | null;
   nextLevelDetails: VipLevel | null;
   qualificationProgress: {
@@ -109,6 +113,7 @@ export default function VipPage() {
   const [selectedLevel, setSelectedLevel] = useState<VipLevel | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showReasons, setShowReasons] = useState(false);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
 
   const { data: levels, isLoading: levelsLoading } = useQuery<VipLevel[]>({
     queryKey: ["/api/vip/levels"],
@@ -238,6 +243,49 @@ export default function VipPage() {
 
       <div className="px-4 -mt-16 relative z-20 space-y-4">
         
+        {/* Frozen Commission Card */}
+        {vipStatus && (
+          <div className="bg-white rounded-2xl p-5 shadow-lg relative overflow-hidden">
+             <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl -mr-10 -mt-10" />
+             
+             <div className="flex justify-between items-center mb-4 relative z-10">
+               <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                 <Lock className="w-4 h-4 text-purple-500" />
+                 冻结收益管理
+               </h3>
+               <span className="text-xs bg-purple-50 text-purple-600 px-2 py-1 rounded-full font-medium">
+                 完成VIP任务解锁
+               </span>
+             </div>
+
+             <div className="flex items-end justify-between mb-4 relative z-10">
+               <div>
+                 <p className="text-xs text-gray-500 mb-1">当前冻结总额</p>
+                 <p className="text-2xl font-bold text-gray-900">¥{(vipStatus.frozenCommission || 0).toFixed(2)}</p>
+               </div>
+               <div className="text-right">
+                 <p className="text-xs text-gray-500 mb-1">本次可解冻</p>
+                 <p className="text-xl font-bold text-green-600">¥{(vipStatus.unlockableNow || 0).toFixed(2)}</p>
+               </div>
+             </div>
+
+             <div className="space-y-2 relative z-10">
+               <div className="flex justify-between text-xs">
+                 <span className="text-gray-500">解锁进度</span>
+                 <span className="text-purple-600 font-bold">{Math.round((vipStatus.progress || 0) * 100)}%</span>
+               </div>
+               <Progress value={Math.min(100, (vipStatus.progress || 0) * 100)} className="h-1.5" />
+             </div>
+
+             <Button 
+               className="w-full mt-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-md"
+               onClick={() => setShowUnlockModal(true)}
+             >
+               查看详情与解冻
+             </Button>
+          </div>
+        )}
+
         {/* Upgrade Progress Section */}
         {nextDetails && prog && (
           <div className="bg-white rounded-2xl p-5 shadow-lg">
@@ -479,6 +527,12 @@ export default function VipPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <VipFrozenUnlockModal 
+        open={showUnlockModal} 
+        onOpenChange={setShowUnlockModal}
+        vipStatus={vipStatus}
+      />
     </div>
   );
 }

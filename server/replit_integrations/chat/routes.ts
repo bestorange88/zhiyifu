@@ -87,6 +87,17 @@ export function registerChatRoutes(app: Express): void {
       const conversationId = parseInt(req.params.id);
       const { content, systemPrompt } = req.body;
 
+      // Check sensitive words
+      const { sensitiveWords } = await getAiSettings();
+      if (sensitiveWords) {
+        const words = sensitiveWords.split(/[,，]/).map(w => w.trim()).filter(Boolean);
+        for (const word of words) {
+          if (content.includes(word)) {
+            return res.status(400).json({ error: "内容包含敏感词，无法发送" });
+          }
+        }
+      }
+
       // Save user message
       await chatStorage.createMessage(conversationId, "user", content);
 

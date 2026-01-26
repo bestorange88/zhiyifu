@@ -25,6 +25,8 @@ interface Group {
   id: number;
   name: string;
   description: string | null;
+  announcement: string | null;
+  openHours: string | null;
   isActive: boolean;
   createdAt: string;
   members: GroupMember[];
@@ -56,6 +58,8 @@ export default function AdminGroupsPage() {
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
+  const [groupAnnouncement, setGroupAnnouncement] = useState("");
+  const [groupOpenHours, setGroupOpenHours] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<number[]>([]);
   const [manageMembersDialog, setManageMembersDialog] = useState(false);
   const [currentGroupMembers, setCurrentGroupMembers] = useState<GroupMember[]>([]);
@@ -121,7 +125,7 @@ export default function AdminGroupsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: { name: string; description: string; memberIds: number[] } }) => {
+    mutationFn: async ({ id, data }: { id: number; data: { name: string; description: string; announcement: string; openHours: string; memberIds: number[] } }) => {
       const res = await fetch(`/api/admin/groups/${id}`, {
         method: "PUT",
         headers: {
@@ -537,6 +541,29 @@ export default function AdminGroupsPage() {
                 placeholder="输入群组描述（可选）"
                 rows={2}
                 data-testid="input-group-description"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                群公告
+              </label>
+              <Textarea
+                value={groupAnnouncement}
+                onChange={(e) => setGroupAnnouncement(e.target.value)}
+                placeholder="输入群公告（可选）"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                开放时间段 (例如: 09:00-22:00)
+              </label>
+              <Input
+                value={groupOpenHours}
+                onChange={(e) => setGroupOpenHours(e.target.value)}
+                placeholder="输入开放时间段"
               />
             </div>
 

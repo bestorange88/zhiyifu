@@ -6,18 +6,18 @@ import path from "path";
 import fs from "fs";
 
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-      const uploadDir = path.join(process.cwd(), "uploads");
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-      cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      cb(null, uniqueSuffix + path.extname(file.originalname));
-    },
-  });
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(process.cwd(), "attached_assets", "uploads");
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
 
 const upload = multer({ 
   storage,
@@ -44,11 +44,161 @@ import * as smsService from "../services/sms";
 import * as redPacketService from "../services/redPacket";
 import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema, adminRankUpdateSchema, requestCodeSchema, registerWithSmsSchema, identityVerificationSubmitSchema, adminIdentityReviewSchema } from "@shared/schema";
 import * as identityService from "../services/identity";
-import { db } from "../db";
-import { users } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import * as sellerOnboardingService from "../services/sellerOnboarding";
+import * as orderService from "../services/orderService";
+import * as cartService from "../services/cartService";
 
 export function registerApiRoutes(app: Express): void {
+  // ============ SHOP / E-COMMERCE ============
+  
+  // Cart
+  app.get("/api/cart", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const cart = await cartService.getCart(req.userId!);
+      res.json(cart);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/cart", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const item = await cartService.addToCart(req.userId!, req.body);
+      res.json(item);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/cart/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const item = await cartService.updateCartItem(req.userId!, id, req.body);
+      res.json(item);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/cart/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await cartService.removeFromCart(req.userId!, id);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/cart", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const result = await cartService.clearCart(req.userId!);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Orders
+  app.post("/api/orders", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const order = await orderService.createOrder(req.userId!, req.body);
+      res.status(201).json(order);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/orders", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const status = req.query.status as any;
+      const orders = await orderService.getOrderList(req.userId!, status);
+      res.json(orders);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/orders/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const order = await orderService.getOrderDetail(id);
+      if (order.user_id !== req.userId) {
+        return res.status(403).json({ error: "无权访问此订单" });
+      }
+      res.json(order);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/orders/:id/tracking", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      // 验证权限
+      const order = await orderService.getOrderDetail(id);
+      if (order.user_id !== req.userId) {
+        return res.status(403).json({ error: "无权访问此订单" });
+      }
+      const tracking = await logisticsService.getTracking(id);
+      res.json(tracking);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/orders/:id/pay", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const order = await orderService.payOrder(req.userId!, id);
+      res.json(order);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/orders/:id/cancel", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const order = await orderService.cancelOrder(req.userId!, id);
+      res.json(order);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/orders/:id/confirm", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const order = await orderService.confirmReceipt(req.userId!, id);
+      res.json(order);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+Virtual Buyer Simulation
+  app.post("/api/admin/simulate/shopping", adminAuthMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const order = await virtualBuyerService.simulateVirtualOrder();
+      res.json(order);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 
+  // Admin / Seller Operations
+  app.post("/api/admin/orders/:id/ship", adminAuthMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { trackingNo, carrier } = req.body;
+      const order = await orderService.shipOrder(id, { company: carrier, trackingNo });
+      res.json(order);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   // ============ AUTH ============
   app.post("/api/auth/request-code", async (req, res) => {
     try {
@@ -92,8 +242,7 @@ export function registerApiRoutes(app: Express): void {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
-      const currency = req.query.currency as string;
-      const history = await walletService.getLedgerWithBalance(req.userId!, limit, offset, currency);
+      const history = await walletService.getLedgerHistory(req.userId!, limit, offset);
       res.json(history);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
@@ -341,46 +490,6 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
-  // ============ ADMIN VIP UPGRADE REQUESTS ============
-  app.get("/api/admin/vip-upgrades", adminAuthMiddleware, async (req: AdminRequest, res) => {
-    try {
-      const status = req.query.status as string | undefined;
-      const requests = await vipService.getVipUpgradeRequests(status);
-      res.json(requests);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/admin/vip-upgrades/:id/approve", adminAuthMiddleware, async (req: AdminRequest, res) => {
-    try {
-      const requestId = parseInt(req.params.id);
-      const result = await vipService.approveVipUpgradeRequest(requestId, req.adminId);
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/admin/vip-upgrades/:id/reject", adminAuthMiddleware, async (req: AdminRequest, res) => {
-    try {
-      const requestId = parseInt(req.params.id);
-      const result = await vipService.rejectVipUpgradeRequest(requestId, req.adminId);
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/admin/vip-upgrades/approve-all-pending", adminAuthMiddleware, async (req: AdminRequest, res) => {
-    try {
-      const result = await vipService.approveAllPendingVipUpgrades();
-      res.json(result);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
   // ============ WITHDRAW ============
   app.get("/api/withdraw/rules", authMiddleware, async (req: AuthRequest, res) => {
     try {
@@ -540,29 +649,158 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
-  // ============ DEBUG ============
-  app.get("/api/debug/check-vip", async (req, res) => {
+  // ============ SELLER ONBOARDING ============
+  app.get("/api/seller/onboarding", authMiddleware, async (req: AuthRequest, res) => {
     try {
-      const { phone, secret } = req.query;
-      if (secret !== "trae_debug_2024") {
-        return res.status(403).json({ error: "Forbidden" });
-      }
-      
-      const [user] = await db.select().from(users).where(eq(users.phone, phone as string)).limit(1);
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      const status = await vipService.getUserVipStatus(user.id);
-      const wallet = await walletService.getWallet(user.id);
-
-      res.json({
-        user: { id: user.id, phone: user.phone, vipLevel: user.vipLevel },
-        status,
-        wallet
-      });
+      const progress = await sellerOnboardingService.getOnboardingProgress(req.userId!);
+      res.json(progress || { currentStep: 1 }); // Default to step 1 if no record
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/seller/onboarding/step/:step", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const step = parseInt(req.params.step);
+      const data = req.body;
+      const result = await sellerOnboardingService.updateOnboardingStep(req.userId!, step, data);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/seller/onboarding/vip-pay", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const result = await sellerOnboardingService.completeVipPayment(req.userId!);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ CART ============
+  app.get("/api/cart", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const cart = await cartService.getCart(req.userId!);
+      res.json(cart);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/cart", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const result = await cartService.addToCart(req.userId!, req.body);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/cart/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await cartService.updateCartItem(req.userId!, id, req.body);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/cart/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await cartService.removeFromCart(req.userId!, id);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/cart", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const result = await cartService.clearCart(req.userId!);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ ORDERS ============
+  app.post("/api/orders", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const result = await orderService.createOrder(req.userId!, req.body);
+      res.status(201).json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/orders", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const status = req.query.status as string;
+      const result = await orderService.getOrderList(req.userId!, status);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/orders/:id", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await orderService.getOrderDetail(req.userId!, id);
+      if (!result) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/orders/:id/cancel", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await orderService.cancelOrder(req.userId!, id);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/orders/:id/pay", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await orderService.payOrder(req.userId!, id);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/orders/:id/receive", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await orderService.confirmReceipt(req.userId!, id);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/orders/:id/ship", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { company, trackingNo } = req.body;
+      const result = await orderService.shipOrder(id, { company, trackingNo });
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+      res.status(400).json({ error: error.message });
     }
   });
 
@@ -1024,6 +1262,15 @@ export function registerApiRoutes(app: Express): void {
   });
 
   // ============ PUBLIC SETTINGS ============
+  app.get("/api/settings/poster", async (req, res) => {
+    try {
+      const setting = await adminService.getSystemSettingByKey("welcome_poster_url");
+      res.json({ url: setting?.value || null });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
   app.get("/api/settings/payment-qr", async (req, res) => {
     try {
       const setting = await adminService.getSystemSettingByKey("payment_qr_url");
@@ -1191,51 +1438,16 @@ export function registerApiRoutes(app: Express): void {
 
   app.post("/api/admin/identity-verifications/batch-review", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {
-      console.log("Batch review RAW body:", JSON.stringify(req.body));
-      
-      // Manual parsing to be extremely permissive
-      let { ids, approved, reviewNote } = req.body || {};
-      
-      // 1. Handle IDs
-      if (typeof ids === 'string') {
-        try { ids = JSON.parse(ids); } catch(e) {}
-      }
-      if (!Array.isArray(ids)) {
-         // Try to find ids in other ways or return error
-         return res.status(400).json({ error: "Invalid 'ids' format: must be an array", received: req.body });
-      }
-      
-      // Convert to numbers and filter
-      const safeIds = ids
-        .map((x: any) => Number(x))
-        .filter((x: number) => !isNaN(x) && x > 0);
-
-      if (safeIds.length === 0) {
-        return res.status(400).json({ error: "No valid numeric IDs provided", received: req.body });
-      }
-
-      // 2. Handle approved
-      if (typeof approved === 'string') {
-        approved = (approved === 'true');
-      }
-      // If missing/invalid, default logic or error. 
-      // AdminIdentityPage sends boolean, so strict check is okay-ish, but let's be safe.
-      const safeApproved = !!approved;
-
+      const { ids, approved, reviewNote } = adminIdentityBatchReviewSchema.parse(req.body);
       const results = await identityService.batchReviewIdentityVerifications(
-        safeIds,
+        ids,
         req.adminId!,
-        safeApproved,
+        approved,
         reviewNote
       );
       res.json(results);
     } catch (error: any) {
-      console.error("Batch review error:", error);
-      res.status(400).json({ 
-        error: error.message, 
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-        received: req.body 
-      });
+      res.status(400).json({ error: error.message });
     }
   });
 
@@ -1417,19 +1629,6 @@ export function registerApiRoutes(app: Express): void {
       const userId = parseInt(req.params.id);
       const detail = await adminService.getUserDetail(userId);
       res.json(detail);
-    } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
-
-  app.get("/api/admin/users/:id/ledger", adminAuthMiddleware, async (req: AdminRequest, res) => {
-    try {
-      const userId = parseInt(req.params.id);
-      const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 20;
-      const currency = req.query.currency as string;
-      const result = await adminService.getUserLedgerWithBalance(userId, page, limit, currency);
-      res.json(result);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

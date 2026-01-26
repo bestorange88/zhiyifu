@@ -1,21 +1,27 @@
+import { useState } from "react";
 import AdminLayout from "./AdminLayout";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { format } from "date-fns";
-import { Users, TrendingUp, UserPlus } from "lucide-react";
+import { Users, TrendingUp, UserPlus, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
-interface UserWithReferrals {
-  id: number;
-  phone: string | null;
-  inviteCode: string;
-  inviterId: number | null;
-  vipLevel: number;
-  createdAt: string;
-  directCount: number;
-  teamCount: number;
-  currentRank: number;
+interface TeamStats {
+  leaderId: number;
+  leaderPhone: string | null;
+  leaderVip: number;
+  joinDate: string;
+  teamSize: number;
+  vipCounts: {
+    v1: number;
+    v2: number;
+    v3: number;
+    v4: number;
+    v5: number;
+  };
 }
 
 interface ReferralRecord {
@@ -32,16 +38,25 @@ interface ReferralRecord {
 
 export default function AdminDistributionPage() {
   const { token } = useAdminAuth();
+  const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [inputValue, setInputValue] = useState("");
 
-  const { data: users, isLoading: usersLoading } = useQuery<UserWithReferrals[]>({
-    queryKey: ["/api/admin/distribution/users"],
+  const { data: teamData, isLoading: teamsLoading } = useQuery<{ teams: TeamStats[]; total: number }>({
+    queryKey: ["/api/admin/distribution/teams", page, searchQuery],
     queryFn: async () => {
-      const res = await fetch("/api/admin/distribution/users", {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: "20",
+      });
+      if (searchQuery) {
+        params.append("search", searchQuery);
+      }
+      const res = await fetch(`/api/admin/distribution/teams?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) return [];
-      const data = await res.json();
-      return data.users || data || [];
+      if (!res.ok) return { teams: [], total: 0 };
+      return res.json();
     },
     enabled: !!token,
   });
@@ -58,6 +73,11 @@ export default function AdminDistributionPage() {
     enabled: !!token,
   });
 
+  const handleSearch = () => {
+    setSearchQuery(inputValue);
+    setPage(1);
+  };
+
   const getRankBadge = (rank: number) => {
     const rankNames = ["普通", "V1", "V2", "V3", "V4", "V5"];
     const colors = [
@@ -71,6 +91,9 @@ export default function AdminDistributionPage() {
     return <Badge className={colors[rank] || colors[0]}>{rankNames[rank] || `V${rank}`}</Badge>;
   };
 
+  const teams = teamData?.teams || [];
+  const totalTeams = teamData?.total || 0;
+
   return (
     <AdminLayout title="分销管理">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
@@ -81,8 +104,8 @@ export default function AdminDistributionPage() {
                 <Users className="w-6 h-6 text-purple-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">总会员数</p>
-                <p className="text-2xl font-bold">{users?.length || 0}</p>
+                <p className="text-sm text-gray-500">团队总数</p>
+                <p className="text-2xl font-bold">{totalTeams}</p>
               </div>
             </div>
           </CardContent>
@@ -107,53 +130,86 @@ export default function AdminDistributionPage() {
                 <TrendingUp className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">代理数</p>
-                <p className="text-2xl font-bold">{users?.filter(u => u.currentRank > 0).length || 0}</p>
+                <p className="text-sm text-gray-500">VIP团队数</p>
+                <p className="text-2xl font-bold">{teams.filter(t => t.leaderVip > 0).length}</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              会员层级
-            </CardTitle>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                团队列表
+              </CardTitle>
+              <div className="flex gap-2 w-full md:w-auto">
+                <Input 
+                  placeholder="搜索团长手机号/ID" 
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                  className="w-full md:w-[200px]"
+                />
+                <Button onClick={handleSearch}>
+                  <Search className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            {usersLoading ? (
+            {teamsLoading ? (
               <div className="text-center py-8 text-gray-500">加载中...</div>
-            ) : !users?.length ? (
-              <div className="text-center py-8 text-gray-500">暂无数据</div>
+            ) : !teams.length ? (
+              <div className="text-center py-8 text-gray-500">暂无团队数据</div>
             ) : (
-              <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+              <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50 sticky top-0">
                     <tr>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">用户</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">邀请码</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">直推</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">团队</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">团长</th>
                       <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">等级</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">团队总人数</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">VIP分布</th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">创建时间</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {users.map((user) => (
-                      <tr key={user.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm">{user.phone || `ID${user.id}`}</td>
-                        <td className="px-4 py-3 text-sm font-mono">{user.inviteCode}</td>
-                        <td className="px-4 py-3 text-sm">{user.directCount}</td>
-                        <td className="px-4 py-3 text-sm">{user.teamCount}</td>
-                        <td className="px-4 py-3">{getRankBadge(user.currentRank)}</td>
+                    {teams.map((team) => (
+                      <tr key={team.leaderId} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm">
+                          <div className="font-medium">{team.leaderPhone || `用户${team.leaderId}`}</div>
+                          <div className="text-xs text-gray-400">ID: {team.leaderId}</div>
+                        </td>
+                        <td className="px-4 py-3">{getRankBadge(team.leaderVip)}</td>
+                        <td className="px-4 py-3 text-sm font-bold">{team.teamSize}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <div className="flex gap-2">
+                            {team.vipCounts.v1 > 0 && <span className="bg-blue-50 text-blue-600 px-1.5 rounded text-xs">V1:{team.vipCounts.v1}</span>}
+                            {team.vipCounts.v2 > 0 && <span className="bg-green-50 text-green-600 px-1.5 rounded text-xs">V2:{team.vipCounts.v2}</span>}
+                            {team.vipCounts.v3 > 0 && <span className="bg-yellow-50 text-yellow-600 px-1.5 rounded text-xs">V3:{team.vipCounts.v3}</span>}
+                            {team.vipCounts.v4 > 0 && <span className="bg-orange-50 text-orange-600 px-1.5 rounded text-xs">V4:{team.vipCounts.v4}</span>}
+                            {team.vipCounts.v5 > 0 && <span className="bg-red-50 text-red-600 px-1.5 rounded text-xs">V5:{team.vipCounts.v5}</span>}
+                            {Object.values(team.vipCounts).every(c => c === 0) && <span className="text-gray-400 text-xs">无VIP</span>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {format(new Date(team.joinDate), "yyyy-MM-dd")}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
+            <div className="flex justify-between items-center mt-4">
+               <Button variant="outline" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>上一页</Button>
+               <span className="text-sm text-gray-500">第 {page} 页</span>
+               <Button variant="outline" onClick={() => setPage(p => p + 1)} disabled={teams.length < 20}>下一页</Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -161,7 +217,7 @@ export default function AdminDistributionPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UserPlus className="w-5 h-5" />
-              邀请记录
+              最近邀请记录
             </CardTitle>
           </CardHeader>
           <CardContent>

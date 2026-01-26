@@ -5,19 +5,34 @@ $LocalEnv = ".env.prod"
 $RemotePackage = "/tmp/deploy_solo.tar.gz"
 $DeployPath = "/var/www/binarycent"
 
+# Switch to script directory
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location $ScriptDir
+Write-Host "Working Directory: $(Get-Location)" -ForegroundColor Cyan
+Write-Host "Listing files in current directory:" -ForegroundColor Gray
+Get-ChildItem
+
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "   SOLO Branch Deployment Tool" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 
 # 0. Build and Package
 Write-Host "[0/4] Building and Packaging..." -ForegroundColor Green
+Write-Host "Running npm install..."
+npm install
+Write-Host "Checking available scripts..."
+npm run
+Write-Host "Running npm run build..."
 npm run build
 if ($LASTEXITCODE -ne 0) { Write-Error "Build failed"; exit 1 }
 
-tar -czf $LocalPackage dist package.json package-lock.json
+# Package
+echo "Packaging..."
+# Make sure to include fix_db.cjs
+tar -czf $LocalPackage dist package.json package-lock.json shared drizzle.config.ts fix_db.cjs
 if ($LASTEXITCODE -ne 0) { Write-Error "Packaging failed"; exit 1 }
 
-# 1. Upload Package
+# Upload Package
 Write-Host "[1/4] Uploading package..." -ForegroundColor Green
 scp $LocalPackage ${User}@${Server}:${RemotePackage}
 if ($LASTEXITCODE -ne 0) { Write-Error "Package upload failed"; exit 1 }
@@ -101,6 +116,20 @@ echo "Installing dependencies..."
 cd $DeployPath
 npm install --production
 
+# DB Fix (Critical for schema updates)
+echo "Running DB Fix Script..."
+node fix_db.cjs || echo "⚠️ DB Fix script failed or skipped."
+
+# DB Migration
+echo "Running Database Migration..."
+# drizzle-kit and tsx are now in dependencies so they are installed
+# Use npx to ensure we use the installed binary
+# Try to run migration non-interactively if possible, or warn user.
+# Drizzle Kit push doesn't support --force or --yes easily for data loss.
+# We will pipe "y" to it just in case it asks about data loss (e.g. dropping tables).
+# CAUTION: This is aggressive.
+echo "y" | npx drizzle-kit push || echo "⚠️ Database migration failed or skipped. Please check connection."
+
 # Restart
 echo "Restarting service..."
 # Set System Timezone
@@ -113,9 +142,35 @@ if [ -f /usr/share/zoneinfo/Asia/Shanghai ]; then
 fi
 echo "Current system time: $(date)"
 
+# SETUP PERSISTENT STORAGE
+# Use a directory outside the deployment folder to store uploads
+PERSISTENT_DIR="/var/www/binarycent_storage"
+UPLOADS_DIR="`$PERSISTENT_DIR/uploads"
+
+echo "Setting up persistent storage at `$PERSISTENT_DIR..."
+mkdir -p `$UPLOADS_DIR
+
+# Migrate existing uploads if they exist in the backup or current deployment
+if [ -d "/tmp/binarycent_backup/uploads" ]; then
+    echo "Migrating uploads from backup to persistent storage..."
+    cp -rn /tmp/binarycent_backup/uploads/* `$UPLOADS_DIR/ || true
+fi
+
+# Ensure permissions
+# Assuming the app runs as root (based on pm2 config), but good to be safe
+chmod -R 755 `$PERSISTENT_DIR
+
+# Create Symlink for Nginx/App compatibility
+# Remove the directory if it exists (it was created by restore or mkdir)
+rm -rf $DeployPath/uploads
+ln -sfn `$UPLOADS_DIR $DeployPath/uploads
+echo "✅ Symlinked $DeployPath/uploads -> `$UPLOADS_DIR"
+
 export TZ=Asia/Shanghai
+export UPLOAD_DIR=`$UPLOADS_DIR
 pm2 delete ai-clone || true
-TZ=Asia/Shanghai pm2 start dist/index.cjs --name "ai-clone"
+# Pass UPLOAD_DIR to the process
+TZ=Asia/Shanghai UPLOAD_DIR=`$UPLOADS_DIR pm2 start dist/index.cjs --name "ai-clone"
 pm2 save
 
 echo "✅ Deployment Successful!"

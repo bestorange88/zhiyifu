@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, decimal, varchar, date, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal, varchar, date, uuid, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations, sql } from "drizzle-orm";
@@ -32,6 +32,7 @@ export const wallets = pgTable("wallets", {
   balanceCashAvailable: decimal("balance_cash_available", { precision: 10, scale: 2 }).default("0").notNull(),
   balanceCashFrozen: decimal("balance_cash_frozen", { precision: 10, scale: 2 }).default("0").notNull(),
   balancePoints: integer("balance_points").default(0).notNull(),
+  totalUnfrozen: decimal("total_unfrozen", { precision: 10, scale: 2 }).default("0").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
@@ -172,6 +173,7 @@ export const vipLevels = pgTable("vip_levels", {
   withdrawThresholdCents: integer("withdraw_threshold_cents").default(10000).notNull(),  // 提现门槛(分)
   settleType: varchar("settle_type", { length: 10 }).default("T1").notNull(),  // 'T0'|'T1'
   benefits: text("benefits"), // JSON string of benefits list
+  bonusRules: text("bonus_rules"), // JSON: {"minProgress":0.8, "probability":[{"range":[0.8,0.9],"p":0.05},{"range":[0.9,1.0],"p":0.12},{"range":[1.0,1.0],"p":0.2}]}
 });
 
 // VIP推广达标要求
@@ -196,6 +198,29 @@ export const lotteryCommissionRates = pgTable("lottery_commission_rates", {
   indirectRate: decimal("indirect_rate", { precision: 6, scale: 4 }).default("0.05").notNull(),
 });
 
+// ============ SELLER ONBOARDING ============
+export const sellerOnboarding = pgTable("seller_onboarding", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().unique().references(() => users.id),
+  currentStep: integer("current_step").default(1).notNull(),
+  vipStatus: varchar("vip_status", { length: 20 }).default("pending"), // pending, paid
+  questionnaire: text("questionnaire"), // JSON string
+  agreements: text("agreements"), // JSON string
+  storeData: text("store_data"), // JSON string
+  decorationData: text("decoration_data"), // JSON string
+  productsData: text("products_data"), // JSON string
+  managedService: boolean("managed_service"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSellerOnboardingSchema = createInsertSchema(sellerOnboarding).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type InsertSellerOnboarding = z.infer<typeof insertSellerOnboardingSchema>;
+export type SellerOnboarding = typeof sellerOnboarding.$inferSelect;
+
 // 用户VIP状态表
 export const userVipStatus = pgTable("user_vip_status", {
   userId: integer("user_id").primaryKey().references(() => users.id),
@@ -206,6 +231,14 @@ export const userVipStatus = pgTable("user_vip_status", {
   directCount: integer("direct_count").default(0).notNull(),
   team3Count: integer("team3_count").default(0).notNull(),
   lastQualCheckAt: timestamp("last_qual_check_at"),
+});
+
+// VIP解锁状态表（防重复解冻）
+export const vipUnlockState = pgTable("vip_unlock_state", {
+  userId: integer("user_id").primaryKey().references(() => users.id),
+  vipLevel: integer("vip_level").notNull(),
+  unlockedBaseAmount: decimal("unlocked_base_amount", { precision: 10, scale: 2 }).default("0").notNull(),
+  lastUnlockAt: timestamp("last_unlock_at"),
 });
 
 // VIP升级交易表
@@ -232,12 +265,154 @@ export const vipPlans = pgTable("vip_plans", {
   winMultiplier: decimal("win_multiplier", { precision: 3, scale: 2 }).default("1"),
 });
 
+// ============ E-COMMERCE (Added) ============
+export const stores = pgTable("stores", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  logo: text("logo"),
+  status: varchar("status", { length: 20 }).default("active").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  storeId: integer("store_id").notNull().references(() => stores.id),
+  name: varchar("name", { length: 200 }).notNull(),
+  description: text("description"),
+  basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
+  mainImage: text("main_image"),
+  status: varchar("status", { length: 20 }).default("active").notNull(),
+  categoryId: integer("category_id"),
+  stock: integer("stock").default(0),
+  sales: integer("sales").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const productVariants = pgTable("product_variants", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull().references(() => products.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  sku: varchar("sku", { length: 100 }),
+  priceAdjustment: decimal("price_adjustment", { precision: 10, scale: 2 }).default("0"),
+  stock: integer("stock").default(0),
+  image: text("image"),
+  attributes: text("attributes"), // JSON string
+});
+
+export const cartItems = pgTable("cart_items", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  storeId: integer("store_id").references(() => stores.id),
+  productId: integer("product_id").notNull().references(() => products.id),
+  variantId: integer("variant_id").references(() => productVariants.id),
+  quantity: integer("quantity").default(1).notNull(),
+  checked: boolean("checked").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const addresses = pgTable("addresses", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  name: varchar("name", { length: 50 }).notNull(),
+  phone: varchar("phone", { length: 20 }).notNull(),
+  province: varchar("province", { length: 50 }).notNull(),
+  city: varchar("city", { length: 50 }).notNull(),
+  district: varchar("district", { length: 50 }).notNull(),
+  detail: text("detail").notNull(),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const coupons = pgTable("coupons", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 20 }).unique().notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  discountType: varchar("discount_type", { length: 20 }).notNull(), // percentage, fixed
+  discountValue: decimal("discount_value", { precision: 10, scale: 2 }).notNull(),
+  minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }).default("0").notNull(),
+  maxDiscountAmount: decimal("max_discount_amount", { precision: 10, scale: 2 }),
+  applicableRegions: text("applicable_regions"), // JSON array
+  applicableStoreIds: text("applicable_store_ids"), // JSON array
+  applicableCategoryIds: text("applicable_category_ids"), // JSON array
+  usageLimit: integer("usage_limit"),
+  usedCount: integer("used_count").default(0),
+  perUserLimit: integer("per_user_limit").default(1),
+  startsAt: timestamp("starts_at").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const userCoupons = pgTable("user_coupons", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  couponId: integer("coupon_id").notNull().references(() => coupons.id),
+  usedAt: timestamp("used_at"),
+  orderId: integer("order_id"), // References orders.id, but since defined before orders, we might skip direct reference or use raw integer.
+  // Actually, orders is defined AFTER. Circular dependency if I reference orders.id here and orders reference coupon.id.
+  // I'll just use integer for orderId here.
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const virtualBuyers = pgTable("virtual_buyers", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  avatarUrl: text("avatar_url"),
+  phone: text("phone"),
+  email: text("email"),
+  regionCode: text("region_code").default("CN"),
+  isActive: boolean("is_active").default(true),
+  behaviorProfile: jsonb("behavior_profile").default({}),
+  orderCount: integer("order_count").default(0),
+  totalSpent: decimal("total_spent", { precision: 12, scale: 2 }).default("0"),
+  lastOrderAt: timestamp("last_order_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id),
-  type: varchar("type", { length: 30 }).notNull(),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  status: varchar("status", { length: 20 }).default("pending").notNull(),
+  storeId: integer("store_id").references(() => stores.id),
+  orderNo: varchar("order_no", { length: 50 }).unique().notNull(),
+  type: varchar("type", { length: 30 }).default("shop").notNull(), // shop, vip, recharge, etc.
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(), // Total amount to pay
+  subtotalAmount: decimal("subtotal_amount", { precision: 10, scale: 2 }),
+  shippingFee: decimal("shipping_fee", { precision: 10, scale: 2 }).default("0"),
+  discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).default("0"),
+  status: varchar("status", { length: 20 }).default("pending_payment").notNull(), // pending_payment, pending_shipment, shipped, completed, cancelled, refunded
+  paymentMethod: varchar("payment_method", { length: 30 }),
+  shippingAddress: text("shipping_address"), // JSON string or text
+  logisticsCompany: varchar("logistics_company", { length: 50 }),
+  logisticsTrackingNo: varchar("logistics_tracking_no", { length: 100 }),
+  // New fields from migration
+  carrier: varchar("carrier", { length: 50 }),
+  trackingNo: varchar("tracking_no", { length: 100 }),
+  isVirtualOrder: boolean("is_virtual_order").default(false),
+  virtualBuyerId: integer("virtual_buyer_id"), // Will reference virtual_buyers.id
+  notes: text("notes"),
+  couponId: integer("coupon_id"),
+  paidAt: timestamp("paid_at"),
+  shippedAt: timestamp("shipped_at"),
+  completedAt: timestamp("completed_at"),
+  cancelledAt: timestamp("cancelled_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const orderItems = pgTable("order_items", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").notNull().references(() => orders.id),
+  storeId: integer("store_id").references(() => stores.id),
+  productId: integer("product_id").notNull().references(() => products.id),
+  variantId: integer("variant_id").references(() => productVariants.id),
+  productSnapshot: text("product_snapshot"), // JSON snapshot of product info at time of purchase
+  quantity: integer("quantity").notNull(),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
+  status: varchar("status", { length: 20 }).default("pending"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -341,6 +516,8 @@ export const chatGroups = pgTable("chat_groups", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
+  announcement: text("announcement"),
+  openHours: varchar("open_hours", { length: 50 }), // e.g. "09:00-22:00"
   avatarUrl: text("avatar_url"),
   ownerId: integer("owner_id").references(() => users.id),
   isActive: boolean("is_active").default(true).notNull(),
@@ -463,6 +640,16 @@ export const commissionLogs = pgTable("commission_logs", {
   commissionUnique: { unique: true, columns: [table.bizType, table.toUserId, table.refId, table.relationLevel] },
 }));
 
+// ============ AI CHAT LOGS ============
+export const aiChatLogs = pgTable("ai_chat_logs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id), // Can be null if guest? But mostly users
+  question: text("question").notNull(),
+  answer: text("answer").notNull(),
+  source: varchar("source", { length: 20 }).default("private"), // private | group
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // ============ CUSTOMER SERVICE CHAT ============
 export const serviceChatSessions = pgTable("service_chat_sessions", {
   id: serial("id").primaryKey(),
@@ -483,6 +670,15 @@ export const serviceChatMessages = pgTable("service_chat_messages", {
 });
 
 // ============ INSERT SCHEMAS ============
+export const insertStoreSchema = createInsertSchema(stores).omit({ id: true, createdAt: true });
+export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true, sales: true });
+export const insertProductVariantSchema = createInsertSchema(productVariants).omit({ id: true });
+export const insertCartItemSchema = createInsertSchema(cartItems).omit({ id: true, createdAt: true });
+export const insertAddressSchema = createInsertSchema(addresses).omit({ id: true, createdAt: true });
+export const insertCouponSchema = createInsertSchema(coupons).omit({ id: true, createdAt: true, usedCount: true });
+export const insertUserCouponSchema = createInsertSchema(userCoupons).omit({ id: true, createdAt: true });
+export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true, createdAt: true });
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertWalletSchema = createInsertSchema(wallets).omit({ id: true, updatedAt: true });
 export const insertLedgerSchema = createInsertSchema(ledger).omit({ id: true, createdAt: true });
@@ -505,6 +701,7 @@ export const insertServiceChatSessionSchema = createInsertSchema(serviceChatSess
 export const insertServiceChatMessageSchema = createInsertSchema(serviceChatMessages).omit({ id: true, createdAt: true });
 export const insertVipLevelSchema = createInsertSchema(vipLevels);
 export const insertVipRequirementSchema = createInsertSchema(vipRequirements);
+export const insertVipUnlockStateSchema = createInsertSchema(vipUnlockState);
 export const insertVipCommissionRateSchema = createInsertSchema(vipCommissionRates);
 export const insertLotteryCommissionRateSchema = createInsertSchema(lotteryCommissionRates);
 export const insertUserVipStatusSchema = createInsertSchema(userVipStatus);
@@ -514,6 +711,7 @@ export const insertSignInRewardRuleSchema = createInsertSchema(signInRewardRules
 export const insertLotteryTimesLedgerSchema = createInsertSchema(lotteryTimesLedger).omit({ id: true, createdAt: true });
 export const insertLotteryDrawSchema = createInsertSchema(lotteryDraws).omit({ id: true, createdAt: true });
 export const insertCommissionLogSchema = createInsertSchema(commissionLogs).omit({ id: true, createdAt: true });
+export const insertAiChatLogSchema = createInsertSchema(aiChatLogs).omit({ id: true, createdAt: true });
 
 // ============ TYPES ============
 export type User = typeof users.$inferSelect;
@@ -560,6 +758,8 @@ export type VipLevel = typeof vipLevels.$inferSelect;
 export type InsertVipLevel = z.infer<typeof insertVipLevelSchema>;
 export type VipRequirement = typeof vipRequirements.$inferSelect;
 export type InsertVipRequirement = z.infer<typeof insertVipRequirementSchema>;
+export type VipUnlockState = typeof vipUnlockState.$inferSelect;
+export type InsertVipUnlockState = z.infer<typeof insertVipUnlockStateSchema>;
 export type VipCommissionRate = typeof vipCommissionRates.$inferSelect;
 export type LotteryCommissionRate = typeof lotteryCommissionRates.$inferSelect;
 export type UserVipStatus = typeof userVipStatus.$inferSelect;
@@ -575,6 +775,11 @@ export type LotteryDraw = typeof lotteryDraws.$inferSelect;
 export type InsertLotteryDraw = z.infer<typeof insertLotteryDrawSchema>;
 export type CommissionLog = typeof commissionLogs.$inferSelect;
 export type InsertCommissionLog = z.infer<typeof insertCommissionLogSchema>;
+export type AiChatLog = typeof aiChatLogs.$inferSelect;
+export type InsertAiChatLog = z.infer<typeof insertAiChatLogSchema>;
+
+export type VirtualBuyer = typeof virtualBuyers.$inferSelect;
+
 // ============ API SCHEMAS ============
 export const registerSchema = z.object({
   phone: z.string().min(11).max(11),
@@ -769,3 +974,22 @@ export const insertGroupRedPacketSchema = createInsertSchema(groupRedPackets).om
 export type GroupRedPacket = typeof groupRedPackets.$inferSelect;
 export type InsertGroupRedPacket = z.infer<typeof insertGroupRedPacketSchema>;
 export type RedPacketClaim = typeof redPacketClaims.$inferSelect;
+
+// ============ E-COMMERCE TYPES ============
+export type Store = typeof stores.$inferSelect;
+export type InsertStore = z.infer<typeof insertStoreSchema>;
+export type Product = typeof products.$inferSelect;
+export type InsertProduct = z.infer<typeof insertProductSchema>;
+export type ProductVariant = typeof productVariants.$inferSelect;
+export type InsertProductVariant = z.infer<typeof insertProductVariantSchema>;
+export type CartItem = typeof cartItems.$inferSelect;
+export type InsertCartItem = z.infer<typeof insertCartItemSchema>;
+export type Address = typeof addresses.$inferSelect;
+export type InsertAddress = z.infer<typeof insertAddressSchema>;
+export type Coupon = typeof coupons.$inferSelect;
+export type InsertCoupon = z.infer<typeof insertCouponSchema>;
+export type UserCoupon = typeof userCoupons.$inferSelect;
+export type InsertUserCoupon = z.infer<typeof insertUserCouponSchema>;
+export type OrderItem = typeof orderItems.$inferSelect;
+export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
+

@@ -31,6 +31,7 @@ export async function getWallet(userId: number) {
       balanceCashAvailable: "0",
       balanceCashFrozen: "0",
       balancePoints: 0,
+      totalUnfrozen: "0",
     }).returning();
     return newWallet;
   }
@@ -120,6 +121,36 @@ export async function deductCashAvailable(userId: number, amount: number, type: 
     amount: (-amount).toString(),
     refId,
     description,
+  });
+}
+
+export async function unfreezeCommission(userId: number, amount: number, description?: string) {
+  // Ensure wallet exists
+  await getWallet(userId);
+
+  await db.update(wallets)
+    .set({ 
+      balanceCashFrozen: sql`${wallets.balanceCashFrozen} - ${amount}`,
+      balanceCashAvailable: sql`${wallets.balanceCashAvailable} + ${amount}`,
+      totalUnfrozen: sql`${wallets.totalUnfrozen} + ${amount}`,
+      updatedAt: new Date(),
+    })
+    .where(eq(wallets.userId, userId));
+
+  await db.insert(ledger).values({
+    userId,
+    type: "commission_unfreeze",
+    currency: "cash_frozen",
+    amount: (-amount).toString(),
+    description: description || "VIP进度解冻",
+  });
+  
+  await db.insert(ledger).values({
+    userId,
+    type: "commission_unfreeze",
+    currency: "cash_available",
+    amount: amount.toString(),
+    description: description || "VIP进度解冻",
   });
 }
 

@@ -60,7 +60,6 @@ export async function editImages(
     // ({ image, prompt, mask?, ... })
     // Passing an array `images` to `image` param would be a type error in standard SDK unless `images` was cast or Replit SDK was different.
     // I will try to make it standard-compliant-ish.
-    image: images[0], 
     prompt,
   });
 

@@ -12,7 +12,7 @@ export async function createGroup(name: string, description?: string, ownerId?: 
   return group;
 }
 
-export async function updateGroup(groupId: number, data: { name?: string; description?: string; isActive?: boolean }) {
+export async function updateGroup(groupId: number, data: { name?: string; description?: string; isActive?: boolean; announcement?: string; openHours?: string }) {
   const [group] = await db.update(chatGroups)
     .set(data)
     .where(eq(chatGroups.id, groupId))

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Users, Search, ChevronLeft, ChevronRight, Ban, CheckCircle, Plus, Minus, Eye, X, GitBranch, ArrowUp, ArrowDown, UserPlus } from "lucide-react";
+import { Users, Search, ChevronLeft, ChevronRight, Ban, CheckCircle, Plus, Minus, Eye, X, GitBranch, ArrowUp, ArrowDown, UserPlus, Bug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +43,7 @@ export default function AdminUsersPage() {
   const [relationshipModalOpen, setRelationshipModalOpen] = useState(false);
   const [createUserModalOpen, setCreateUserModalOpen] = useState(false);
   const [ledgerModalOpen, setLedgerModalOpen] = useState(false);
+  const [debugModalOpen, setDebugModalOpen] = useState(false);
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerCurrency, setLedgerCurrency] = useState("cash_available");
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -108,6 +109,18 @@ export default function AdminUsersPage() {
       return res.json();
     },
     enabled: !!selectedUser && ledgerModalOpen,
+  });
+
+  const { data: debugData, isLoading: loadingDebug } = useQuery({
+    queryKey: ["/api/admin/users", selectedUser?.id, "debug"],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/users/${selectedUser.id}/debug-commission`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load debug info");
+      return res.json();
+    },
+    enabled: !!selectedUser && debugModalOpen,
   });
 
   const updateStatusMutation = useMutation({
@@ -235,6 +248,11 @@ export default function AdminUsersPage() {
     setSelectedUser(user);
     setLedgerModalOpen(true);
     setLedgerPage(1);
+  };
+
+  const openDebugModal = (user: any) => {
+    setSelectedUser(user);
+    setDebugModalOpen(true);
   };
 
   const totalPages = Math.ceil((data?.total || 0) / 20);
@@ -373,6 +391,15 @@ export default function AdminUsersPage() {
                           data-testid={`button-user-relationship-${user.id}`}
                         >
                           <GitBranch className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openDebugModal(user)}
+                          className="text-orange-600 border-orange-200"
+                          title="佣金诊断"
+                        >
+                          <Bug className="w-3 h-3" />
                         </Button>
                         {user.status === "active" ? (
                           <Button
@@ -831,6 +858,125 @@ export default function AdminUsersPage() {
                </Button>
              </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={debugModalOpen} onOpenChange={setDebugModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bug className="w-5 h-5 text-orange-500" />
+              佣金诊断 - {selectedUser?.phone}
+            </DialogTitle>
+          </DialogHeader>
+          {loadingDebug ? (
+            <div className="py-8 text-center text-gray-500">加载中...</div>
+          ) : debugData ? (
+            <div className="space-y-6 py-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <h4 className="text-sm font-semibold text-gray-500 mb-2">基本信息</h4>
+                  <div className="space-y-1 text-sm">
+                    <p>ID: {debugData.user.id}</p>
+                    <p>VIP等级: {debugData.user.vipLevel}</p>
+                    <p>达标状态: 
+                      <span className={`ml-1 font-bold ${debugData.vipStatus.qualified ? 'text-green-600' : 'text-red-600'}`}>
+                        {debugData.vipStatus.qualified ? "已达标" : "未达标"}
+                      </span>
+                    </p>
+                    <p>有效直推: {debugData.vipStatus.currentDirectCount} / {debugData.vipStatus.requiredDirectCount}</p>
+                    <p>团队业绩: {debugData.vipStatus.currentTeamPerformance} / {debugData.vipStatus.requiredTeamPerformance}</p>
+                  </div>
+                </div>
+                
+                <div className="p-4 bg-orange-50 rounded-lg col-span-2">
+                  <h4 className="text-sm font-semibold text-orange-800 mb-2">最近5笔转盘分佣</h4>
+                  {debugData.recentSpinCommissions.length > 0 ? (
+                    <div className="space-y-2">
+                      {debugData.recentSpinCommissions.map((log: any) => (
+                        <div key={log.id} className="text-xs flex justify-between items-center bg-white/50 p-2 rounded">
+                          <span>{new Date(log.createdAt).toLocaleString()}</span>
+                          <span className="font-bold">¥{log.amountCents ? (log.amountCents / 100).toFixed(2) : log.amount}</span>
+                          <span className={log.status === 'credited' ? 'text-green-600' : 'text-red-600'}>
+                            {log.status === 'credited' ? '已到账' : '冻结中'}
+                          </span>
+                          <span className="text-gray-500 truncate max-w-[150px]">{log.description}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">暂无记录</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">最近下级中奖记录 (前10条)</h4>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left">时间</th>
+                        <th className="px-3 py-2 text-left">下级用户</th>
+                        <th className="px-3 py-2 text-left">奖品</th>
+                        <th className="px-3 py-2 text-right">金额</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {debugData.recentDownlineWins.length > 0 ? (
+                        debugData.recentDownlineWins.map((win: any) => (
+                          <tr key={win.id}>
+                            <td className="px-3 py-2">{new Date(win.createdAt).toLocaleString()}</td>
+                            <td className="px-3 py-2">{win.phone}</td>
+                            <td className="px-3 py-2">{win.prize}</td>
+                            <td className="px-3 py-2 text-right text-red-600 font-bold">¥{win.amount/100}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr><td colSpan={4} className="text-center py-4 text-gray-400">暂无记录</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">最近所有佣金记录 (前20条)</h4>
+                <div className="border rounded-lg overflow-hidden max-h-[300px] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-left">时间</th>
+                        <th className="px-3 py-2 text-left">类型</th>
+                        <th className="px-3 py-2 text-right">金额</th>
+                        <th className="px-3 py-2 text-left">状态</th>
+                        <th className="px-3 py-2 text-left">描述</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {debugData.recentCommissions.length > 0 ? (
+                        debugData.recentCommissions.map((log: any) => (
+                          <tr key={log.id}>
+                            <td className="px-3 py-2">{new Date(log.createdAt).toLocaleString()}</td>
+                            <td className="px-3 py-2">{log.bizType}</td>
+                            <td className="px-3 py-2 text-right">¥{log.amountCents ? (log.amountCents / 100).toFixed(2) : log.amount}</td>
+                            <td className={`px-3 py-2 ${log.status === 'credited' ? 'text-green-600' : 'text-red-600'}`}>
+                              {log.status === 'credited' ? '已到账' : '冻结中'}
+                            </td>
+                            <td className="px-3 py-2 text-gray-500">{log.description}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr><td colSpan={5} className="text-center py-4 text-gray-400">暂无记录</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-red-500">加载失败</div>
+          )}
         </DialogContent>
       </Dialog>
     </AdminLayout>

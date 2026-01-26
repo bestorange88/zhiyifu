@@ -3,9 +3,10 @@ import {
   admins, users, wallets, withdraws, orders, agentApplications, userRanks,
   systemSettings, featureFlags, deposits, adminActions, commissionRecords,
   serviceChatSessions, serviceChatMessages, wheelPrizes, wheelSpins, vipPlans, ledger,
-  paymentQrCodes, commissionLogs, identityVerifications, signInLogs, userDevices, vipUpgradeTxs, lotteryDraws
+  paymentQrCodes, commissionLogs, identityVerifications, signInLogs, userDevices, vipUpgradeTxs, lotteryDraws,
+  messages, conversations, aiChatLogs
 } from "@shared/schema";
-import { eq, desc, sql, count, and, gt, gte, sum, inArray } from "drizzle-orm";
+import { eq, desc, sql, count, and, gt, gte, sum, inArray, or } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -743,6 +744,7 @@ export async function getDistributionUsers(page = 1, limit = 50) {
     phone: users.phone,
     inviteCode: users.inviteCode,
     createdAt: users.createdAt,
+    inviterId: users.inviterId,
   }).from(users).orderBy(desc(users.createdAt)).limit(limit).offset(offset);
   
   const [total] = await db.select({ count: count() }).from(users);
@@ -751,10 +753,18 @@ export async function getDistributionUsers(page = 1, limit = 50) {
     usersWithRank.map(async (u) => {
       const [rank] = await db.select().from(userRanks).where(eq(userRanks.userId, u.id)).limit(1);
       const [referralCount] = await db.select({ count: count() }).from(users).where(eq(users.inviterId, u.id));
+      
+      let inviterPhone = "-";
+      if (u.inviterId) {
+        const [inviter] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, u.inviterId)).limit(1);
+        inviterPhone = inviter?.phone || "-";
+      }
+
       return {
         ...u,
         rankLevel: rank?.currentRank || 0,
         directCount: referralCount?.count || 0,
+        inviterPhone,
       };
     })
   );
@@ -787,27 +797,239 @@ export async function getReferralRecords() {
   return result;
 }
 
-// ============ COMMISSIONS ============
-export async function getCommissionRecords(page = 1, limit = 50) {
+export async function getDistributionTeams(page = 1, limit = 20, search?: string) {
+  // 1. Fetch all users (lite version) to build tree
+  const allUsers = await db.select({
+    id: users.id,
+    phone: users.phone,
+    inviterId: users.inviterId,
+    vipLevel: users.vipLevel,
+    createdAt: users.createdAt,
+    inviteCode: users.inviteCode,
+  }).from(users);
+
+  // 2. Build adjacency list
+  const userMap = new Map<number, any>();
+  const childrenMap = new Map<number, number[]>();
+  
+  allUsers.forEach(u => {
+    userMap.set(u.id, u);
+    if (u.inviterId) {
+      if (!childrenMap.has(u.inviterId)) childrenMap.set(u.inviterId, []);
+      childrenMap.get(u.inviterId)?.push(u.id);
+    }
+  });
+
+  // 3. Identify roots (Team Leaders)
+  // Roots are users with no inviter OR inviter not in the list (e.g. deleted)
+  // Filter by search if provided
+  let roots = allUsers.filter(u => !u.inviterId || !userMap.has(u.inviterId));
+
+  if (search) {
+    const lowerSearch = search.toLowerCase();
+    roots = roots.filter(u => 
+      (u.phone || "").toLowerCase().includes(lowerSearch) || 
+      (u.inviteCode || "").toLowerCase().includes(lowerSearch) ||
+      u.id.toString() === search
+    );
+  }
+
+  // 4. Calculate team stats for each root
+  // BFS/DFS to count total size and total sales (sales not available in this query, just size)
+  const calculateTeamStats = (rootId: number) => {
+    let size = 0;
+    let vipCounts = { v1: 0, v2: 0, v3: 0, v4: 0, v5: 0 };
+    const queue = [rootId];
+    
+    // We don't count the root itself in "team size" usually, or do we? 
+    // "Team List" usually implies the group led by this person.
+    // Let's count total size including downlines.
+    
+    // Using queue for BFS
+    let head = 0;
+    while(head < queue.length){
+        const currentId = queue[head++];
+        const children = childrenMap.get(currentId) || [];
+        size += children.length;
+        children.forEach(childId => {
+            queue.push(childId);
+            const child = userMap.get(childId);
+            if (child && child.vipLevel > 0) {
+                const key = `v${child.vipLevel}` as keyof typeof vipCounts;
+                if (vipCounts[key] !== undefined) vipCounts[key]++;
+            }
+        });
+    }
+    
+    return { size, vipCounts };
+  };
+
+  const teams = roots.map(root => {
+    const stats = calculateTeamStats(root.id);
+    return {
+      leaderId: root.id,
+      leaderPhone: root.phone,
+      leaderVip: root.vipLevel,
+      joinDate: root.createdAt,
+      teamSize: stats.size,
+      vipCounts: stats.vipCounts,
+    };
+  });
+
+  // 5. Sort by team size desc
+  teams.sort((a, b) => b.teamSize - a.teamSize);
+
+  // 6. Pagination
+  const total = teams.length;
   const offset = (page - 1) * limit;
-  const records = await db.select().from(commissionRecords).orderBy(desc(commissionRecords.createdAt)).limit(limit).offset(offset);
-  const [total] = await db.select({ count: count() }).from(commissionRecords);
+  const pagedTeams = teams.slice(offset, offset + limit);
+
+  return {
+    teams: pagedTeams,
+    total,
+    page,
+    limit
+  };
+}
+
+// ============ COMMISSIONS ============
+export async function getCommissionRecords(page = 1, limit = 50, search?: string, type?: string) {
+  const offset = (page - 1) * limit;
   
-  const result = await Promise.all(
-    records.map(async (r) => {
-      const [user] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, r.userId)).limit(1);
-      const [source] = r.fromUserId 
-        ? await db.select({ phone: users.phone }).from(users).where(eq(users.id, r.fromUserId)).limit(1)
-        : [null];
-      return {
-        ...r,
-        userPhone: user?.phone || "未知",
-        sourcePhone: source?.phone || "-",
-      };
-    })
-  );
+  let query = db.select().from(commissionRecords).orderBy(desc(commissionRecords.createdAt));
   
-  return { commissions: result, total: total?.count || 0, page, limit };
+  // Join with users to filter by phone/id
+  // But Drizzle query builder with joins and dynamic filters is verbose.
+  // Let's fetch all (or filter by type first) then map, OR use raw SQL / advanced query.
+  // Since we need search by user phone, we must join.
+  
+  // Using query builder with joins:
+  /*
+  const query = db.select({
+    ...commissionRecords,
+    userPhone: users.phone,
+    fromUserPhone: alias(users, "fromUser").phone
+  })
+  .from(commissionRecords)
+  .leftJoin(users, eq(commissionRecords.userId, users.id))
+  ...
+  */
+  
+  // Simplified approach for now:
+  // 1. If search is provided, find matching user IDs first.
+  let userIds: number[] = [];
+  if (search) {
+    const matchedUsers = await db.select({ id: users.id }).from(users)
+      .where(sql`${users.phone} LIKE ${`%${search}%`} OR ${users.id} = ${parseInt(search) || 0}`);
+    userIds = matchedUsers.map(u => u.id);
+    
+    if (userIds.length === 0) {
+      return { commissions: [], total: 0, page, limit };
+    }
+  }
+
+  let dbQuery = db.select().from(commissionRecords);
+  let conditions = [];
+
+  if (userIds.length > 0) {
+    conditions.push(inArray(commissionRecords.userId, userIds));
+  }
+
+  if (type) {
+    // commissionRecords doesn't have 'type' field directly? 
+    // Wait, commissionRecords schema: id, userId, fromUserId, orderId, level, rate, amount, status, createdAt.
+    // It does NOT have 'type'.
+    // commissionLogs HAS 'bizType'.
+    // The previous implementation used commissionRecords table.
+    // BUT 'referralService.getDetailedCommissionHistory' uses 'commissionLogs'.
+    // 'commissionRecords' might be legacy or specific to order commissions?
+    // Let's check schema.ts if possible, or infer.
+    // The previous code used `commissionRecords`.
+    // If the user wants to split "VIP Rewards" and "Downline Commissions", we might need to use `commissionLogs` instead, or `commissionRecords` has implicit type?
+    // Usually `commissionRecords` is for order-based commissions.
+    // `vipUpgradeTxs` generates commissions?
+    // Let's switch to `commissionLogs` for a unified view if possible, or check if `commissionRecords` is sufficient.
+    // `commissionLogs` is the central log. `commissionRecords` might be a subset.
+    // Let's use `commissionLogs` as it has `bizType` which allows separating "vip_commission" vs "order_commission" vs "lottery_reward".
+    // But wait, existing `getCommissionRecords` used `commissionRecords`.
+    // I should probably switch to `commissionLogs` to support "VIP Rewards" tab.
+  }
+  
+  // Let's use commissionLogs which is more comprehensive
+  return getCommissionLogs(page, limit, search, type);
+}
+
+export async function getCommissionLogs(page = 1, limit = 50, search?: string, type?: string) {
+  const offset = (page - 1) * limit;
+
+  let query = db.select({
+    id: commissionLogs.id,
+    userId: commissionLogs.toUserId,
+    fromUserId: commissionLogs.fromUserId,
+    amount: commissionLogs.amountCents,
+    status: commissionLogs.status,
+    type: commissionLogs.bizType,
+    level: commissionLogs.relationLevel,
+    createdAt: commissionLogs.createdAt,
+    userPhone: users.phone,
+    // fromUserPhone needs join
+  })
+  .from(commissionLogs)
+  .leftJoin(users, eq(commissionLogs.toUserId, users.id))
+  .orderBy(desc(commissionLogs.createdAt));
+
+  const conditions = [];
+
+  if (search) {
+    conditions.push(sql`${users.phone} LIKE ${`%${search}%`} OR ${users.inviteCode} LIKE ${`%${search}%`} OR ${users.id} = ${parseInt(search) || 0}`);
+  }
+
+  if (type) {
+    if (type === "vip") {
+      // VIP Rewards (Self rewards: Upgrade bonus, Rank bonus, Sign-in cash, etc.)
+      conditions.push(inArray(commissionLogs.bizType, ["vip_upgrade_reward", "rank_bonus", "upgrade_reward", "signin_cash", "signin_bonus"]));
+    } else if (type === "downline") {
+      // Downline Commissions (From downline: VIP upgrade comm, Order comm, Lottery comm, etc.)
+      conditions.push(inArray(commissionLogs.bizType, ["vip_upgrade", "vip_commission", "commission", "order_commission", "lottery_commission", "spin_commission", "referral_reward"])); 
+    } else if (type === "lottery") {
+      // Lottery Wins (Direct wins)
+      conditions.push(eq(commissionLogs.bizType, "lottery_reward")); 
+    }
+  }
+
+  if (conditions.length > 0) {
+    query = query.where(and(...conditions)) as any;
+  }
+
+  const records = await query.limit(limit).offset(offset);
+  
+  // Fetch fromUser phones manually to avoid complex double join in query builder if lazy
+  const recordsWithSource = await Promise.all(records.map(async (r) => {
+    let sourcePhone = "-";
+    if (r.fromUserId) {
+      const [source] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, r.fromUserId)).limit(1);
+      sourcePhone = source?.phone || "-";
+    }
+    return {
+      ...r,
+      amount: (r.amount / 100).toFixed(2),
+      sourcePhone,
+      // Map bizType to display status or type
+      rate: "N/A" // Logs might not have rate directly
+    };
+  }));
+
+  // Count total
+  let countQuery = db.select({ count: count() })
+    .from(commissionLogs)
+    .leftJoin(users, eq(commissionLogs.toUserId, users.id));
+    
+  if (conditions.length > 0) {
+    countQuery = countQuery.where(and(...conditions)) as any;
+  }
+  const [total] = await countQuery;
+
+  return { commissions: recordsWithSource, total: total?.count || 0, page, limit };
 }
 
 // ============ VIP PLANS ============
@@ -1234,4 +1456,82 @@ export async function getUserLedgerWithBalance(userId: number, page = 1, limit =
     page,
     limit
   };
+}
+
+// ============ AI QA ============
+export async function getAiStats() {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  
+  const [totalQuestions] = await db.select({ count: count() }).from(messages).where(eq(messages.role, "user"));
+  const [todayQuestions] = await db.select({ count: count() }).from(messages)
+    .where(and(eq(messages.role, "user"), gte(messages.createdAt, todayStart)));
+    
+  return {
+    totalQuestions: totalQuestions?.count || 0,
+    todayQuestions: todayQuestions?.count || 0,
+  };
+}
+
+export async function getAiMessages(page = 1, limit = 50, search?: string) {
+  const offset = (page - 1) * limit;
+  
+  let query = db.select({
+    id: messages.id,
+    role: messages.role,
+    content: messages.content,
+    createdAt: messages.createdAt,
+    userPhone: users.phone,
+    userId: users.id,
+  })
+  .from(messages)
+  .leftJoin(conversations, eq(messages.conversationId, conversations.id))
+  .leftJoin(users, eq(conversations.userId, users.id))
+  .orderBy(desc(messages.createdAt));
+
+  if (search) {
+    query = query.where(or(
+        sql`${users.phone} LIKE ${`%${search}%`}`,
+        sql`${messages.content} LIKE ${`%${search}%`}`
+    )) as any;
+  }
+
+  const msgs = await query.limit(limit).offset(offset);
+  
+  // Count total
+  let countQuery = db.select({ count: count() })
+    .from(messages)
+    .leftJoin(conversations, eq(messages.conversationId, conversations.id))
+    .leftJoin(users, eq(conversations.userId, users.id));
+
+  if (search) {
+    countQuery = countQuery.where(or(
+        sql`${users.phone} LIKE ${`%${search}%`}`,
+        sql`${messages.content} LIKE ${`%${search}%`}`
+    )) as any;
+  }
+  
+  const [total] = await countQuery;
+  
+  return { messages: msgs, total: total?.count || 0, page, limit };
+}
+
+export async function getAiSettings() {
+  const sensitiveWords = await db.select().from(systemSettings).where(eq(systemSettings.key, "ai_sensitive_words")).limit(1);
+  const presetReplies = await db.select().from(systemSettings).where(eq(systemSettings.key, "ai_preset_replies")).limit(1);
+  
+  return {
+    sensitiveWords: sensitiveWords[0]?.value || "",
+    presetReplies: presetReplies[0]?.value || ""
+  };
+}
+
+export async function updateAiSettings(data: { sensitiveWords?: string; presetReplies?: string }) {
+  if (data.sensitiveWords !== undefined) {
+    await setSystemSetting("ai_sensitive_words", data.sensitiveWords);
+  }
+  if (data.presetReplies !== undefined) {
+    await setSystemSetting("ai_preset_replies", data.presetReplies);
+  }
+  return { success: true };
 }

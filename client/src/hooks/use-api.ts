@@ -78,6 +78,17 @@ export function useVipStatus() {
   });
 }
 
+export function useUnlockCommission() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => authFetch("/api/vip/unlock", { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/vip/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/wallet"] });
+    },
+  });
+}
+
 export function useReferralSummary() {
   return useQuery({
     queryKey: ["/api/referral/summary"],

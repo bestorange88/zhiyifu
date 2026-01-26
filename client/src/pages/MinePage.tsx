@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles, Moon, Sun, Trash2, Info, Shield, MessageCircle, Phone, CreditCard, Upload, Camera, ArrowDownCircle, History, CalendarCheck, HelpCircle } from "lucide-react";
+import { User, Gift, Share2, Crown, Settings, Wallet, LogIn, Copy, Check, ChevronRight, Clock, Zap, LogOut, Sparkles, Moon, Sun, Trash2, Info, Shield, MessageCircle, Phone, CreditCard, Upload, Camera, ArrowDownCircle, History, CalendarCheck, HelpCircle, Lock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useWallet, useCheckinStatus, useCheckin, useSpinBalance, useReferralSummary } from "@/hooks/use-api";
 import LotteryWheel from "@/components/LotteryWheel";
+import { VipFrozenUnlockModal } from "@/components/VipFrozenUnlockModal";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -26,6 +27,7 @@ export default function MinePage() {
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [showIdentityDialog, setShowIdentityDialog] = useState(false);
   const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawMethod, setWithdrawMethod] = useState("alipay");
   const [withdrawAccount, setWithdrawAccount] = useState("");
@@ -564,6 +566,23 @@ export default function MinePage() {
             <span className="text-sm font-normal text-gray-400 ml-1">¥</span>
           </p>
           <p className="stat-label">账户余额</p>
+          
+          {/* Frozen Balance Info */}
+          {(vipStatus && vipStatus.frozenCommission !== undefined) && (
+            <div className="mt-1 flex items-center justify-center gap-1">
+              <div className="text-[10px] text-purple-500 bg-purple-50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <Lock className="w-2.5 h-2.5" />
+                <span>冻结: ¥{parseFloat(vipStatus?.frozenCommission || '0').toFixed(2)}</span>
+              </div>
+              <button 
+                onClick={(e) => { e.stopPropagation(); setShowUnlockModal(true); }}
+                className="text-[10px] text-white bg-purple-500 px-2 py-0.5 rounded-full hover:bg-purple-600 transition-colors"
+              >
+                解冻
+              </button>
+            </div>
+          )}
+
           <div className="flex gap-2 mt-2">
             <button
               onClick={() => setLocation('/deposit')}
@@ -643,31 +662,31 @@ export default function MinePage() {
       </div>
 
       <div className="px-4 mt-6 mb-4">
-        <h3 className="section-title mb-3">
-          <Clock className="w-4 h-4 text-primary" />
+        <h3 className="font-bold text-lg text-gray-800 mb-3">
           每日任务
         </h3>
-        <div className="card-elevated divide-y divide-gray-50">
+        <div className="space-y-3">
           {tasks.map((task, index) => (
-            <button
+            <div
               key={index}
-              onClick={task.action}
-              className="w-full p-4 flex items-center justify-between hover:bg-gray-50/50 transition-colors text-left"
-              data-testid={`button-task-${index}`}
+              className="bg-gradient-to-r from-blue-50/50 to-indigo-50/50 rounded-2xl p-4 flex items-center justify-between border border-blue-100/30"
             >
-              <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${task.completed ? 'bg-gray-100' : 'gradient-primary'}`}>
-                  <Gift className={`w-4 h-4 ${task.completed ? 'text-gray-400' : 'text-white'}`} />
-                </div>
-                <div>
-                  <p className="font-medium text-gray-800 text-sm">{task.title}</p>
-                  <p className="text-xs text-emerald-500 font-medium">{task.reward}</p>
-                </div>
+              <div className="flex flex-col">
+                <p className="font-bold text-gray-800 text-sm mb-1">{task.title}</p>
+                <p className="text-xs text-gray-500">{task.reward}</p>
               </div>
-              <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${task.completed ? 'text-gray-400 bg-gray-100' : 'text-primary bg-primary/10'}`}>
+              <button
+                onClick={task.action}
+                disabled={task.completed}
+                className={`text-xs font-medium px-4 py-1.5 rounded-full transition-all ${
+                  task.completed 
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                    : 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm hover:shadow'
+                }`}
+              >
                 {task.completed ? '已完成' : '去完成'}
-              </span>
-            </button>
+              </button>
+            </div>
           ))}
         </div>
       </div>
@@ -1186,6 +1205,11 @@ export default function MinePage() {
           </div>
         </DialogContent>
       </Dialog>
+      <VipFrozenUnlockModal 
+        open={showUnlockModal} 
+        onOpenChange={setShowUnlockModal}
+        vipStatus={vipStatus}
+      />
     </div>
   );
 }

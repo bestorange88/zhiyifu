@@ -43,11 +43,14 @@ export default function AdminSettingsPage() {
     const { toast } = useToast();
     const [formValues, setFormValues] = useState<Record<string, string>>({});
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
-    const [uploading, setUploading] = useState(false);
-    const [uploadingQr, setUploadingQr] = useState(false);
-    const [newQrType, setNewQrType] = useState<string>("alipay");
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const qrFileInputRef = useRef<HTMLInputElement>(null);
+  const [posterPreview, setPosterPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadingPoster, setUploadingPoster] = useState(false);
+  const [uploadingQr, setUploadingQr] = useState(false);
+  const [newQrType, setNewQrType] = useState<string>("alipay");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const posterFileInputRef = useRef<HTMLInputElement>(null);
+  const qrFileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: settings, isLoading } = useQuery<SystemSetting[]>({
     queryKey: ["/api/admin/settings"],
@@ -60,6 +63,10 @@ export default function AdminSettingsPage() {
       const logoSetting = data.find((s: SystemSetting) => s.key === "logo_url");
       if (logoSetting?.value) {
         setLogoPreview(logoSetting.value);
+      }
+      const posterSetting = data.find((s: SystemSetting) => s.key === "welcome_poster_url");
+      if (posterSetting?.value) {
+        setPosterPreview(posterSetting.value);
       }
       return data;
     },
@@ -221,6 +228,51 @@ export default function AdminSettingsPage() {
     saveMutation.mutate({ key: "logo_url", value: "" });
   };
 
+  const handlePosterFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "请选择图片文件", variant: "destructive" });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "图片大小不能超过5MB", variant: "destructive" });
+      return;
+    }
+
+    setUploadingPoster(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error("Upload failed");
+
+      const { url } = await res.json();
+      setPosterPreview(url);
+      saveMutation.mutate({ key: "welcome_poster_url", value: url });
+    } catch (error) {
+      toast({ title: "上传失败", variant: "destructive" });
+    } finally {
+      setUploadingPoster(false);
+      if (posterFileInputRef.current) {
+        posterFileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleRemovePoster = () => {
+    setPosterPreview(null);
+    saveMutation.mutate({ key: "welcome_poster_url", value: "" });
+  };
+
     const handleQrFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
@@ -341,6 +393,80 @@ export default function AdminSettingsPage() {
                       onClick={() => handleSave("logo_url")}
                       disabled={saveMutation.isPending}
                       data-testid="button-save-logo-url"
+                    >
+                      <Save className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Image className="w-5 h-5" />
+              首页海报弹窗
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-start gap-6">
+              <div className="w-32 h-48 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden relative">
+                {posterPreview ? (
+                  <>
+                    <img src={posterPreview} alt="Poster" className="w-full h-full object-cover" />
+                    <button
+                      onClick={handleRemovePoster}
+                      className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center"
+                      data-testid="button-remove-poster"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center text-gray-400">
+                    <Image className="w-8 h-8 mx-auto mb-1" />
+                    <span className="text-xs">暂无海报</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex-1 space-y-4">
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">建议尺寸: 竖屏比例 (如 1080x1920)，文件大小不超过 5MB</p>
+                  <input
+                    ref={posterFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePosterFileSelect}
+                    className="hidden"
+                    data-testid="input-poster-file"
+                  />
+                  <Button
+                    onClick={() => posterFileInputRef.current?.click()}
+                    disabled={uploadingPoster}
+                    data-testid="button-upload-poster"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {uploadingPoster ? "上传中..." : "选择海报图片"}
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Label>或输入海报地址</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={formValues["welcome_poster_url"] || posterPreview || ""}
+                      onChange={(e) => {
+                        handleChange("welcome_poster_url", e.target.value);
+                        setPosterPreview(e.target.value);
+                      }}
+                      placeholder="https://example.com/poster.png"
+                      data-testid="input-poster-url"
+                    />
+                    <Button
+                      onClick={() => handleSave("welcome_poster_url")}
+                      disabled={saveMutation.isPending}
+                      data-testid="button-save-poster-url"
                     >
                       <Save className="w-4 h-4" />
                     </Button>

@@ -99,7 +99,7 @@ export default function ToolsPage() {
         </div>
       </div>
 
-      <main className="px-4 mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <main className="px-4 mt-2 grid grid-cols-2 gap-3">
         {filteredTools.length === 0 ? (
           <div className="col-span-full py-16 text-center">
             <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
