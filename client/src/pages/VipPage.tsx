@@ -163,16 +163,8 @@ export default function VipPage() {
   const handleUpgradeClick = () => {
     if (!vipStatus?.nextLevelDetails) return;
     
-    // Check if requirements met
-    const prog = vipStatus.qualificationProgress;
-    if (prog && !prog.isQualified) {
-      toast({
-        title: "条件未达标",
-        description: "请先完成所有升级任务要求",
-        variant: "destructive"
-      });
-      return;
-    }
+    // 新规则：允许先升级VIP，不检查达标任务
+    // 升级奖励在完成达标任务后由系统自动派发
 
     setSelectedLevel(vipStatus.nextLevelDetails);
     setShowConfirmDialog(true);
@@ -505,23 +497,37 @@ export default function VipPage() {
                <div className="bg-orange-50 rounded-xl p-4 text-center mb-4 border border-orange-100">
                   <p className="text-sm text-gray-500">升级费用</p>
                   <p className="text-2xl font-bold text-orange-600">¥{selectedLevel.priceYuan}</p>
-                  <div className="mt-2 pt-2 border-t border-orange-200/50 flex justify-between text-xs text-orange-700">
-                     <span>升级后奖励:</span>
-                     <span className="font-bold">¥{selectedLevel.upgradeRewardYuan}</span>
-                  </div>
+                  {selectedLevel.upgradeRewardYuan > 0 && (
+                    <div className="mt-2 pt-2 border-t border-orange-200/50 text-xs text-orange-700">
+                       <p className="flex justify-between">
+                         <span>达标奖励:</span>
+                         <span className="font-bold">¥{selectedLevel.upgradeRewardYuan}</span>
+                       </p>
+                       <p className="text-orange-500 mt-1 text-[10px]">
+                         (完成{selectedLevel.name}达标任务后自动发放)
+                       </p>
+                    </div>
+                  )}
                </div>
 
-               <p className="text-xs text-gray-500 text-center mb-4">
-                 支付后将提交管理员审核，审核通过后生效。<br/>
-                 若审核拒绝，资金将原路退回余额。
-               </p>
+               {/* 重要提示 */}
+               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                  <p className="text-xs text-amber-800 font-medium flex items-start gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span>
+                      升级后将立即获得VIP权益（收益倍率、抽奖次数等）。
+                      <br/>
+                      升级奖励需在完成当前VIP等级达标任务后，由系统自动派发至余额。
+                    </span>
+                  </p>
+               </div>
 
                <Button 
                  className="w-full bg-gradient-to-r from-amber-500 to-orange-600 font-bold"
                  onClick={handleConfirmPurchase}
                  disabled={buyMutation.isPending}
                >
-                 {buyMutation.isPending ? "处理中..." : "确认支付并申请"}
+                 {buyMutation.isPending ? "处理中..." : "确认支付升级"}
                </Button>
             </div>
           )}

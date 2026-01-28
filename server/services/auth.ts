@@ -6,6 +6,7 @@ import { eq, and } from "drizzle-orm";
 import { updateUserRankStats } from "./referral";
 import { verifyCode } from "./sms";
 import { checkRegisterRisk, recordUserDevice, checkCycleReferrals } from "./riskControl";
+import { checkAndGrantVipReward } from "./vip";
 
 const REGISTER_BONUS_POINTS = 50;
 
@@ -178,6 +179,13 @@ export function verifyToken(token: string): { userId: number } | null {
 
 async function updateInviterStats(inviterId: number) {
   await updateUserRankStats(inviterId);
+  // 新增：检查邀请人的VIP达标状态，达标后自动发放升级奖励
+  try {
+    await checkAndGrantVipReward(inviterId);
+  } catch (error) {
+    // 忽略错误，不影响注册流程
+    console.error(`[VIP Reward Check] Error checking inviter ${inviterId}:`, error);
+  }
 }
 
 async function joinSystemGroups(userId: number) {

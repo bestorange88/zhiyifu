@@ -436,33 +436,8 @@ export async function createVipUpgradeOrder(userId: number, targetLevel: number)
   const [targetVipLevel] = await db.select().from(vipLevels).where(eq(vipLevels.level, targetLevel)).limit(1);
   if (!targetVipLevel) throw new Error("VIP等级不存在");
 
-  // 检查升级条件：直推人数和三代内人数
-  const [requirement] = await db.select().from(vipRequirements).where(eq(vipRequirements.level, targetLevel)).limit(1);
-  if (requirement) {
-    const directCount = await getDirectReferralCount(userId);
-    const team3Count = await get3GenTeamCount(userId);
-    
-    if (directCount < requirement.directRequired) {
-      throw new Error(`升级V${targetLevel}需要直推${requirement.directRequired}人，当前直推${directCount}人`);
-    }
-    if (team3Count < requirement.team3Required) {
-      throw new Error(`升级V${targetLevel}需要三代内${requirement.team3Required}人，当前三代内${team3Count}人`);
-    }
-
-    // Check downline VIP structure
-    if (requirement.downlineLevelRequirements) {
-      const downlineReqs: Record<string, number> = JSON.parse(requirement.downlineLevelRequirements);
-      for (const [levelKey, requiredCount] of Object.entries(downlineReqs)) {
-        const targetLvl = parseInt(levelKey.replace('V', ''));
-        if (!isNaN(targetLvl)) {
-          const currentCount = await countDownlineVipLevelWithin3Gen(userId, targetLvl);
-          if (currentCount < requiredCount) {
-             throw new Error(`升级V${targetLevel}需要团队内有${requiredCount}个${levelKey}会员，当前只有${currentCount}个`);
-          }
-        }
-      }
-    }
-  }
+  // 新规则：允许先升级VIP，不检查达标任务
+  // 升级奖励在完成达标任务后由系统自动派发
 
   const wallet = await getWallet(userId);
   const availableBalance = Math.floor(parseFloat(wallet.balanceCashAvailable) * 100);
@@ -535,7 +510,7 @@ export async function confirmVipUpgrade(userId: number, orderId: number) {
       await autoUnlockOnUpgrade(userId, oldLevel);
   }
 
-  // 1. Update User VIP Status
+  // 1. Update User VIP Status - 设置rewardStatus为locked，奖励需要完成达标任务后才发放
   if (!status) {
       await db.insert(userVipStatus).values({
           userId,
@@ -544,12 +519,15 @@ export async function confirmVipUpgrade(userId: number, orderId: number) {
           qualified: false,
           directCount: 0,
           team3Count: 0,
+          rewardStatus: "locked",  // 新规则：升级奖励锁定，达标后才发放
       });
   } else {
       await db.update(userVipStatus)
           .set({ 
               vipLevel: order.toLevel,
               upgradedAt: new Date(),
+              rewardStatus: "locked",  // 新规则：升级奖励锁定，达标后才发放
+              rewardGrantedAt: null,   // 清除之前的发放记录
           })
           .where(eq(userVipStatus.userId, userId));
   }
@@ -559,18 +537,19 @@ export async function confirmVipUpgrade(userId: number, orderId: number) {
       .set({ vipLevel: order.toLevel })
       .where(eq(users.id, userId));
 
-  // 3. Grant Daily Spins
+  // 3. Grant Daily Spins - 抽奖次数升级即生效
   if (targetLevel.dailyLottery > 0) {
       await addSpins(userId, targetLevel.dailyLottery);
   }
 
-  // 4. Distribute Upgrade Reward
-  if (targetLevel.upgradeRewardCents > 0) {
-      const rewardYuan = targetLevel.upgradeRewardCents / 100;
-      await addCashAvailable(userId, rewardYuan, "vip_upgrade_reward", orderId, `升级${targetLevel.name}奖励`);
-  }
+  // 4. 升级奖励不再立即发放，改为达标后由系统自动派发
+  // 旧代码已移除：
+  // if (targetLevel.upgradeRewardCents > 0) {
+  //     const rewardYuan = targetLevel.upgradeRewardCents / 100;
+  //     await addCashAvailable(userId, rewardYuan, "vip_upgrade_reward", orderId, `升级${targetLevel.name}奖励`);
+  // }
 
-  // 5. Distribute Commissions
+  // 5. Distribute Commissions - 上级分佣仍然正常发放
   await distributeVipUpgradeCommission(userId, order.payAmountCents, orderId);
 
   // 6. Update Order Status to Completed
@@ -578,12 +557,33 @@ export async function confirmVipUpgrade(userId: number, orderId: number) {
     .set({ status: "completed", paidAt: new Date() })
     .where(eq(vipUpgradeTxs.id, orderId));
 
+  // 7. 检查是否已达标，如果达标则自动发放奖励
+  await checkAndGrantVipReward(userId);
+
+  // 8. 检查上级的VIP达标状态（下级升级VIP会影响上级的VIP结构门槛）
+  const [user] = await db.select({ inviterId: users.inviterId }).from(users).where(eq(users.id, userId)).limit(1);
+  if (user?.inviterId) {
+    // 检查三代内上级的达标状态
+    const uplineChain = await getUplineChain(userId, 3);
+    for (const uplineId of uplineChain) {
+      try {
+        await checkAndGrantVipReward(uplineId);
+      } catch (error) {
+        console.error(`[VIP Reward Check] Error checking upline ${uplineId}:`, error);
+      }
+    }
+  }
+
   return {
     success: true,
     vipLevel: order.toLevel,
     vipName: targetLevel.name,
-    message: "升级成功！已自动发放奖励",
-    status: "completed"
+    message: targetLevel.upgradeRewardCents > 0 
+      ? `升级成功！完成V${order.toLevel}达标任务后，可获得¥${(targetLevel.upgradeRewardCents / 100).toFixed(2)}升级奖励` 
+      : "升级成功！",
+    status: "completed",
+    rewardStatus: "locked",
+    upgradeReward: targetLevel.upgradeRewardCents / 100,
   };
 }
 
@@ -817,6 +817,159 @@ async function countDownlineVipLevelWithin3Gen(userId: number, targetLevel: numb
 export async function recalcQualification(userId: number) {
   // Deprecated/Simplified: Logic moved to getUserVipStatus for real-time check
   return { qualified: true, changed: false };
+}
+
+/**
+ * 检查VIP达标任务完成情况，达标后自动派发升级奖励
+ * 
+ * 达标条件：
+ * 1. 直推人数达标
+ * 2. 三代内团队人数达标
+ * 3. VIP结构门槛达标（V2需要10个V1，V3需要10个V1+10个V2，以此类推）
+ * 
+ * 硬规则：
+ * - 不允许人工补发
+ * - 不允许重复发放
+ * - 不允许未达标提前发放
+ */
+export async function checkAndGrantVipReward(userId: number): Promise<{
+  success: boolean;
+  message: string;
+  rewardGranted?: number;
+}> {
+  // 1. 获取用户VIP状态
+  const [status] = await db.select().from(userVipStatus).where(eq(userVipStatus.userId, userId)).limit(1);
+  
+  if (!status || status.vipLevel <= 0) {
+    return { success: false, message: "用户不是VIP会员" };
+  }
+  
+  // 2. 检查奖励是否已发放
+  if (status.rewardStatus === "granted") {
+    return { success: false, message: "升级奖励已发放，不可重复发放" };
+  }
+  
+  const level = status.vipLevel;
+  
+  // 3. 获取达标要求
+  const [requirement] = await db.select().from(vipRequirements).where(eq(vipRequirements.level, level)).limit(1);
+  if (!requirement) {
+    return { success: false, message: "VIP等级要求配置不存在" };
+  }
+  
+  // 4. 检查直推人数
+  const directCount = await getDirectReferralCount(userId);
+  if (directCount < requirement.directRequired) {
+    return { 
+      success: false, 
+      message: `直推人数不足：需要${requirement.directRequired}人，当前${directCount}人` 
+    };
+  }
+  
+  // 5. 检查三代内团队人数
+  const team3Count = await get3GenTeamCount(userId);
+  if (team3Count < requirement.team3Required) {
+    return { 
+      success: false, 
+      message: `三代内团队人数不足：需要${requirement.team3Required}人，当前${team3Count}人` 
+    };
+  }
+  
+  // 6. 检查VIP结构门槛（硬门槛）
+  if (requirement.downlineLevelRequirements) {
+    const downlineReqs: Record<string, number> = JSON.parse(requirement.downlineLevelRequirements);
+    for (const [levelKey, requiredCount] of Object.entries(downlineReqs)) {
+      const targetLvl = parseInt(levelKey.replace('V', ''));
+      if (!isNaN(targetLvl)) {
+        const currentCount = await countDownlineVipLevelWithin3Gen(userId, targetLvl);
+        if (currentCount < requiredCount) {
+          return { 
+            success: false, 
+            message: `团队VIP结构不足：需要${requiredCount}个${levelKey}会员，当前${currentCount}个` 
+          };
+        }
+      }
+    }
+  }
+  
+  // 7. 全部达标，发放升级奖励
+  const [vipLevel] = await db.select().from(vipLevels).where(eq(vipLevels.level, level)).limit(1);
+  if (!vipLevel) {
+    return { success: false, message: "VIP等级配置不存在" };
+  }
+  
+  const rewardCents = vipLevel.upgradeRewardCents;
+  
+  // 8. 更新达标状态
+  await db.update(userVipStatus)
+    .set({
+      qualified: true,
+      qualifiedAt: new Date(),
+      directCount,
+      team3Count,
+      lastQualCheckAt: new Date(),
+      rewardStatus: "granted",
+      rewardGrantedAt: new Date(),
+    })
+    .where(eq(userVipStatus.userId, userId));
+  
+  // 9. 发放升级奖励（如果有）
+  if (rewardCents > 0) {
+    const rewardYuan = rewardCents / 100;
+    await addCashAvailable(userId, rewardYuan, "vip_upgrade_reward", undefined, `VIP V${level} 达标奖励`);
+    
+    console.log(`[VIP Reward] User ${userId} granted V${level} upgrade reward: ¥${rewardYuan}`);
+    
+    return { 
+      success: true, 
+      message: `恭喜！V${level}达标任务完成，已发放¥${rewardYuan.toFixed(2)}升级奖励`,
+      rewardGranted: rewardYuan
+    };
+  }
+  
+  return { 
+    success: true, 
+    message: `V${level}达标任务完成`,
+    rewardGranted: 0
+  };
+}
+
+/**
+ * 批量检查所有VIP用户的达标状态，用于定时任务
+ */
+export async function checkAllVipRewards(): Promise<{
+  checked: number;
+  granted: number;
+}> {
+  // 获取所有奖励状态为locked的VIP用户
+  const lockedUsers = await db.select()
+    .from(userVipStatus)
+    .where(and(
+      gte(userVipStatus.vipLevel, 1),
+      eq(userVipStatus.rewardStatus, "locked")
+    ));
+  
+  console.log(`[VIP Reward Check] Found ${lockedUsers.length} users with locked rewards`);
+  
+  let grantedCount = 0;
+  
+  for (const user of lockedUsers) {
+    try {
+      const result = await checkAndGrantVipReward(user.userId);
+      if (result.success && result.rewardGranted && result.rewardGranted > 0) {
+        grantedCount++;
+      }
+    } catch (error: any) {
+      console.error(`[VIP Reward Check] Error checking user ${user.userId}:`, error.message);
+    }
+  }
+  
+  console.log(`[VIP Reward Check] Completed. Checked: ${lockedUsers.length}, Granted: ${grantedCount}`);
+  
+  return {
+    checked: lockedUsers.length,
+    granted: grantedCount
+  };
 }
 
 async function getDirectReferralCount(userId: number): Promise<number> {

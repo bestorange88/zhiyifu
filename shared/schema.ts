@@ -231,6 +231,9 @@ export const userVipStatus = pgTable("user_vip_status", {
   directCount: integer("direct_count").default(0).notNull(),
   team3Count: integer("team3_count").default(0).notNull(),
   lastQualCheckAt: timestamp("last_qual_check_at"),
+  // 升级奖励状态: locked(未达标,奖励锁定) / granted(已达标,奖励已发放)
+  rewardStatus: varchar("reward_status", { length: 20 }).default("locked").notNull(),
+  rewardGrantedAt: timestamp("reward_granted_at"),  // 奖励发放时间
 });
 
 // VIP解锁状态表（防重复解冻）
@@ -992,4 +995,3 @@ export type UserCoupon = typeof userCoupons.$inferSelect;
 export type InsertUserCoupon = z.infer<typeof insertUserCouponSchema>;
 export type OrderItem = typeof orderItems.$inferSelect;
 export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
-
