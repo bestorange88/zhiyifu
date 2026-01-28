@@ -1,21 +1,30 @@
 import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
 import { Volume2, CreditCard, Stethoscope, FileText, Sparkles, ChevronRight, Zap, Heart, Brain, Activity, ShieldCheck } from "lucide-react";
 import { FeatureCard } from "@/components/FeatureCard";
 import { ArticleCard } from "@/components/ArticleCard";
 import { Header } from "@/components/Header";
 import { AppDownloadBanner } from "@/components/AppDownloadBanner";
 import { PosterPopup } from "@/components/PosterPopup";
+import { Carousel } from "@/components/Carousel";
 
-// 首页图片资源配置
+// 首页图片资源配置 - 使用服务器上传的图片
 const ASSETS = {
-  banner: 'https://img.picui.cn/free/2025/01/26/67960cfd8fa3c.jpg',
   features: {
-    monitor: 'https://img.picui.cn/free/2025/01/26/67960cfd79974.jpg',
-    assessment: 'https://img.picui.cn/free/2025/01/26/67960cfdae7ec.jpg',
-    analysis: 'https://img.picui.cn/free/2025/01/26/67960cfdd0c4e.jpg',
-    consult: 'https://img.picui.cn/free/2025/01/26/67960cfd8fa3c.jpg',
+    monitor: '/uploads/features/z1.png',      // AI健康监测 - 绿色智能手表
+    assessment: '/uploads/features/z2.png',   // 智能健康评估 - 心脏心跳
+    analysis: '/uploads/features/z5.png',     // 健康数据分析 - 图表
+    consult: '/uploads/features/z3.png',      // AI健康咨询 - AI大脑
   }
 };
+
+// 默认轮播图（当后台没有配置时使用）
+const DEFAULT_CAROUSEL_IMAGES = [
+  '/uploads/features/z1.png',
+  '/uploads/features/z2.png',
+  '/uploads/features/z3.png',
+  '/uploads/features/z5.png',
+];
 
 const articles = [
   { id: '1', title: '急诊决策 "人机对决"！新研究揭示，生成式 AI 准确性碾压？', summary: '本研究提示了急诊护士与生成式人工智能模型在临床决策上的关键差异。', author: '客服-晨晨', views: 15953 },
@@ -59,16 +68,31 @@ const medicalServices = [
 
 export default function HomePage() {
   const [, setLocation] = useLocation();
+  const [carouselImages, setCarouselImages] = useState<string[]>(DEFAULT_CAROUSEL_IMAGES);
+
+  // 从后台获取轮播图配置
+  useEffect(() => {
+    fetch('/api/carousel')
+      .then(res => res.json())
+      .then(data => {
+        if (data.images && data.images.length > 0) {
+          setCarouselImages(data.images);
+        }
+      })
+      .catch(() => {
+        // 获取失败时使用默认轮播图
+      });
+  }, []);
 
   const handleToolClick = (toolId: string) => {
     setLocation(`/tools/${toolId}`);
   };
 
-    return (
-      <div className="page-container">
-        <PosterPopup />
-        <AppDownloadBanner />
-        <Header />
+  return (
+    <div className="page-container">
+      <PosterPopup />
+      <AppDownloadBanner />
+      <Header />
 
       <main className="px-4 space-y-5 pb-20">
         <div className="mt-2 bg-gradient-to-r from-orange-500 to-red-500 rounded-full px-4 py-2.5 flex items-center gap-3 shadow-lg shadow-orange-500/20" data-testid="banner-announcement">
@@ -85,62 +109,59 @@ export default function HomePage() {
           <ChevronRight className="w-4 h-4 text-white/80 flex-shrink-0" />
         </div>
 
-        {/* Hero Card - Smart Health System Banner */}
-        <div 
-          onClick={() => setLocation('/topic/health-system?src=home_banner')}
-          className="relative mx-auto w-full group cursor-pointer transform hover:scale-[1.01] transition-transform duration-300"
-        >
-          <img 
-            src={ASSETS.banner} 
-            alt="智能健康管理体系" 
-            className="w-full h-auto object-cover rounded-2xl shadow-lg shadow-emerald-500/10"
-          />
-        </div>
+        {/* 轮播图模块 */}
+        <Carousel 
+          images={carouselImages}
+          autoPlay={true}
+          interval={4000}
+          showIndicators={true}
+          className="shadow-lg shadow-emerald-500/10"
+        />
 
-        {/* Core Features Section (2x2 Grid) */}
+        {/* Core Features Section (2x2 Grid) - 使用图片作为卡片背景，无文字标题 */}
         <div className="grid grid-cols-2 gap-3">
           <button 
             onClick={() => setLocation('/health/monitor')}
-            className="bg-[#E8F5E9] rounded-2xl p-4 flex flex-col items-center text-center hover:shadow-md transition-all border border-emerald-100/50"
+            className="relative rounded-2xl overflow-hidden aspect-square hover:shadow-lg transition-all transform hover:scale-[1.02]"
           >
-            <div className="w-16 h-16 mb-2">
-              <img src={ASSETS.features.monitor} alt="AI健康监测" className="w-full h-full object-contain" />
-            </div>
-            <h3 className="font-bold text-gray-800 text-sm mb-1">AI健康监测</h3>
-            <p className="text-[10px] text-gray-500">实时身体数据追踪</p>
+            <img 
+              src={ASSETS.features.monitor} 
+              alt="AI健康监测" 
+              className="w-full h-full object-cover"
+            />
           </button>
 
           <button 
             onClick={() => setLocation('/health/assessment')}
-            className="bg-[#E8F5E9] rounded-2xl p-4 flex flex-col items-center text-center hover:shadow-md transition-all border border-emerald-100/50"
+            className="relative rounded-2xl overflow-hidden aspect-square hover:shadow-lg transition-all transform hover:scale-[1.02]"
           >
-            <div className="w-16 h-16 mb-2">
-              <img src={ASSETS.features.assessment} alt="智能健康评估" className="w-full h-full object-contain" />
-            </div>
-            <h3 className="font-bold text-gray-800 text-sm mb-1">智能健康评估</h3>
-            <p className="text-[10px] text-gray-500">AI健康风险预测</p>
+            <img 
+              src={ASSETS.features.assessment} 
+              alt="智能健康评估" 
+              className="w-full h-full object-cover"
+            />
           </button>
 
           <button 
             onClick={() => setLocation('/health/insights')}
-            className="bg-[#E8F5E9] rounded-2xl p-4 flex flex-col items-center text-center hover:shadow-md transition-all border border-emerald-100/50"
+            className="relative rounded-2xl overflow-hidden aspect-square hover:shadow-lg transition-all transform hover:scale-[1.02]"
           >
-            <div className="w-16 h-16 mb-2">
-              <img src={ASSETS.features.analysis} alt="健康数据分析" className="w-full h-full object-contain" />
-            </div>
-            <h3 className="font-bold text-gray-800 text-sm mb-1">健康数据分析</h3>
-            <p className="text-[10px] text-gray-500">个性化健康建议</p>
+            <img 
+              src={ASSETS.features.analysis} 
+              alt="健康数据分析" 
+              className="w-full h-full object-cover"
+            />
           </button>
 
           <button 
             onClick={() => setLocation('/health/assistant')}
-            className="bg-[#E8F5E9] rounded-2xl p-4 flex flex-col items-center text-center hover:shadow-md transition-all border border-emerald-100/50"
+            className="relative rounded-2xl overflow-hidden aspect-square hover:shadow-lg transition-all transform hover:scale-[1.02]"
           >
-            <div className="w-16 h-16 mb-2">
-              <img src={ASSETS.features.consult} alt="AI健康咨询" className="w-full h-full object-contain" />
-            </div>
-            <h3 className="font-bold text-gray-800 text-sm mb-1">AI健康咨询</h3>
-            <p className="text-[10px] text-gray-500">7x24健康问答</p>
+            <img 
+              src={ASSETS.features.consult} 
+              alt="AI健康咨询" 
+              className="w-full h-full object-cover"
+            />
           </button>
         </div>
 

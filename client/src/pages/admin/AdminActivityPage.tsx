@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Save, Gift, Timer } from "lucide-react";
+import { Loader2, Save, Gift, Timer, Image, Upload, Trash2, Plus } from "lucide-react";
 import AdminLayout from "./AdminLayout";
 
 interface SystemSetting {
@@ -17,8 +17,88 @@ export default function AdminActivityPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const token = localStorage.getItem("adminToken");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [carouselImages, setCarouselImages] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // 获取轮播图配置
+  const { data: carouselData, isLoading: carouselLoading } = useQuery<{ images: string[] }>({
+    queryKey: ["/api/admin/carousel"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/carousel", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch carousel");
+      return res.json();
+    },
+    enabled: !!token,
+  });
+
+  useEffect(() => {
+    if (carouselData?.images) {
+      setCarouselImages(carouselData.images);
+    }
+  }, [carouselData]);
+
+  // 上传轮播图
+  const handleUploadCarousel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+      const res = await fetch("/api/admin/carousel/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) throw new Error("上传失败");
+      const data = await res.json();
+      
+      // 添加到轮播图列表
+      const newImages = [...carouselImages, data.url];
+      await saveCarouselImages(newImages);
+      toast({ title: "上传成功" });
+    } catch (error) {
+      toast({ title: "上传失败", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  // 保存轮播图配置
+  const saveCarouselImages = async (images: string[]) => {
+    try {
+      const res = await fetch("/api/admin/carousel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ images }),
+      });
+      if (!res.ok) throw new Error("保存失败");
+      setCarouselImages(images);
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/carousel"] });
+    } catch (error) {
+      toast({ title: "保存失败", variant: "destructive" });
+    }
+  };
+
+  // 删除轮播图
+  const handleDeleteCarousel = async (index: number) => {
+    const newImages = carouselImages.filter((_, i) => i !== index);
+    await saveCarouselImages(newImages);
+    toast({ title: "删除成功" });
+  };
 
   const { data: settings, isLoading } = useQuery<SystemSetting[]>({
     queryKey: ["/api/admin/settings"],
@@ -87,6 +167,62 @@ export default function AdminActivityPage() {
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold tracking-tight">活动管理</h2>
         </div>
+
+        {/* 轮播图管理 */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Image className="w-5 h-5 text-green-500" />
+              首页轮播图管理
+            </CardTitle>
+            <CardDescription>
+              管理首页顶部的轮播图，支持上传、删除和排序
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {carouselImages.map((image, index) => (
+                <div key={index} className="relative group">
+                  <img
+                    src={image}
+                    alt={`轮播图 ${index + 1}`}
+                    className="w-full h-24 object-cover rounded-lg border"
+                  />
+                  <button
+                    onClick={() => handleDeleteCarousel(index)}
+                    className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <span className="absolute bottom-1 left-1 bg-black/50 text-white text-xs px-2 py-0.5 rounded">
+                    {index + 1}
+                  </span>
+                </div>
+              ))}
+              
+              <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary transition-colors">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleUploadCarousel}
+                  className="hidden"
+                />
+                {isUploading ? (
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                ) : (
+                  <>
+                    <Plus className="w-6 h-6 text-gray-400" />
+                    <span className="text-xs text-gray-400 mt-1">添加图片</span>
+                  </>
+                )}
+              </label>
+            </div>
+            <p className="text-xs text-gray-500">
+              建议尺寸：750x400像素，支持 JPG、PNG 格式，单张图片不超过 2MB
+            </p>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-6 md:grid-cols-2">
         {/* Unlock Random Reward Settings */}

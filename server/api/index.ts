@@ -1678,4 +1678,101 @@ export function registerApiRoutes(app: Express): void {
       res.status(400).json({ error: error.message });
     }
   });
+
+  // ============ CAROUSEL / 轮播图管理 ============
+  
+  // 轮播图配置文件路径
+  const carouselConfigPath = path.join(process.cwd(), "attached_assets", "carousel.json");
+  
+  // 获取轮播图列表（公开接口）
+  app.get("/api/carousel", async (req, res) => {
+    try {
+      if (fs.existsSync(carouselConfigPath)) {
+        const config = JSON.parse(fs.readFileSync(carouselConfigPath, "utf-8"));
+        res.json(config);
+      } else {
+        // 返回默认轮播图
+        res.json({ 
+          images: [
+            "/uploads/features/z1.png",
+            "/uploads/features/z2.png",
+            "/uploads/features/z3.png",
+            "/uploads/features/z5.png"
+          ] 
+        });
+      }
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 管理员获取轮播图列表
+  app.get("/api/admin/carousel", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      if (fs.existsSync(carouselConfigPath)) {
+        const config = JSON.parse(fs.readFileSync(carouselConfigPath, "utf-8"));
+        res.json(config);
+      } else {
+        res.json({ images: [] });
+      }
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 管理员上传轮播图
+  app.post("/api/admin/carousel/upload", adminAuthMiddleware, upload.single("image"), async (req: AdminRequest, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "请上传图片" });
+      }
+      const imageUrl = `/uploads/${req.file.filename}`;
+      res.json({ url: imageUrl });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 管理员保存轮播图配置
+  app.post("/api/admin/carousel", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const { images } = req.body;
+      if (!Array.isArray(images)) {
+        return res.status(400).json({ error: "images必须是数组" });
+      }
+      
+      // 确保目录存在
+      const configDir = path.dirname(carouselConfigPath);
+      if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true });
+      }
+      
+      fs.writeFileSync(carouselConfigPath, JSON.stringify({ images }, null, 2));
+      res.json({ success: true, images });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 管理员删除轮播图
+  app.delete("/api/admin/carousel/:index", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const index = parseInt(req.params.index);
+      
+      if (fs.existsSync(carouselConfigPath)) {
+        const config = JSON.parse(fs.readFileSync(carouselConfigPath, "utf-8"));
+        if (config.images && index >= 0 && index < config.images.length) {
+          config.images.splice(index, 1);
+          fs.writeFileSync(carouselConfigPath, JSON.stringify(config, null, 2));
+          res.json({ success: true, images: config.images });
+        } else {
+          res.status(400).json({ error: "无效的索引" });
+        }
+      } else {
+        res.status(400).json({ error: "轮播图配置不存在" });
+      }
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
 }

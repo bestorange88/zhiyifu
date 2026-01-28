@@ -572,7 +572,7 @@ export default function MinePage() {
             <div className="mt-1 flex items-center justify-center gap-1">
               <div className="text-[10px] text-purple-500 bg-purple-50 px-2 py-0.5 rounded-full flex items-center gap-1">
                 <Lock className="w-2.5 h-2.5" />
-                <span>冻结: ¥{parseFloat(vipStatus?.frozenCommission || '0').toFixed(2)}</span>
+                <span>待领取: ¥{parseFloat(vipStatus?.frozenCommission || '0').toFixed(2)}</span>
               </div>
               <button 
                 onClick={(e) => { e.stopPropagation(); setShowUnlockModal(true); }}

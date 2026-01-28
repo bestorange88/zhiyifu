@@ -33,6 +33,10 @@ const HelpCenterPage = lazy(() => import("@/pages/HelpCenterPage"));
 const AboutPage = lazy(() => import("@/pages/AboutPage"));
 const RightsPage = lazy(() => import("@/pages/RightsPage"));
 const TopicHealthSystem = lazy(() => import("@/pages/topic/TopicHealthSystem"));
+const HealthMonitorPage = lazy(() => import("@/pages/health/HealthMonitorPage"));
+const HealthAssessmentPage = lazy(() => import("@/pages/health/HealthAssessmentPage"));
+const HealthInsightsPage = lazy(() => import("@/pages/health/HealthInsightsPage"));
+const HealthAssistantPage = lazy(() => import("@/pages/health/HealthAssistantPage"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 // Admin Pages
@@ -97,6 +101,10 @@ function UserRouter() {
           <Route path="/about" component={AboutPage} />
           <Route path="/rights" component={RightsPage} />
           <Route path="/topic/health-system" component={TopicHealthSystem} />
+          <Route path="/health/monitor" component={HealthMonitorPage} />
+          <Route path="/health/assessment" component={HealthAssessmentPage} />
+          <Route path="/health/insights" component={HealthInsightsPage} />
+          <Route path="/health/assistant" component={HealthAssistantPage} />
           <Route component={NotFound} />
         </Switch>
       </Suspense>
