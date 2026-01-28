@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { chatStorage } from "./storage";
 import OpenAI from "openai";
+import { getAiSettings } from "../../services/admin";
 
 // Configure OpenAI Client for Free/Community Instances
 // Support both naming conventions for environment variables
