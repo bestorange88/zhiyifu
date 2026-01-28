@@ -891,7 +891,7 @@ export const adminIdentityReviewSchema = z.object({
 });
 
 export const adminIdentityBatchReviewSchema = z.object({
-  ids: z.array(z.any()),
+  ids: z.array(z.coerce.number()),
   approved: z.boolean(),
   reviewNote: z.string().optional(),
 });
