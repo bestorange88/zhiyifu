@@ -6,6 +6,17 @@ import { Header } from "@/components/Header";
 import { AppDownloadBanner } from "@/components/AppDownloadBanner";
 import { PosterPopup } from "@/components/PosterPopup";
 
+// 首页图片资源配置
+const ASSETS = {
+  banner: 'https://img.picui.cn/free/2025/01/26/67960cfd8fa3c.jpg',
+  features: {
+    monitor: 'https://img.picui.cn/free/2025/01/26/67960cfd79974.jpg',
+    assessment: 'https://img.picui.cn/free/2025/01/26/67960cfdae7ec.jpg',
+    analysis: 'https://img.picui.cn/free/2025/01/26/67960cfdd0c4e.jpg',
+    consult: 'https://img.picui.cn/free/2025/01/26/67960cfd8fa3c.jpg',
+  }
+};
+
 const articles = [
   { id: '1', title: '急诊决策 "人机对决"！新研究揭示，生成式 AI 准确性碾压？', summary: '本研究提示了急诊护士与生成式人工智能模型在临床决策上的关键差异。', author: '客服-晨晨', views: 15953 },
   { id: '2', title: '人工智能 (AI) 和医疗保健行业', summary: '人工智能 (AI) 正在改变医疗保健行业，彻底改变了提供护理服务的方式。', author: '客服-晨晨', views: 2364 },
