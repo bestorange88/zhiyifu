@@ -27,8 +27,8 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-// Serve uploads from UPLOAD_DIR or default to process.cwd()/uploads
-const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+// Serve uploads from UPLOAD_DIR or default to process.cwd()/attached_assets/uploads
+const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), "attached_assets", "uploads");
 app.use("/uploads", express.static(uploadDir));
 
 export function log(message: string, source = "express") {

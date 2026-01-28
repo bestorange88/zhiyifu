@@ -42,7 +42,7 @@ import * as agentService from "../services/agent";
 import * as groupService from "../services/group";
 import * as smsService from "../services/sms";
 import * as redPacketService from "../services/redPacket";
-import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema, adminRankUpdateSchema, requestCodeSchema, registerWithSmsSchema, identityVerificationSubmitSchema, adminIdentityReviewSchema } from "@shared/schema";
+import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema, adminRankUpdateSchema, requestCodeSchema, registerWithSmsSchema, identityVerificationSubmitSchema, adminIdentityReviewSchema, adminIdentityBatchReviewSchema } from "@shared/schema";
 import * as identityService from "../services/identity";
 import * as sellerOnboardingService from "../services/sellerOnboarding";
 import * as orderService from "../services/orderService";
@@ -176,7 +176,8 @@ export function registerApiRoutes(app: Express): void {
       res.status(400).json({ error: error.message });
     }
   });
-Virtual Buyer Simulation
+
+  // Virtual Buyer Simulation
   app.post("/api/admin/simulate/shopping", adminAuthMiddleware, async (req: AuthRequest, res) => {
     try {
       const order = await virtualBuyerService.simulateVirtualOrder();
@@ -797,9 +798,6 @@ Virtual Buyer Simulation
       const result = await orderService.shipOrder(id, { company, trackingNo });
       res.json(result);
     } catch (error: any) {
-      res.status(400).json({ error: error.message });
-    }
-  });
       res.status(400).json({ error: error.message });
     }
   });
@@ -1438,15 +1436,19 @@ Virtual Buyer Simulation
 
   app.post("/api/admin/identity-verifications/batch-review", adminAuthMiddleware, async (req: AdminRequest, res) => {
     try {
+      console.log("[Batch Review] Request body:", JSON.stringify(req.body));
       const { ids, approved, reviewNote } = adminIdentityBatchReviewSchema.parse(req.body);
+      console.log("[Batch Review] Parsed - ids:", ids, "approved:", approved, "adminId:", req.adminId);
       const results = await identityService.batchReviewIdentityVerifications(
         ids,
         req.adminId!,
         approved,
         reviewNote
       );
+      console.log("[Batch Review] Results:", JSON.stringify(results));
       res.json(results);
     } catch (error: any) {
+      console.error("[Batch Review] Error:", error.message, error.stack);
       res.status(400).json({ error: error.message });
     }
   });
