@@ -2,9 +2,13 @@ import fs from "node:fs";
 import OpenAI, { toFile } from "openai";
 import { Buffer } from "node:buffer";
 
+// Support both naming conventions for environment variables
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY || "sk-free-proxy";
+const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+
 export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "dummy_key_to_allow_server_start",
-  baseURL: process.env.OPENAI_BASE_URL,
+  apiKey: OPENAI_API_KEY,
+  baseURL: OPENAI_BASE_URL,
 });
 
 /**

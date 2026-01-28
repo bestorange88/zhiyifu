@@ -3,13 +3,19 @@ import { chatStorage } from "./storage";
 import OpenAI from "openai";
 
 // Configure OpenAI Client for Free/Community Instances
-// Users can set OPENAI_BASE_URL to any compatible provider (e.g. LocalAI, vLLM, or public free proxies)
+// Support both naming conventions for environment variables
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY || "sk-free-proxy";
+const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || "https://api.openai.com/v1";
+
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "sk-dummy-key-for-free-instances", // Many free instances don't check key, but some require a dummy one
-  baseURL: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1", // Default to official, can be overridden env
+  apiKey: OPENAI_API_KEY,
+  baseURL: OPENAI_BASE_URL,
 });
 
+// Use GPT-3.5-turbo model (free tier compatible)
 const AI_MODEL = process.env.OPENAI_MODEL || "gpt-3.5-turbo";
+
+console.log(`[AI Chat] Configured with baseURL: ${OPENAI_BASE_URL}, model: ${AI_MODEL}`);
 
 async function callOpenAIAPI(messages: Array<{ role: string; content: string }>) {
   try {
