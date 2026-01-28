@@ -11,10 +11,10 @@ import { Carousel } from "@/components/Carousel";
 // 首页图片资源配置 - 使用服务器上传的图片
 const ASSETS = {
   features: {
-    monitor: '/uploads/features/g1.png',      // AI健康监测
-    assessment: '/uploads/features/g2.png',   // 智能健康评估
-    analysis: '/uploads/features/g3.png',     // 健康数据分析
-    consult: '/uploads/features/g4.png',      // AI健康咨询
+    monitor: '/uploads/xx1.png',      // AI健康监测
+    assessment: '/uploads/xx2.png',   // 智能健康评估
+    analysis: '/uploads/xx3.png',     // 健康数据分析
+    consult: '/uploads/xx4.png',      // AI健康咨询
   }
 };
 
