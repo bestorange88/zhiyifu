@@ -55,37 +55,69 @@ export default function AdminServicePage() {
   const [selectedSession, setSelectedSession] = useState<ChatSession | null>(null);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastMessageCountRef = useRef<number>(0);
+  const lastSessionCountRef = useRef<number>(0);
   
   // Quick Reply States
   const [quickReplySearch, setQuickReplySearch] = useState("");
   const [activeCategory, setActiveCategory] = useState("全部");
 
-  const { data: sessions, isLoading: sessionsLoading } = useQuery<ChatSession[]>({
-    queryKey: ["/api/admin/service/sessions"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/service/sessions", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!token,
-    refetchInterval: 10000,
-  });
+  // Initialize notification audio
+  useEffect(() => {
+    audioRef.current = new Audio('/notification.mp3');
+    audioRef.current.volume = 0.5;
+  }, []);
 
-  const { data: messages, refetch: refetchMessages } = useQuery<ChatMessage[]>({
-    queryKey: ["/api/admin/service/sessions", selectedSession?.id, "messages"],
-    queryFn: async () => {
-      if (!selectedSession) return [];
-      const res = await fetch(`/api/admin/service/sessions/${selectedSession.id}/messages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!selectedSession && !!token,
-    refetchInterval: 5000,
-  });
+    const { data: sessions, isLoading: sessionsLoading } = useQuery<ChatSession[]>({
+      queryKey: ["/api/admin/service/sessions"],
+      queryFn: async () => {
+        const res = await fetch("/api/admin/service/sessions", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return [];
+        return res.json();
+      },
+      enabled: !!token,
+      refetchInterval: 10000,
+    });
+
+    // Play notification sound when new session arrives
+    useEffect(() => {
+      if (sessions && sessions.length > 0) {
+        const openSessions = sessions.filter(s => s.status === "open").length;
+        if (lastSessionCountRef.current > 0 && openSessions > lastSessionCountRef.current) {
+          audioRef.current?.play().catch(() => {});
+          toast({ title: "新会话", description: "有新的客服会话请求" });
+        }
+        lastSessionCountRef.current = openSessions;
+      }
+    }, [sessions, toast]);
+
+    const { data: messages, refetch: refetchMessages } = useQuery<ChatMessage[]>({
+      queryKey: ["/api/admin/service/sessions", selectedSession?.id, "messages"],
+      queryFn: async () => {
+        if (!selectedSession) return [];
+        const res = await fetch(`/api/admin/service/sessions/${selectedSession.id}/messages`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return [];
+        return res.json();
+      },
+      enabled: !!selectedSession && !!token,
+      refetchInterval: 5000,
+    });
+
+    // Play notification sound when new user message arrives
+    useEffect(() => {
+      if (messages && messages.length > 0) {
+        const userMessages = messages.filter(m => m.senderType === "user").length;
+        if (lastMessageCountRef.current > 0 && userMessages > lastMessageCountRef.current) {
+          audioRef.current?.play().catch(() => {});
+        }
+        lastMessageCountRef.current = userMessages;
+      }
+    }, [messages]);
 
   const sendMessageMutation = useMutation({
     mutationFn: async ({ sessionId, content }: { sessionId: number; content: string }) => {

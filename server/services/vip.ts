@@ -2,7 +2,7 @@ import { db } from "../db";
 import { 
   vipLevels, vipRequirements, vipCommissionRates, lotteryCommissionRates,
   userVipStatus, vipUpgradeTxs, commissionLogs, vipUnlockState,
-  users, orders, wallets, vipPlans 
+  users, orders, wallets, vipPlans, ledger 
 } from "@shared/schema";
 import { eq, sql, and, desc, like, gte, inArray } from "drizzle-orm";
 import { deductCashAvailable, addCashAvailable, addCashFrozen, getWallet, unfreezeCommission } from "./wallet";
@@ -913,9 +913,29 @@ export async function checkAndGrantVipReward(userId: number): Promise<{
     })
     .where(eq(userVipStatus.userId, userId));
   
-  // 9. 发放升级奖励（如果有）
+  // 9. 发放升级奖励（如果有）- 增加防重复检查
   if (rewardCents > 0) {
     const rewardYuan = rewardCents / 100;
+    
+    // 防重复检查：检查ledger表中是否已有该用户该等级的VIP达标奖励
+    const existingReward = await db.select()
+      .from(ledger)
+      .where(and(
+        eq(ledger.userId, userId),
+        eq(ledger.type, "vip_upgrade_reward"),
+        sql`${ledger.description} LIKE ${`%V${level}%达标奖励%`}`
+      ))
+      .limit(1);
+    
+    if (existingReward.length > 0) {
+      console.log(`[VIP Reward] DUPLICATE PREVENTED: User ${userId} already received V${level} reward`);
+      return { 
+        success: false, 
+        message: `V${level}达标奖励已发放过，不可重复发放`,
+        rewardGranted: 0
+      };
+    }
+    
     await addCashAvailable(userId, rewardYuan, "vip_upgrade_reward", undefined, `VIP V${level} 达标奖励`);
     
     console.log(`[VIP Reward] User ${userId} granted V${level} upgrade reward: ¥${rewardYuan}`);
@@ -1042,6 +1062,102 @@ export async function grantDailyVipSpins() {
       }
     }
   }
+}
+
+/**
+ * 检查并撤回重复发放的VIP奖励
+ * 
+ * 检查逻辑：
+ * 1. 查找所有vip_upgrade_reward类型的ledger记录
+ * 2. 按用户和VIP等级分组，找出重复发放的记录
+ * 3. 对于重复的记录，保留最早的一条，撤回其余的
+ * 
+ * 撤回方式：
+ * - 从用户余额中扣除重复发放的金额
+ * - 在ledger中添加撤回记录
+ */
+export async function checkAndRevokeDuplicateVipRewards(): Promise<{
+  checked: number;
+  duplicatesFound: number;
+  revoked: number;
+  revokedAmount: number;
+  details: Array<{ userId: number; level: string; count: number; revokedAmount: number }>;
+}> {
+  console.log("[VIP Reward Check] Starting duplicate reward check...");
+  
+  // 1. 获取所有VIP达标奖励记录
+  const allRewards = await db.select()
+    .from(ledger)
+    .where(eq(ledger.type, "vip_upgrade_reward"))
+    .orderBy(ledger.createdAt);
+  
+  console.log(`[VIP Reward Check] Found ${allRewards.length} total VIP reward records`);
+  
+  // 2. 按用户和VIP等级分组
+  const rewardsByUserLevel: Map<string, typeof allRewards> = new Map();
+  
+  for (const reward of allRewards) {
+    // 从description中提取VIP等级，如 "VIP V2 达标奖励"
+    const levelMatch = reward.description?.match(/V(\d+)/);
+    if (!levelMatch) continue;
+    
+    const key = `${reward.userId}-V${levelMatch[1]}`;
+    if (!rewardsByUserLevel.has(key)) {
+      rewardsByUserLevel.set(key, []);
+    }
+    rewardsByUserLevel.get(key)!.push(reward);
+  }
+  
+  // 3. 找出重复发放的记录并撤回
+  let duplicatesFound = 0;
+  let revokedCount = 0;
+  let totalRevokedAmount = 0;
+  const details: Array<{ userId: number; level: string; count: number; revokedAmount: number }> = [];
+  
+  for (const [key, rewards] of rewardsByUserLevel) {
+    if (rewards.length > 1) {
+      duplicatesFound++;
+      const [userIdStr, level] = key.split('-');
+      const userId = parseInt(userIdStr);
+      
+      // 保留第一条（最早的），撤回其余的
+      const toRevoke = rewards.slice(1);
+      let userRevokedAmount = 0;
+      
+      for (const reward of toRevoke) {
+        const amount = parseFloat(reward.amount);
+        
+        // 从用户余额中扣除
+        try {
+          await deductCashAvailable(userId, amount, "vip_reward_revoke", reward.id, `撤回重复发放的${level}达标奖励`);
+          revokedCount++;
+          userRevokedAmount += amount;
+          totalRevokedAmount += amount;
+          
+          console.log(`[VIP Reward Revoke] User ${userId} ${level}: Revoked ¥${amount} (ledger id: ${reward.id})`);
+        } catch (error: any) {
+          console.error(`[VIP Reward Revoke] Failed to revoke for user ${userId}: ${error.message}`);
+        }
+      }
+      
+      details.push({
+        userId,
+        level,
+        count: rewards.length,
+        revokedAmount: userRevokedAmount
+      });
+    }
+  }
+  
+  console.log(`[VIP Reward Check] Completed. Duplicates found: ${duplicatesFound}, Revoked: ${revokedCount}, Total amount: ¥${totalRevokedAmount.toFixed(2)}`);
+  
+  return {
+    checked: allRewards.length,
+    duplicatesFound,
+    revoked: revokedCount,
+    revokedAmount: totalRevokedAmount,
+    details
+  };
 }
 
 // 初始化VIP等级数据（应用启动时调用）
