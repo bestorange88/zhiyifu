@@ -11,10 +11,10 @@ import { Carousel } from "@/components/Carousel";
 // 首页图片资源配置 - 使用服务器上传的图片
 const ASSETS = {
   features: {
-    monitor: '/uploads/features/z1.png',      // AI健康监测 - 绿色智能手表
-    assessment: '/uploads/features/z2.png',   // 智能健康评估 - 心脏心跳
-    analysis: '/uploads/features/z5.png',     // 健康数据分析 - 图表
-    consult: '/uploads/features/z3.png',      // AI健康咨询 - AI大脑
+    monitor: '/uploads/features/g1.png',      // AI健康监测
+    assessment: '/uploads/features/g2.png',   // 智能健康评估
+    analysis: '/uploads/features/g3.png',     // 健康数据分析
+    consult: '/uploads/features/g4.png',      // AI健康咨询
   }
 };
 
@@ -118,49 +118,49 @@ export default function HomePage() {
           className="shadow-lg shadow-emerald-500/10"
         />
 
-        {/* Core Features Section (2x2 Grid) - 使用图片作为卡片背景，无文字标题 */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Core Features Section - 四个水平一行排列 */}
+        <div className="flex gap-2 overflow-x-auto pb-2">
           <button 
             onClick={() => setLocation('/health/monitor')}
-            className="relative rounded-2xl overflow-hidden aspect-square hover:shadow-lg transition-all transform hover:scale-[1.02]"
+            className="flex-1 min-w-0 relative rounded-xl overflow-hidden hover:shadow-lg transition-all transform hover:scale-[1.02]"
           >
             <img 
               src={ASSETS.features.monitor} 
               alt="AI健康监测" 
-              className="w-full h-full object-cover"
+              className="w-full h-auto object-contain"
             />
           </button>
 
           <button 
             onClick={() => setLocation('/health/assessment')}
-            className="relative rounded-2xl overflow-hidden aspect-square hover:shadow-lg transition-all transform hover:scale-[1.02]"
+            className="flex-1 min-w-0 relative rounded-xl overflow-hidden hover:shadow-lg transition-all transform hover:scale-[1.02]"
           >
             <img 
               src={ASSETS.features.assessment} 
               alt="智能健康评估" 
-              className="w-full h-full object-cover"
+              className="w-full h-auto object-contain"
             />
           </button>
 
           <button 
             onClick={() => setLocation('/health/insights')}
-            className="relative rounded-2xl overflow-hidden aspect-square hover:shadow-lg transition-all transform hover:scale-[1.02]"
+            className="flex-1 min-w-0 relative rounded-xl overflow-hidden hover:shadow-lg transition-all transform hover:scale-[1.02]"
           >
             <img 
               src={ASSETS.features.analysis} 
               alt="健康数据分析" 
-              className="w-full h-full object-cover"
+              className="w-full h-auto object-contain"
             />
           </button>
 
           <button 
             onClick={() => setLocation('/health/assistant')}
-            className="relative rounded-2xl overflow-hidden aspect-square hover:shadow-lg transition-all transform hover:scale-[1.02]"
+            className="flex-1 min-w-0 relative rounded-xl overflow-hidden hover:shadow-lg transition-all transform hover:scale-[1.02]"
           >
             <img 
               src={ASSETS.features.consult} 
               alt="AI健康咨询" 
-              className="w-full h-full object-cover"
+              className="w-full h-auto object-contain"
             />
           </button>
         </div>
