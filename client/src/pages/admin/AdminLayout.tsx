@@ -4,6 +4,7 @@ import { LayoutDashboard, Users, CreditCard, UserCheck, LogOut, Menu, X, Shoppin
 import { Button } from "@/components/ui/button";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { formatDate } from "@/lib/utils";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -218,7 +219,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
             <h2 className="font-semibold text-gray-800">{title}</h2>
           </div>
           <div className="text-sm text-gray-500">
-            {new Date().toLocaleDateString("zh-CN")}
+            {formatDate(new Date())}
           </div>
         </header>
 

@@ -11,7 +11,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "./AdminLayout";
 import { format } from "date-fns";
-import { cn, maskPhoneNumber } from "@/lib/utils";
+import { cn, maskPhoneNumber, formatDate, formatDateTime } from "@/lib/utils";
 
 interface GroupMember {
   id: number;
@@ -451,7 +451,7 @@ export default function AdminGroupsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                      {new Date(group.createdAt).toLocaleDateString("zh-CN")}
+                      {formatDate(group.createdAt)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">

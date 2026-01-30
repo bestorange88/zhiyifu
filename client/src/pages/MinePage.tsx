@@ -9,6 +9,7 @@ import LotteryWheel from "@/components/LotteryWheel";
 import { VipFrozenUnlockModal } from "@/components/VipFrozenUnlockModal";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { formatDate } from "@/lib/utils";
 
 const benefits = [
   { id: 'lottery', title: '转盘奖励', description: '资助贡献值', action: '去抽奖', icon: <Gift className="w-5 h-5 text-rose-500" />, gradient: 'from-rose-50 to-pink-50' },
@@ -1187,7 +1188,7 @@ export default function MinePage() {
                       <div>
                         <span className="font-medium">¥{record.amount}</span>
                         <span className="text-gray-400 text-xs ml-2">
-                          {new Date(record.createdAt).toLocaleDateString("zh-CN")}
+                          {formatDate(record.createdAt)}
                         </span>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-xs ${

@@ -14,6 +14,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatDateTime, formatDate } from "@/lib/utils";
 
 interface DashboardStats {
   // 1. Users
@@ -341,7 +342,7 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <span className="text-xs text-gray-400">
-                        {new Date(user.createdAt).toLocaleDateString("zh-CN")} {new Date(user.createdAt).toLocaleTimeString("zh-CN", {hour: '2-digit', minute:'2-digit'})}
+                        {formatDateTime(user.createdAt)}
                       </span>
                     </div>
                   ))}
@@ -399,7 +400,7 @@ export default function AdminDashboard() {
                            w.status === "paid" ? "已打款" : "已拒绝"}
                         </p>
                         <p className="text-xs text-gray-400">
-                          {new Date(w.createdAt).toLocaleDateString("zh-CN")}
+                          {formatDate(w.createdAt)}
                         </p>
                       </div>
                     </div>

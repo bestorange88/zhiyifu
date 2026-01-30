@@ -8,6 +8,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import AdminLayout from "./AdminLayout";
 import { useToast } from "@/hooks/use-toast";
+import { formatDateTime } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -252,7 +253,7 @@ export default function AdminOrdersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
-                      {new Date(order.createdAt).toLocaleString("zh-CN")}
+                      {formatDateTime(order.createdAt)}
                     </td>
                     <td className="px-4 py-3 flex gap-2">
                       <Button
@@ -341,12 +342,12 @@ export default function AdminOrdersPage() {
                 )}
                 <div className="col-span-2">
                   <p className="text-gray-500">创建时间</p>
-                  <p>{new Date(selectedOrder.createdAt).toLocaleString("zh-CN")}</p>
+                  <p>{formatDateTime(selectedOrder.createdAt)}</p>
                 </div>
                 {selectedOrder.paidAt && (
                   <div className="col-span-2">
                     <p className="text-gray-500">支付时间</p>
-                    <p>{new Date(selectedOrder.paidAt).toLocaleString("zh-CN")}</p>
+                    <p>{formatDateTime(selectedOrder.paidAt)}</p>
                   </div>
                 )}
               </div>

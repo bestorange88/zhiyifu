@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
+import { formatDate } from "@/lib/utils";
 
 interface ReferralSummary {
   directCount: number;
@@ -247,7 +248,7 @@ export default function ReferralPage() {
                       </div>
                       <div className="flex flex-col gap-0.5 text-xs text-gray-400">
                         <div className="flex items-center gap-2">
-                          <span>{new Date(ref.createdAt).toLocaleDateString("zh-CN")}</span>
+                          <span>{formatDate(ref.createdAt)}</span>
                           {ref.totalDeposit && parseFloat(ref.totalDeposit) > 0 && (
                             <span className="text-blue-500">充值¥{ref.totalDeposit}</span>
                           )}
@@ -305,7 +306,7 @@ export default function ReferralPage() {
                       <div>
                         <p className="font-bold text-gray-800">{downlineDetail.phone}</p>
                         <p className="text-xs text-gray-500">
-                          注册于 {new Date(downlineDetail.createdAt).toLocaleDateString("zh-CN")}
+                          注册于 {formatDate(downlineDetail.createdAt)}
                         </p>
                       </div>
                     </div>
@@ -359,7 +360,7 @@ export default function ReferralPage() {
                               <p className="font-medium text-gray-800">¥{deposit.amount}</p>
                               <p className="text-xs text-gray-400">
                                 {deposit.method === "alipay" ? "支付宝" : deposit.method === "wechat" ? "微信" : deposit.method || "未知"} · 
-                                {new Date(deposit.createdAt).toLocaleDateString("zh-CN")}
+                                {formatDate(deposit.createdAt)}
                               </p>
                             </div>
                             <span className={`text-xs px-2 py-1 rounded-full ${
@@ -404,7 +405,7 @@ export default function ReferralPage() {
                       {reward.level === 1 ? "直推佣金" : "间推佣金"}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {new Date(reward.createdAt).toLocaleDateString("zh-CN")}
+                      {formatDate(reward.createdAt)}
                     </p>
                   </div>
                   <span className="text-green-600 font-bold">+¥{reward.amount}</span>
@@ -443,7 +444,7 @@ export default function ReferralPage() {
                         </span>
                       </p>
                       <p className="text-xs text-gray-400">
-                        {sourceLabel} · {new Date(record.createdAt).toLocaleDateString("zh-CN")}
+                        {sourceLabel} · {formatDate(record.createdAt)}
                       </p>
                     </div>
                     <span className="text-green-600 font-bold">+¥{parseFloat(record.amount).toFixed(2)}</span>

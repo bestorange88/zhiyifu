@@ -8,6 +8,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "./AdminLayout";
 import { Checkbox } from "@/components/ui/checkbox";
+import { formatDateTime } from "@/lib/utils";
 
 export default function AdminIdentityPage() {
   const { token } = useAdminAuth();
@@ -275,7 +276,7 @@ export default function AdminIdentityPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
-                      {new Date(v.createdAt).toLocaleString("zh-CN")}
+                      {formatDateTime(v.createdAt)}
                     </td>
                     <td className="px-4 py-3">
                       {v.status === "pending" ? (

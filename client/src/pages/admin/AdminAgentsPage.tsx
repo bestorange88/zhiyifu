@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "./AdminLayout";
+import { formatDateTime } from "@/lib/utils";
 
 export default function AdminAgentsPage() {
   const { token } = useAdminAuth();
@@ -123,7 +124,7 @@ export default function AdminAgentsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
-                      {new Date(app.createdAt).toLocaleString("zh-CN")}
+                      {formatDateTime(app.createdAt)}
                     </td>
                     <td className="px-4 py-3">
                       {app.status === "pending" ? (

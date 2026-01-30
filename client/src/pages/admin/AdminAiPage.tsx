@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatDateTime } from "@/lib/utils";
 
 export default function AdminAiPage() {
   const { token } = useAdminAuth();
@@ -172,7 +173,7 @@ export default function AdminAiPage() {
                           {msg.content}
                         </TableCell>
                         <TableCell>
-                          {new Date(msg.createdAt).toLocaleString("zh-CN")}
+                          {formatDateTime(msg.createdAt)}
                         </TableCell>
                       </TableRow>
                     ))}

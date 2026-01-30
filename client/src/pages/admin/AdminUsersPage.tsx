@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatDate, formatDateTime } from "@/lib/utils";
 
 interface UserDetail {
   id: number;
@@ -353,7 +354,7 @@ export default function AdminUsersPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
-                      {new Date(user.createdAt).toLocaleDateString("zh-CN")}
+                      {formatDate(user.createdAt)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
@@ -535,7 +536,7 @@ export default function AdminUsersPage() {
                 </div>
                 <div>
                   <Label className="text-xs text-gray-500">注册时间</Label>
-                  <p>{new Date(userDetail.createdAt).toLocaleString("zh-CN")}</p>
+                  <p>{formatDateTime(userDetail.createdAt)}</p>
                 </div>
                 <div>
                   <Label className="text-xs text-gray-500">邀请人</Label>
@@ -825,7 +826,7 @@ export default function AdminUsersPage() {
                 ) : ledgerData?.records?.length > 0 ? (
                   ledgerData.records.map((record: any) => (
                     <tr key={record.id} className="hover:bg-gray-50">
-                      <td className="px-3 py-2">{new Date(record.createdAt).toLocaleString()}</td>
+                      <td className="px-3 py-2">{formatDateTime(record.createdAt)}</td>
                       <td className="px-3 py-2">
                          <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">{record.type}</span>
                       </td>
@@ -895,7 +896,7 @@ export default function AdminUsersPage() {
                     <div className="space-y-2">
                       {debugData.recentSpinCommissions.map((log: any) => (
                         <div key={log.id} className="text-xs flex justify-between items-center bg-white/50 p-2 rounded">
-                          <span>{new Date(log.createdAt).toLocaleString()}</span>
+                          <span>{formatDateTime(log.createdAt)}</span>
                           <span className="font-bold">¥{log.amountCents ? (log.amountCents / 100).toFixed(2) : log.amount}</span>
                           <span className={log.status === 'credited' ? 'text-green-600' : 'text-red-600'}>
                             {log.status === 'credited' ? '已到账' : '冻结中'}
@@ -926,7 +927,7 @@ export default function AdminUsersPage() {
                       {debugData.recentDownlineWins.length > 0 ? (
                         debugData.recentDownlineWins.map((win: any) => (
                           <tr key={win.id}>
-                            <td className="px-3 py-2">{new Date(win.createdAt).toLocaleString()}</td>
+                            <td className="px-3 py-2">{formatDateTime(win.createdAt)}</td>
                             <td className="px-3 py-2">{win.phone}</td>
                             <td className="px-3 py-2">{win.prize}</td>
                             <td className="px-3 py-2 text-right text-red-600 font-bold">¥{win.amount/100}</td>
@@ -957,7 +958,7 @@ export default function AdminUsersPage() {
                       {debugData.recentCommissions.length > 0 ? (
                         debugData.recentCommissions.map((log: any) => (
                           <tr key={log.id}>
-                            <td className="px-3 py-2">{new Date(log.createdAt).toLocaleString()}</td>
+                            <td className="px-3 py-2">{formatDateTime(log.createdAt)}</td>
                             <td className="px-3 py-2">{log.bizType}</td>
                             <td className="px-3 py-2 text-right">¥{log.amountCents ? (log.amountCents / 100).toFixed(2) : log.amount}</td>
                             <td className={`px-3 py-2 ${log.status === 'credited' ? 'text-green-600' : 'text-red-600'}`}>

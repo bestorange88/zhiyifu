@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { useQuery } from "@tanstack/react-query";
 import AdminLayout from "./AdminLayout";
+import { formatDateTime } from "@/lib/utils";
 
 export default function AdminRankRequestsPage() {
   const { token } = useAdminAuth();
@@ -98,7 +99,7 @@ export default function AdminRankRequestsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
-                      {new Date(req.paidAt || req.createdAt).toLocaleString("zh-CN")}
+                      {formatDateTime(req.paidAt || req.createdAt)}
                     </td>
                   </tr>
                 ))

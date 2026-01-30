@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "./AdminLayout";
+import { formatDateTime } from "@/lib/utils";
 
 export default function AdminWithdrawsPage() {
   const { token } = useAdminAuth();
@@ -120,7 +121,7 @@ export default function AdminWithdrawsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
-                      {new Date(w.createdAt).toLocaleString("zh-CN")}
+                      {formatDateTime(w.createdAt)}
                     </td>
                     <td className="px-4 py-3">
                       {w.status === "applied" ? (

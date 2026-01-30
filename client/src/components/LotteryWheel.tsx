@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Gift, Star, Coins, Sparkles, Clock, Crown, CalendarCheck } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { useSpinBalance, useSpin, useLotteryDraws } from "@/hooks/use-api";
 import { useAuth } from "@/lib/auth";
 
@@ -169,7 +169,7 @@ export default function LotteryWheel({ open, onOpenChange, onWin }: LotteryWheel
                   <div key={item.id} className="bg-white/5 border border-white/5 rounded-xl p-3 flex justify-between items-center backdrop-blur-sm">
                     <div>
                       <div className="font-bold text-purple-200">{item.prizeCode}</div>
-                      <div className="text-[10px] text-white/40 mt-1">{new Date(item.createdAt).toLocaleString()}</div>
+                      <div className="text-[10px] text-white/40 mt-1">{formatDateTime(item.createdAt)}</div>
                     </div>
                     {item.rewardCents > 0 ? (
                       <div className="font-bold text-pink-400">+{item.rewardCents / 100}元</div>

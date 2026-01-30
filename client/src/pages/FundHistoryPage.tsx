@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { ArrowLeft, Wallet, Calendar, ArrowUpRight, ArrowDownLeft } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { formatDateTimeShort } from "@/lib/utils";
 
 export default function FundHistoryPage() {
   const [, setLocation] = useLocation();
@@ -50,10 +51,8 @@ export default function FundHistoryPage() {
     return typeMap[type] || type;
   };
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return `${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${date.getMinutes().toString().padStart(2, "0")}`;
-  };
+  // 使用统一的北京时间格式化函数
+  const formatDateLocal = (dateStr: string) => formatDateTimeShort(dateStr);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -79,7 +78,7 @@ export default function FundHistoryPage() {
                     <div className="font-medium text-gray-900">{formatType(tx.type, tx.description)}</div>
                     <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
                       <Calendar className="w-3 h-3" />
-                      {formatDate(tx.createdAt)}
+                      {formatDateLocal(tx.createdAt)}
                     </div>
                   </div>
                 </div>
