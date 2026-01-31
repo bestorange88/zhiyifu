@@ -18,31 +18,27 @@ export function maskPhoneNumber(phone: string | null | undefined): string {
 }
 
 /**
- * 统一时间格式化工具 - 全局使用北京时间 (UTC+8)
- * 所有时间显示都应该使用这些函数，确保时间一致性
+ * 统一时间格式化工具
+ * 注意：服务器时区已设置为Asia/Shanghai，数据库存储的时间已经是北京时间
+ * 因此前端不需要再进行时区转换，直接格式化显示即可
  */
 
-// 北京时区配置
-const BEIJING_TIMEZONE = "Asia/Shanghai";
 const BEIJING_LOCALE = "zh-CN";
 
 /**
- * 格式化日期时间 - 完整格式 (yyyy-MM-dd HH:mm:ss)
+ * 格式化日期时间 - 完整格式 (yyyy/MM/dd HH:mm:ss)
  */
 export function formatDateTime(date: string | Date | null | undefined): string {
   if (!date) return "";
   const d = new Date(date);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleString(BEIJING_LOCALE, { 
-    timeZone: BEIJING_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false
-  });
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
 }
 
 /**
@@ -52,29 +48,24 @@ export function formatDateTimeShort(date: string | Date | null | undefined): str
   if (!date) return "";
   const d = new Date(date);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleString(BEIJING_LOCALE, { 
-    timeZone: BEIJING_TIMEZONE,
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  });
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${month}-${day} ${hours}:${minutes}`;
 }
 
 /**
- * 格式化日期 - 仅日期 (yyyy-MM-dd)
+ * 格式化日期 - 仅日期 (yyyy/MM/dd)
  */
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return "";
   const d = new Date(date);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(BEIJING_LOCALE, { 
-    timeZone: BEIJING_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  });
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}/${month}/${day}`;
 }
 
 /**
@@ -84,8 +75,8 @@ export function formatDateChinese(date: string | Date | null | undefined): strin
   if (!date) return "";
   const d = new Date(date);
   if (isNaN(d.getTime())) return "";
-  const month = d.toLocaleString(BEIJING_LOCALE, { timeZone: BEIJING_TIMEZONE, month: "2-digit" });
-  const day = d.toLocaleString(BEIJING_LOCALE, { timeZone: BEIJING_TIMEZONE, day: "2-digit" });
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
   return `${month}月${day}日`;
 }
 
@@ -96,12 +87,9 @@ export function formatTime(date: string | Date | null | undefined): string {
   if (!date) return "";
   const d = new Date(date);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString(BEIJING_LOCALE, { 
-    timeZone: BEIJING_TIMEZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  });
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
 }
 
 /**
@@ -111,11 +99,8 @@ export function formatTimeFull(date: string | Date | null | undefined): string {
   if (!date) return "";
   const d = new Date(date);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString(BEIJING_LOCALE, { 
-    timeZone: BEIJING_TIMEZONE,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false
-  });
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
 }
