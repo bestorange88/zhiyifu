@@ -9,7 +9,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { formatDateTimeShort } from "@/lib/utils";
 import { Check, X, ArrowUpCircle, ArrowDownCircle, Eye } from "lucide-react";
 
 interface Withdraw {
@@ -190,7 +190,7 @@ export default function AdminFinancePage() {
                           <td className="px-4 py-3 text-sm max-w-[150px] truncate" title={item.accountInfo || ""}>{item.accountInfo || "-"}</td>
                           <td className="px-4 py-3">{getStatusBadge(item.status)}</td>
                           <td className="px-4 py-3 text-sm text-gray-500">
-                            {format(new Date(item.createdAt), "MM-dd HH:mm")}
+                            {formatDateTimeShort(item.createdAt)}
                           </td>
                           <td className="px-4 py-3">
                             {(item.status === "pending" || item.status === "applied") && (
@@ -283,7 +283,7 @@ export default function AdminFinancePage() {
                           <td className="px-4 py-3 text-sm max-w-[150px] truncate">{item.remark || "-"}</td>
                           <td className="px-4 py-3">{getStatusBadge(item.status)}</td>
                           <td className="px-4 py-3 text-sm text-gray-500">
-                            {format(new Date(item.createdAt), "MM-dd HH:mm")}
+                            {formatDateTimeShort(item.createdAt)}
                           </td>
                           <td className="px-4 py-3">
                             {item.status === "pending" && (

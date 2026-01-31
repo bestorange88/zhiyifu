@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useState, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatDate } from "@/lib/utils";
 
 interface Member {
   id: number;
@@ -177,7 +178,7 @@ export default function TeamPage() {
                               <span className="text-[10px] text-gray-400">ID:{member.id}</span>
                             </div>
                             <div className="text-xs text-gray-400 mt-0.5">
-                              {new Date(member.createdAt).toLocaleDateString()} 加入 · {member.level}级成员
+                              {formatDate(member.createdAt)} 加入 · {member.level}级成员
                             </div>
                           </div>
                         </div>
@@ -285,7 +286,7 @@ export default function TeamPage() {
                     </div>
                     <span className="text-sm text-gray-600">加入时间</span>
                   </div>
-                  <span className="font-medium text-gray-800">{new Date(selectedMember.createdAt).toLocaleDateString()}</span>
+                  <span className="font-medium text-gray-800">{formatDate(selectedMember.createdAt)}</span>
                 </div>
               </div>
             </div>

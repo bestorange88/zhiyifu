@@ -4,7 +4,7 @@ import { ArrowLeft, Crown, TrendingUp, Users, Wallet, HelpCircle, ChevronRight, 
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
+import { formatDateTimeShort, formatDateTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
@@ -164,7 +164,7 @@ export default function CommissionRewardsPage() {
                         {item.bizType === 'vip_upgrade' ? 'VIP推广奖励' : '活动返佣'}
                       </p>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {format(new Date(item.createdAt), "MM-dd HH:mm")}
+                        {formatDateTimeShort(item.createdAt)}
                       </p>
                     </div>
                   </div>
@@ -216,7 +216,7 @@ export default function CommissionRewardsPage() {
                </div>
                <div className="flex justify-between">
                   <span className="text-gray-500">交易时间</span>
-                  <span>{selectedRecord && format(new Date(selectedRecord.createdAt), "yyyy-MM-dd HH:mm:ss")}</span>
+                  <span>{selectedRecord && formatDateTime(selectedRecord.createdAt)}</span>
                </div>
                
                <div className="pt-3 border-t">

@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
 import { ArrowLeft, Coins } from "lucide-react";
 import { useLocation } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { formatDateTime } from "@/lib/utils";
 
 export default function PointsHistoryPage() {
   const [, setLocation] = useLocation();
@@ -45,7 +45,7 @@ export default function PointsHistoryPage() {
               <div>
                 <p className="font-medium text-gray-900">{item.description}</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {format(new Date(item.createdAt), "yyyy-MM-dd HH:mm")}
+                  {formatDateTime(item.createdAt)}
                 </p>
               </div>
               <div className={`font-bold text-lg ${item.amount > 0 ? "text-green-600" : "text-red-600"}`}>

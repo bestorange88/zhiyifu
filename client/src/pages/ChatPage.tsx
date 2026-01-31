@@ -2,8 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Header } from "@/components/Header";
 import { useConversations, useCreateConversation, useMessages, useChatStream } from "@/hooks/use-chat";
 import { Send, Bot, User, Loader2, Plus, MessageCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { cn, formatTime } from "@/lib/utils";
 
 export default function ChatPage() {
   const { data: conversations, isLoading: isLoadingConversations } = useConversations();
@@ -170,7 +169,7 @@ function MessageBubble({ role, content, isTyping, time }: { role: 'user' | 'assi
             "text-[10px] mt-2 text-right",
             isUser ? "text-white/70" : "text-gray-400"
           )}>
-            {format(new Date(time), "HH:mm")}
+            {formatTime(time)}
           </div>
         )}
       </div>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import AdminLayout from "./AdminLayout";
 import { useQuery } from "@tanstack/react-query";
 import { useAdminAuth } from "@/lib/adminAuth";
-import { format } from "date-fns";
+import { formatDateTime } from "@/lib/utils";
 import { Search, ArrowLeft, ArrowRight, Coins } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -115,7 +115,7 @@ export default function AdminPointsPage() {
                     </td>
                     <td className="px-4 py-3 text-sm">{record.description}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">
-                      {format(new Date(record.createdAt), "yyyy-MM-dd HH:mm")}
+                      {formatDateTime(record.createdAt)}
                     </td>
                   </tr>
                 ))

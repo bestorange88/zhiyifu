@@ -7,8 +7,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { format } from "date-fns";
-import { zhCN } from "date-fns/locale";
+import { formatDateChinese } from "@/lib/utils";
 
 interface CheckinStatus {
   checkedToday: boolean;
@@ -275,7 +274,7 @@ export default function CheckInPage() {
                   <div className="flex items-center gap-2">
                     <CheckCircle className="w-4 h-4 text-green-500" />
                     <span className="text-sm text-gray-600 dark:text-gray-300">
-                      {format(new Date(record.checkDate), "MM月dd日", { locale: zhCN })}
+                      {formatDateChinese(record.checkDate)}
                     </span>
                   </div>
                   <div className="text-right">

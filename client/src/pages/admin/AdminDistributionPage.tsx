@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { useAdminAuth } from "@/lib/adminAuth";
-import { format } from "date-fns";
+import { formatDate, formatDateTimeShort } from "@/lib/utils";
 import { Users, TrendingUp, UserPlus, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -197,7 +197,7 @@ export default function AdminDistributionPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-500">
-                          {format(new Date(team.joinDate), "yyyy-MM-dd")}
+                          {formatDate(team.joinDate)}
                         </td>
                       </tr>
                     ))}
@@ -245,7 +245,7 @@ export default function AdminDistributionPage() {
                         <td className="px-4 py-3 text-sm">{record.level}级</td>
                         <td className="px-4 py-3 text-sm font-medium text-green-600">+¥{record.amount}</td>
                         <td className="px-4 py-3 text-sm text-gray-500">
-                          {format(new Date(record.createdAt), "MM-dd HH:mm")}
+                          {formatDateTimeShort(record.createdAt)}
                         </td>
                       </tr>
                     ))}

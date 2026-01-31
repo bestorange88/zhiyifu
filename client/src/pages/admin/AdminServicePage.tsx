@@ -8,9 +8,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
 import { Headphones, Send, User, MessageCircle, Zap, Search, Clock } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatTime } from "@/lib/utils";
 
 interface ChatSession {
   id: number;
@@ -206,7 +205,7 @@ export default function AdminServicePage() {
                         {session.userPhone || `用户${session.userId}`}
                       </span>
                       <span className="text-[10px] text-gray-400">
-                        {format(new Date(session.createdAt), "HH:mm")}
+                        {formatTime(session.createdAt)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -286,7 +285,7 @@ export default function AdminServicePage() {
                               "text-[10px] mt-1 px-1 opacity-70",
                               isAdmin ? "text-right" : "text-left"
                             )}>
-                              {format(new Date(msg.createdAt), "HH:mm")}
+                              {formatTime(msg.createdAt)}
                             </p>
                           </div>
                         </div>

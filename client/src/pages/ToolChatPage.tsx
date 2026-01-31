@@ -3,8 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { Header } from "@/components/Header";
 import { useMessages, useChatStream, useCreateConversation, useConversations } from "@/hooks/use-chat";
 import { Send, Bot, User, Loader2, ArrowLeft } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { cn, formatTime } from "@/lib/utils";
 import { tools } from "@/pages/ToolsPage";
 
 // System prompts for different tool categories
@@ -251,7 +250,7 @@ function MessageBubble({ role, content, isTyping, time }: { role: 'user' | 'assi
             "text-[10px] mt-1 text-right opacity-70",
             isUser ? "text-blue-100" : "text-gray-400"
           )}>
-            {format(new Date(time), "HH:mm")}
+            {formatTime(time)}
           </div>
         )}
       </div>

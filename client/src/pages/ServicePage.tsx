@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Header } from "@/components/Header";
 import { User, CreditCard, FlaskConical, FileText, ChevronRight, ChevronDown, Headphones, Gift, MessageCircle, Send, Bot, ArrowLeft, Loader2, Users, X } from "lucide-react";
-import { cn, maskPhoneNumber } from "@/lib/utils";
-import { format } from "date-fns";
+import { cn, maskPhoneNumber, formatTime } from "@/lib/utils";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -416,7 +415,7 @@ export default function ServicePage() {
                             isMe ? "text-white/70" : "text-gray-400"
                           )}
                         >
-                          {format(new Date(msg.createdAt), "HH:mm")}
+                          {formatTime(msg.createdAt)}
                         </p>
                       </div>
                     </div>
@@ -673,7 +672,7 @@ export default function ServicePage() {
                       isUser ? "text-white/70" : "text-gray-400"
                     )}
                   >
-                    {format(new Date(msg.createdAt), "HH:mm")}
+                    {formatTime(msg.createdAt)}
                   </p>
                 </div>
               </div>

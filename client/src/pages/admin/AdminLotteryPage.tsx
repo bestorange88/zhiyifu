@@ -11,7 +11,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { useAdminAuth } from "@/lib/adminAuth";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { formatDateTimeShort } from "@/lib/utils";
 import { Gift, History, Edit, Plus, Save } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -205,7 +205,7 @@ export default function AdminLotteryPage() {
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-500">
-                            {format(new Date(spin.createdAt), "MM-dd HH:mm")}
+                            {formatDateTimeShort(spin.createdAt)}
                           </td>
                         </tr>
                       ))}

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { useAdminAuth } from "@/lib/adminAuth";
-import { format } from "date-fns";
+import { formatDateTimeShort } from "@/lib/utils";
 import { Coins, TrendingUp, DollarSign, Search } from "lucide-react";
 
 interface CommissionRecord {
@@ -194,7 +194,7 @@ export default function AdminCommissionPage() {
                         {getStatusBadge(record.status)}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500">
-                        {format(new Date(record.createdAt), "MM-dd HH:mm")}
+                        {formatDateTimeShort(record.createdAt)}
                       </td>
                     </tr>
                   ))}
