@@ -69,6 +69,7 @@ app.use((req, res, next) => {
 });
 
 import * as vipService from "./services/vip";
+import { executeScheduledRedPackets } from "./services/scheduledRedPacket";
 
 (async () => {
   await initDb();
@@ -85,6 +86,16 @@ import * as vipService from "./services/vip";
   }
 
   await registerRoutes(httpServer, app);
+
+  // 启动定时红包调度器 - 每分钟检查一次
+  setInterval(async () => {
+    try {
+      await executeScheduledRedPackets();
+    } catch (e: any) {
+      console.error("[定时红包] 执行失败:", e.message);
+    }
+  }, 60 * 1000); // 每60秒检查一次
+  log("[定时红包] 调度器已启动，每分钟检查一次");
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

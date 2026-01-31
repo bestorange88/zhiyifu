@@ -978,6 +978,32 @@ export type GroupRedPacket = typeof groupRedPackets.$inferSelect;
 export type InsertGroupRedPacket = z.infer<typeof insertGroupRedPacketSchema>;
 export type RedPacketClaim = typeof redPacketClaims.$inferSelect;
 
+// ============ SCHEDULED RED PACKETS (定时红包) ============
+export const scheduledRedPackets = pgTable("scheduled_red_packets", {
+  id: serial("id").primaryKey(),
+  groupId: integer("group_id").notNull().references(() => chatGroups.id),
+  scheduledTime: varchar("scheduled_time", { length: 10 }).notNull(),  // 发送时间 HH:mm 格式
+  packetCount: integer("packet_count").notNull(),  // 发送几个红包
+  amountPerPacket: decimal("amount_per_packet", { precision: 10, scale: 2 }).notNull(),  // 每个红包金额
+  claimCountPerPacket: integer("claim_count_per_packet").notNull(),  // 每个红包可领取人数
+  greeting: varchar("greeting", { length: 200 }).default("恭喜发财，大吉大利"),  // 红包祝福语
+  isEnabled: boolean("is_enabled").default(true).notNull(),  // 是否启用
+  lastExecutedAt: timestamp("last_executed_at"),  // 上次执行时间
+  createdBy: integer("created_by").references(() => admins.id),  // 创建人
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertScheduledRedPacketSchema = createInsertSchema(scheduledRedPackets).omit({
+  id: true,
+  lastExecutedAt: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ScheduledRedPacket = typeof scheduledRedPackets.$inferSelect;
+export type InsertScheduledRedPacket = z.infer<typeof insertScheduledRedPacketSchema>;
+
 // ============ E-COMMERCE TYPES ============
 export type Store = typeof stores.$inferSelect;
 export type InsertStore = z.infer<typeof insertStoreSchema>;

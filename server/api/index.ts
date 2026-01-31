@@ -42,6 +42,7 @@ import * as agentService from "../services/agent";
 import * as groupService from "../services/group";
 import * as smsService from "../services/sms";
 import * as redPacketService from "../services/redPacket";
+import * as scheduledRedPacketService from "../services/scheduledRedPacket";
 import { registerSchema, loginSchema, spinRequestSchema, withdrawApplySchema, adminLoginSchema, agentApplySchema, adminUserStatusSchema, adminWithdrawReviewSchema, adminAgentReviewSchema, adminRankUpdateSchema, requestCodeSchema, registerWithSmsSchema, identityVerificationSubmitSchema, adminIdentityReviewSchema, adminIdentityBatchReviewSchema } from "@shared/schema";
 import * as identityService from "../services/identity";
 import * as sellerOnboardingService from "../services/sellerOnboarding";
@@ -1216,6 +1217,103 @@ export function registerApiRoutes(app: Express): void {
         return res.status(404).json({ error: "红包不存在" });
       }
       res.json(detail);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // ============ SCHEDULED RED PACKETS (定时红包) ============
+  // 获取所有定时红包
+  app.get("/api/admin/scheduled-red-packets", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const schedules = await scheduledRedPacketService.getAllScheduledRedPackets();
+      res.json(schedules);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 获取群组的定时红包
+  app.get("/api/admin/groups/:id/scheduled-red-packets", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const schedules = await scheduledRedPacketService.getScheduledRedPackets(groupId);
+      res.json(schedules);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 创建定时红包
+  app.post("/api/admin/groups/:id/scheduled-red-packets", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const groupId = parseInt(req.params.id);
+      const { scheduledTime, packetCount, amountPerPacket, claimCountPerPacket, greeting } = req.body;
+      
+      if (!scheduledTime) {
+        return res.status(400).json({ error: "请设置发送时间" });
+      }
+      if (!packetCount || packetCount < 1) {
+        return res.status(400).json({ error: "请设置有效的红包数量" });
+      }
+      if (!amountPerPacket || amountPerPacket < 0.01) {
+        return res.status(400).json({ error: "请设置有效的红包金额" });
+      }
+      if (!claimCountPerPacket || claimCountPerPacket < 1) {
+        return res.status(400).json({ error: "请设置有效的可领取人数" });
+      }
+      
+      const schedule = await scheduledRedPacketService.createScheduledRedPacket(
+        groupId,
+        scheduledTime,
+        parseInt(packetCount),
+        parseFloat(amountPerPacket),
+        parseInt(claimCountPerPacket),
+        greeting || "恭喜发财，大吉大利",
+        req.adminId!
+      );
+      res.status(201).json(schedule);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 更新定时红包
+  app.put("/api/admin/scheduled-red-packets/:id", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { scheduledTime, packetCount, amountPerPacket, claimCountPerPacket, greeting, isEnabled } = req.body;
+      
+      const schedule = await scheduledRedPacketService.updateScheduledRedPacket(id, {
+        scheduledTime,
+        packetCount: packetCount ? parseInt(packetCount) : undefined,
+        amountPerPacket: amountPerPacket ? parseFloat(amountPerPacket) : undefined,
+        claimCountPerPacket: claimCountPerPacket ? parseInt(claimCountPerPacket) : undefined,
+        greeting,
+        isEnabled,
+      });
+      res.json(schedule);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 删除定时红包
+  app.delete("/api/admin/scheduled-red-packets/:id", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await scheduledRedPacketService.deleteScheduledRedPacket(id);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // 手动触发定时红包检查（用于测试）
+  app.post("/api/admin/scheduled-red-packets/execute", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const results = await scheduledRedPacketService.executeScheduledRedPackets();
+      res.json({ results });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Users, Plus, Trash2, Edit2, X, Check, UserPlus, MessageCircle, Send, ArrowLeft, Loader2, Gift, Image, Video } from "lucide-react";
+import { Users, Plus, Trash2, Edit2, X, Check, UserPlus, MessageCircle, Send, ArrowLeft, Loader2, Gift, Image, Video, Clock, Power, PowerOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -51,6 +51,20 @@ interface GroupMessage {
   phone: string | null;
 }
 
+interface ScheduledRedPacket {
+  id: number;
+  groupId: number;
+  groupName: string | null;
+  scheduledTime: string;
+  packetCount: number;
+  amountPerPacket: string;
+  claimCountPerPacket: number;
+  greeting: string | null;
+  isEnabled: boolean;
+  lastExecutedAt: string | null;
+  createdAt: string;
+}
+
 export default function AdminGroupsPage() {
   const { token } = useAdminAuth();
   const { toast } = useToast();
@@ -76,6 +90,16 @@ export default function AdminGroupsPage() {
   const [redPacketCount, setRedPacketCount] = useState("");
   const [redPacketPacketCount, setRedPacketPacketCount] = useState("1");
   const [redPacketGreeting, setRedPacketGreeting] = useState("恭喜发财，大吉大利");
+  
+  // 定时红包相关状态
+  const [showScheduledDialog, setShowScheduledDialog] = useState(false);
+  const [scheduledGroup, setScheduledGroup] = useState<Group | null>(null);
+  const [scheduledTime, setScheduledTime] = useState("");
+  const [scheduledPacketCount, setScheduledPacketCount] = useState("1");
+  const [scheduledAmountPerPacket, setScheduledAmountPerPacket] = useState("");
+  const [scheduledClaimCount, setScheduledClaimCount] = useState("");
+  const [scheduledGreeting, setScheduledGreeting] = useState("恭喜发财，大吉大利");
+  const [editingSchedule, setEditingSchedule] = useState<ScheduledRedPacket | null>(null);
 
   const { data: groups, isLoading } = useQuery<Group[]>({
     queryKey: ["/api/admin/groups"],
@@ -351,6 +375,166 @@ export default function AdminGroupsPage() {
     });
   };
 
+  // 定时红包查询
+  const { data: scheduledRedPackets, refetch: refetchScheduled } = useQuery<ScheduledRedPacket[]>({
+    queryKey: ["/api/admin/scheduled-red-packets"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/scheduled-red-packets", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to load scheduled red packets");
+      return res.json();
+    },
+    enabled: !!token,
+  });
+
+  // 创建定时红包
+  const createScheduledMutation = useMutation({
+    mutationFn: async (data: { groupId: number; scheduledTime: string; packetCount: number; amountPerPacket: number; claimCountPerPacket: number; greeting: string }) => {
+      const res = await fetch(`/api/admin/groups/${data.groupId}/scheduled-red-packets`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "创建失败");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "定时红包创建成功" });
+      resetScheduledForm();
+      refetchScheduled();
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
+    },
+  });
+
+  // 更新定时红包
+  const updateScheduledMutation = useMutation({
+    mutationFn: async (data: { id: number; scheduledTime?: string; packetCount?: number; amountPerPacket?: number; claimCountPerPacket?: number; greeting?: string; isEnabled?: boolean }) => {
+      const res = await fetch(`/api/admin/scheduled-red-packets/${data.id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "更新失败");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "定时红包更新成功" });
+      resetScheduledForm();
+      refetchScheduled();
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
+    },
+  });
+
+  // 删除定时红包
+  const deleteScheduledMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/admin/scheduled-red-packets/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("删除失败");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "定时红包已删除" });
+      refetchScheduled();
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
+    },
+  });
+
+  // 切换定时红包启用状态
+  const toggleScheduledMutation = useMutation({
+    mutationFn: async ({ id, isEnabled }: { id: number; isEnabled: boolean }) => {
+      const res = await fetch(`/api/admin/scheduled-red-packets/${id}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ isEnabled }),
+      });
+      if (!res.ok) throw new Error("更新失败");
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      toast({ title: variables.isEnabled ? "定时红包已启用" : "定时红包已停用" });
+      refetchScheduled();
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetScheduledForm = () => {
+    setShowScheduledDialog(false);
+    setScheduledGroup(null);
+    setScheduledTime("");
+    setScheduledPacketCount("1");
+    setScheduledAmountPerPacket("");
+    setScheduledClaimCount("");
+    setScheduledGreeting("恭喜发财，大吉大利");
+    setEditingSchedule(null);
+  };
+
+  const openScheduledDialog = (group: Group) => {
+    setScheduledGroup(group);
+    setShowScheduledDialog(true);
+  };
+
+  const openEditScheduledDialog = (schedule: ScheduledRedPacket, group: Group) => {
+    setEditingSchedule(schedule);
+    setScheduledGroup(group);
+    setScheduledTime(schedule.scheduledTime);
+    setScheduledPacketCount(String(schedule.packetCount));
+    setScheduledAmountPerPacket(schedule.amountPerPacket);
+    setScheduledClaimCount(String(schedule.claimCountPerPacket));
+    setScheduledGreeting(schedule.greeting || "恭喜发财，大吉大利");
+    setShowScheduledDialog(true);
+  };
+
+  const handleSaveScheduled = () => {
+    if (!scheduledGroup || !scheduledTime || !scheduledAmountPerPacket || !scheduledClaimCount) return;
+    
+    if (editingSchedule) {
+      updateScheduledMutation.mutate({
+        id: editingSchedule.id,
+        scheduledTime,
+        packetCount: parseInt(scheduledPacketCount) || 1,
+        amountPerPacket: parseFloat(scheduledAmountPerPacket),
+        claimCountPerPacket: parseInt(scheduledClaimCount),
+        greeting: scheduledGreeting,
+      });
+    } else {
+      createScheduledMutation.mutate({
+        groupId: scheduledGroup.id,
+        scheduledTime,
+        packetCount: parseInt(scheduledPacketCount) || 1,
+        amountPerPacket: parseFloat(scheduledAmountPerPacket),
+        claimCountPerPacket: parseInt(scheduledClaimCount),
+        greeting: scheduledGreeting,
+      });
+    }
+  };
+
   const handleManageMembers = (group: Group) => {
     setEditingGroup(group);
     setCurrentGroupMembers(group.members);
@@ -473,6 +657,16 @@ export default function AdminGroupsPage() {
                         >
                           <Gift className="w-3 h-3 mr-1" />
                           发红包
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openScheduledDialog(group)}
+                          className="text-orange-600 border-orange-200 hover:bg-orange-50 dark:border-orange-800 dark:hover:bg-orange-900/30"
+                          data-testid={`button-scheduled-red-packet-group-${group.id}`}
+                        >
+                          <Clock className="w-3 h-3 mr-1" />
+                          定时红包
                         </Button>
                         <Button
                           size="sm"
@@ -945,6 +1139,225 @@ export default function AdminGroupsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 定时红包创建/编辑对话框 */}
+      <Dialog open={showScheduledDialog} onOpenChange={() => resetScheduledForm()}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-orange-500" />
+              {editingSchedule ? "编辑定时红包" : "创建定时红包"} - {scheduledGroup?.name}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                发送时间 (北京时间)
+              </label>
+              <Input
+                type="time"
+                value={scheduledTime}
+                onChange={(e) => setScheduledTime(e.target.value)}
+                data-testid="input-scheduled-time"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                每天在指定时间自动发送红包
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                发送红包个数
+              </label>
+              <Input
+                type="number"
+                min="1"
+                value={scheduledPacketCount}
+                onChange={(e) => setScheduledPacketCount(e.target.value)}
+                placeholder="每次发送几个红包"
+                data-testid="input-scheduled-packet-count"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                每个红包金额 (元)
+              </label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={scheduledAmountPerPacket}
+                onChange={(e) => setScheduledAmountPerPacket(e.target.value)}
+                placeholder="每个红包的金额"
+                data-testid="input-scheduled-amount"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                每个红包可领取人数
+              </label>
+              <Input
+                type="number"
+                min="1"
+                value={scheduledClaimCount}
+                onChange={(e) => setScheduledClaimCount(e.target.value)}
+                placeholder="每个红包可以被多少人领取"
+                data-testid="input-scheduled-claim-count"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                红包祝福语
+              </label>
+              <Input
+                value={scheduledGreeting}
+                onChange={(e) => setScheduledGreeting(e.target.value)}
+                placeholder="输入祝福语"
+                data-testid="input-scheduled-greeting"
+              />
+            </div>
+
+            {scheduledTime && scheduledAmountPerPacket && scheduledClaimCount && (
+              <div className="bg-orange-50 dark:bg-orange-900/20 rounded-lg p-3 text-sm">
+                <p className="text-orange-700 dark:text-orange-300">
+                  每天 <strong>{scheduledTime}</strong> 自动发送 <strong>{scheduledPacketCount || 1}</strong> 个红包
+                </p>
+                <p className="text-orange-600 dark:text-orange-400 mt-1">
+                  每个红包 <strong>¥{parseFloat(scheduledAmountPerPacket || "0").toFixed(2)}</strong>，
+                  可被 <strong>{scheduledClaimCount}</strong> 人领取
+                </p>
+                <p className="text-orange-600 dark:text-orange-400 mt-1">
+                  每日总计: ¥{(parseFloat(scheduledAmountPerPacket || "0") * (parseInt(scheduledPacketCount) || 1)).toFixed(2)}
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={resetScheduledForm}>
+                取消
+              </Button>
+              <Button
+                onClick={handleSaveScheduled}
+                disabled={!scheduledTime || !scheduledAmountPerPacket || !scheduledClaimCount || createScheduledMutation.isPending || updateScheduledMutation.isPending}
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+                data-testid="button-save-scheduled"
+              >
+                {(createScheduledMutation.isPending || updateScheduledMutation.isPending) ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    保存中...
+                  </>
+                ) : (
+                  <>
+                    <Clock className="w-4 h-4 mr-2" />
+                    {editingSchedule ? "保存修改" : "创建定时红包"}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 定时红包列表 */}
+      {scheduledRedPackets && scheduledRedPackets.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm mt-6">
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-orange-500" />
+              定时红包列表
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-900 text-xs text-gray-500 dark:text-gray-400 uppercase">
+                <tr>
+                  <th className="px-4 py-3 text-left">群组</th>
+                  <th className="px-4 py-3 text-left">发送时间</th>
+                  <th className="px-4 py-3 text-left">红包配置</th>
+                  <th className="px-4 py-3 text-left">状态</th>
+                  <th className="px-4 py-3 text-left">上次执行</th>
+                  <th className="px-4 py-3 text-left">操作</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {scheduledRedPackets.map((schedule) => {
+                  const group = groups?.find(g => g.id === schedule.groupId);
+                  return (
+                    <tr key={schedule.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {schedule.groupName || `群组 ${schedule.groupId}`}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                        <span className="inline-flex items-center px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs rounded-full">
+                          <Clock className="w-3 h-3 mr-1" />
+                          {schedule.scheduledTime}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                        {schedule.packetCount}个红包 × ¥{parseFloat(schedule.amountPerPacket).toFixed(2)} × {schedule.claimCountPerPacket}人
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 text-xs rounded-full ${
+                          schedule.isEnabled
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                        }`}>
+                          {schedule.isEnabled ? "已启用" : "已停用"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                        {schedule.lastExecutedAt ? formatDateTime(schedule.lastExecutedAt) : "从未执行"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => toggleScheduledMutation.mutate({ id: schedule.id, isEnabled: !schedule.isEnabled })}
+                            className={schedule.isEnabled 
+                              ? "text-gray-600 border-gray-200 hover:bg-gray-50" 
+                              : "text-green-600 border-green-200 hover:bg-green-50"}
+                          >
+                            {schedule.isEnabled ? <PowerOff className="w-3 h-3 mr-1" /> : <Power className="w-3 h-3 mr-1" />}
+                            {schedule.isEnabled ? "停用" : "启用"}
+                          </Button>
+                          {group && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openEditScheduledDialog(schedule, group)}
+                            >
+                              <Edit2 className="w-3 h-3 mr-1" />
+                              编辑
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (confirm("确定要删除该定时红包吗？")) {
+                                deleteScheduledMutation.mutate(schedule.id);
+                              }
+                            }}
+                            className="text-red-600 border-red-200 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-900/30"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }
