@@ -143,17 +143,27 @@ export async function deleteScheduledRedPacket(id: number) {
 // 执行定时红包发送
 export async function executeScheduledRedPackets() {
   // 获取当前北京时间 HH:mm
+  // 服务器已设置为 Asia/Shanghai 时区，直接使用本地时间
   const now = new Date();
-  const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  const currentTime = beijingTime.toISOString().slice(11, 16);
-  const today = beijingTime.toISOString().slice(0, 10);
+  const hours = now.getHours().toString().padStart(2, '0');
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const currentTime = `${hours}:${minutes}`;
+  const today = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
   
-  // 查找所有启用的、当前时间匹配的定时红包
-  const schedules = await db.select().from(scheduledRedPackets)
-    .where(and(
-      eq(scheduledRedPackets.isEnabled, true),
-      eq(scheduledRedPackets.scheduledTime, currentTime)
-    ));
+  // 查找所有启用的定时红包
+  const allSchedules = await db.select().from(scheduledRedPackets)
+    .where(eq(scheduledRedPackets.isEnabled, true));
+  
+  // 过滤匹配当前时间的定时红包
+  const schedules = allSchedules.filter(s => s.scheduledTime === currentTime);
+  
+  // 调试日志：每5分钟输出一次当前时间和待执行的定时红包
+  if (now.getMinutes() % 5 === 0) {
+    console.log(`[定时红包] 当前北京时间: ${currentTime}, 今日: ${today}, 启用的定时红包数: ${allSchedules.length}, 匹配当前时间的: ${schedules.length}`);
+    if (allSchedules.length > 0) {
+      console.log(`[定时红包] 定时红包列表: ${allSchedules.map(s => `群组${s.groupId}@${s.scheduledTime}`).join(', ')}`);
+    }
+  }
   
   const results = [];
   
@@ -161,8 +171,8 @@ export async function executeScheduledRedPackets() {
     // 检查今天是否已执行过
     if (schedule.lastExecutedAt) {
       const lastExecutedDate = new Date(schedule.lastExecutedAt);
-      const lastExecutedBeijing = new Date(lastExecutedDate.getTime() + 8 * 60 * 60 * 1000);
-      const lastExecutedDay = lastExecutedBeijing.toISOString().slice(0, 10);
+      // 服务器已设置为 Asia/Shanghai 时区，直接使用本地时间
+      const lastExecutedDay = `${lastExecutedDate.getFullYear()}-${(lastExecutedDate.getMonth() + 1).toString().padStart(2, '0')}-${lastExecutedDate.getDate().toString().padStart(2, '0')}`;
       
       if (lastExecutedDay === today) {
         // 今天已执行过，跳过
