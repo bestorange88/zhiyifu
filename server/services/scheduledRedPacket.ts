@@ -171,11 +171,15 @@ export async function executeScheduledRedPackets() {
     // 检查今天是否已执行过
     if (schedule.lastExecutedAt) {
       const lastExecutedDate = new Date(schedule.lastExecutedAt);
-      // 服务器已设置为 Asia/Shanghai 时区，直接使用本地时间
-      const lastExecutedDay = `${lastExecutedDate.getFullYear()}-${(lastExecutedDate.getMonth() + 1).toString().padStart(2, '0')}-${lastExecutedDate.getDate().toString().padStart(2, '0')}`;
+      // 数据库存储的是北京时间，但Drizzle可能将其解释为UTC
+      // 使用UTC方法获取日期组件，因为数据库存储的值就是我们想要的北京时间
+      const lastExecutedDay = `${lastExecutedDate.getUTCFullYear()}-${(lastExecutedDate.getUTCMonth() + 1).toString().padStart(2, '0')}-${lastExecutedDate.getUTCDate().toString().padStart(2, '0')}`;
+      
+      console.log(`[定时红包] 检查执行记录: lastExecutedAt=${schedule.lastExecutedAt}, lastExecutedDay=${lastExecutedDay}, today=${today}`);
       
       if (lastExecutedDay === today) {
         // 今天已执行过，跳过
+        console.log(`[定时红包] 群组 ${schedule.groupId} 今天已执行过，跳过`);
         continue;
       }
     }
