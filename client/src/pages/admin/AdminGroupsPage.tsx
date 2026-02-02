@@ -83,6 +83,10 @@ export default function AdminGroupsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   
+  // 新消息提示音
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastMessageCountRef = useRef<number>(0);
+  
   // 红包相关状态
   const [showRedPacketDialog, setShowRedPacketDialog] = useState(false);
   const [redPacketGroup, setRedPacketGroup] = useState<Group | null>(null);
@@ -245,6 +249,23 @@ export default function AdminGroupsPage() {
     enabled: !!token && !!chatGroup,
     refetchInterval: 3000,
   });
+
+  // 初始化提示音
+  useEffect(() => {
+    audioRef.current = new Audio('/notification.mp3');
+    audioRef.current.volume = 0.5;
+  }, []);
+
+  // 新消息提示音 - 当有新的用户消息时播放
+  useEffect(() => {
+    if (chatMessages && chatMessages.length > 0 && chatGroup) {
+      const userMessages = chatMessages.filter(m => m.senderType === "user").length;
+      if (lastMessageCountRef.current > 0 && userMessages > lastMessageCountRef.current) {
+        audioRef.current?.play().catch(() => {});
+      }
+      lastMessageCountRef.current = userMessages;
+    }
+  }, [chatMessages, chatGroup]);
 
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { content: string; messageType?: string; mediaUrl?: string }) => {
