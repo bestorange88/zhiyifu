@@ -546,6 +546,8 @@ export default function AdminGroupsPage() {
     setEditingGroup(null);
     setGroupName("");
     setGroupDescription("");
+    setGroupAnnouncement("");
+    setGroupOpenHours("");
     setSelectedMembers([]);
   };
 
@@ -553,20 +555,29 @@ export default function AdminGroupsPage() {
     setEditingGroup(group);
     setGroupName(group.name);
     setGroupDescription(group.description || "");
+    setGroupAnnouncement(group.announcement || "");
+    setGroupOpenHours(group.openHours || "");
     setSelectedMembers(group.members.map(m => m.userId));
   };
 
   const handleSubmit = () => {
-    const data = {
-      name: groupName,
-      description: groupDescription,
-      memberIds: selectedMembers,
-    };
-    
     if (editingGroup) {
-      updateMutation.mutate({ id: editingGroup.id, data });
+      updateMutation.mutate({ 
+        id: editingGroup.id, 
+        data: {
+          name: groupName,
+          description: groupDescription,
+          announcement: groupAnnouncement,
+          openHours: groupOpenHours,
+          memberIds: selectedMembers,
+        }
+      });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate({
+        name: groupName,
+        description: groupDescription,
+        memberIds: selectedMembers,
+      });
     }
   };
 
@@ -908,14 +919,15 @@ export default function AdminGroupsPage() {
                 className="hidden"
               />
               <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleManageMembers(group)}
-                  >
-                    <Users className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
+                variant="outline"
+                size="sm"
+                onClick={() => chatGroup && handleManageMembers(chatGroup)}
+                title="管理成员"
+              >
+                <Users className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading || sendMessageMutation.isPending}
