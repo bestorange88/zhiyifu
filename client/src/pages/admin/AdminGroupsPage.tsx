@@ -11,7 +11,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "./AdminLayout";
 import { format } from "date-fns";
-import { cn, maskPhoneNumber, formatDate, formatDateTime } from "@/lib/utils";
+import { cn, maskPhoneNumber, formatDate, formatDateTime, formatDateTimeShort } from "@/lib/utils";
 
 interface GroupMember {
   id: number;
@@ -886,7 +886,7 @@ export default function AdminGroupsPage() {
                           {displayName}
                         </span>
                         <span className="text-xs text-gray-400">
-                          {format(new Date(msg.createdAt), "MM-dd HH:mm")}
+                          {formatDateTimeShort(msg.createdAt)}
                         </span>
                       </div>
                       <div className={cn(
