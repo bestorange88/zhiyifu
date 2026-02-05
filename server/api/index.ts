@@ -1873,4 +1873,45 @@ export function registerApiRoutes(app: Express): void {
       res.status(400).json({ error: error.message });
     }
   });
+
+  // ============ AI QA MANAGEMENT ============
+  app.get("/api/admin/ai/stats", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const stats = await adminService.getAiStats();
+      res.json(stats);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/ai/messages", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const search = req.query.search as string;
+      const result = await adminService.getAiMessages(page, limit, search);
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/admin/ai/settings", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const settings = await adminService.getAiSettings();
+      res.json(settings);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/admin/ai/settings", adminAuthMiddleware, async (req: AdminRequest, res) => {
+    try {
+      const { sensitiveWords, presetReplies } = req.body;
+      const result = await adminService.updateAiSettings({ sensitiveWords, presetReplies });
+      res.json(result);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  });
 }

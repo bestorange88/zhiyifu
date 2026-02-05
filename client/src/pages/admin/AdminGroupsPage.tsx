@@ -11,7 +11,7 @@ import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import AdminLayout from "./AdminLayout";
 import { format } from "date-fns";
-import { cn, maskPhoneNumber, formatDate, formatDateTime } from "@/lib/utils";
+import { cn, maskPhoneNumber, formatDate, formatDateTime, formatDateTimeShort } from "@/lib/utils";
 
 interface GroupMember {
   id: number;
@@ -82,6 +82,10 @@ export default function AdminGroupsPage() {
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // 新消息提示音
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastMessageCountRef = useRef<number>(0);
   
   // 红包相关状态
   const [showRedPacketDialog, setShowRedPacketDialog] = useState(false);
@@ -245,6 +249,23 @@ export default function AdminGroupsPage() {
     enabled: !!token && !!chatGroup,
     refetchInterval: 3000,
   });
+
+  // 初始化提示音
+  useEffect(() => {
+    audioRef.current = new Audio('/notification.mp3');
+    audioRef.current.volume = 0.5;
+  }, []);
+
+  // 新消息提示音 - 当有新的用户消息时播放
+  useEffect(() => {
+    if (chatMessages && chatMessages.length > 0 && chatGroup) {
+      const userMessages = chatMessages.filter(m => m.senderType === "user").length;
+      if (lastMessageCountRef.current > 0 && userMessages > lastMessageCountRef.current) {
+        audioRef.current?.play().catch(() => {});
+      }
+      lastMessageCountRef.current = userMessages;
+    }
+  }, [chatMessages, chatGroup]);
 
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { content: string; messageType?: string; mediaUrl?: string }) => {
@@ -546,6 +567,8 @@ export default function AdminGroupsPage() {
     setEditingGroup(null);
     setGroupName("");
     setGroupDescription("");
+    setGroupAnnouncement("");
+    setGroupOpenHours("");
     setSelectedMembers([]);
   };
 
@@ -553,20 +576,29 @@ export default function AdminGroupsPage() {
     setEditingGroup(group);
     setGroupName(group.name);
     setGroupDescription(group.description || "");
+    setGroupAnnouncement(group.announcement || "");
+    setGroupOpenHours(group.openHours || "");
     setSelectedMembers(group.members.map(m => m.userId));
   };
 
   const handleSubmit = () => {
-    const data = {
-      name: groupName,
-      description: groupDescription,
-      memberIds: selectedMembers,
-    };
-    
     if (editingGroup) {
-      updateMutation.mutate({ id: editingGroup.id, data });
+      updateMutation.mutate({ 
+        id: editingGroup.id, 
+        data: {
+          name: groupName,
+          description: groupDescription,
+          announcement: groupAnnouncement,
+          openHours: groupOpenHours,
+          memberIds: selectedMembers,
+        }
+      });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate({
+        name: groupName,
+        description: groupDescription,
+        memberIds: selectedMembers,
+      });
     }
   };
 
@@ -854,7 +886,7 @@ export default function AdminGroupsPage() {
                           {displayName}
                         </span>
                         <span className="text-xs text-gray-400">
-                          {format(new Date(msg.createdAt), "MM-dd HH:mm")}
+                          {formatDateTimeShort(msg.createdAt)}
                         </span>
                       </div>
                       <div className={cn(
@@ -908,14 +940,15 @@ export default function AdminGroupsPage() {
                 className="hidden"
               />
               <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleManageMembers(group)}
-                  >
-                    <Users className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
+                variant="outline"
+                size="sm"
+                onClick={() => chatGroup && handleManageMembers(chatGroup)}
+                title="管理成员"
+              >
+                <Users className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
                 size="icon"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading || sendMessageMutation.isPending}
