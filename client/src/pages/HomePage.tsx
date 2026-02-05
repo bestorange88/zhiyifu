@@ -118,8 +118,8 @@ export default function HomePage() {
           className="shadow-lg shadow-emerald-500/10"
         />
 
-        {/* Core Features Section - 四个水平一行排列 */}
-        <div className="flex gap-2 overflow-x-auto pb-2">
+        {/* Core Features Section - 四个水平一行排列，底部对齐 */}
+        <div className="flex gap-2 overflow-x-auto pb-2 items-end">
           <button 
             onClick={() => setLocation('/health/monitor')}
             className="flex-1 min-w-0 relative rounded-xl overflow-hidden hover:shadow-lg transition-all transform hover:scale-[1.02]"
